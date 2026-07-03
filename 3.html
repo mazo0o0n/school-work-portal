@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>تحليل نتائج مادة</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+:root{
+  --moe:#0b7e88;
+  --moe2:#0aa38b;
+  --ink:#0f172a;
+  --line:#e5e7eb;
+  --soft:#f7fafb;
+
+  --ex:#35b46f;
+  --vg:#2fb1ab;
+  --gd:#3f94e6;
+  --ac:#f08b2f;
+  --wk:#ff5a5f;
+
+  --pageW:210mm;
+  --pageH:297mm;
+
+  /* ✅ هوامش A4 (اضبطها كما تريد) */
+  --pageMargin:8mm;
+
+  --padX:7mm;
+  --padY:6mm;
+
+  --shadow:0 10px 22px rgba(15,23,42,.14);
+
+  --fs-kpi:12px;
+  --fs-val:12.8px;
+  --fs-table:11.6px;
+  --fs-foot:12.6px;
+
+  --donutSize:74px;
+  --barH:235px;
+
+  --overlay:rgba(15,23,42,.35);
+
+  --danger:#ef4444;
+  --dangerBg:#fff1f2;
+  --dangerSoft:#fecaca;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#fff; overflow:auto;}
+body{
+  font-family:"Tajawal",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:var(--ink);
+}
+
+.paper{width:var(--pageW); margin:0 auto; background:#fff;}
+.page{ padding:var(--padY) var(--padX); position:relative; }
+.fitRoot{transform-origin:top center; transform:scale(var(--fitScale,1));}
+
+/* ===== Header banner ===== */
+.headerWrap{
+  margin:0;
+  padding:0;
+  width:100%;
+  border-radius:18px;
+  overflow:hidden;
+  background:transparent;
+  box-shadow:none;
+  position:relative;
+}
+.headerWrap img{
+  display:block;
+  width:100%;
+  height:auto;
+  object-fit:fill;
+}
+.headerOverlay{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:10px 14px;
+  pointer-events:none;
+}
+.headerText{
+  width:min(92%, 980px);
+  color:#fff;
+  text-shadow:0 2px 12px rgba(0,0,0,.38);
+  font-weight:900;
+  line-height:1.2;
+  white-space:normal;
+}
+.headerText .edu{font-size:18px;}
+.headerText .school{font-size:17px;}
+.headerText .title{font-size:16px; margin-top:2px;}
+
+.afterHeaderTight{margin-top:8px;}
+
+.metaRow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.metaBox{
+  border:2px solid #2f80ed33;
+  border-radius:14px;
+  background:#fff;
+  padding:8px 10px;
+  min-height:52px;
+  box-shadow:var(--shadow);
+
+  /* ✅ توسيط العناوين والقيم داخل المربع */
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  gap:6px;
+}
+.metaBox.green{border-color:#0aa38b55;}
+.metaLabel{
+  color:var(--moe);
+  font-weight:900;
+  font-size:var(--fs-kpi);
+  margin:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  text-align:center; /* ✅ */
+}
+.metaVal{
+  font-weight:900;
+  font-size:var(--fs-val);
+  color:#111827;
+  text-align:center;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  width:100%;
+}
+
+.card{
+  margin-top:10px;
+  border:2px solid #dfe7ea;
+  border-radius:18px;
+  background:#fff;
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.cardInner{padding:10px 10px 10px;}
+.sectionTitle{
+  text-align:center;
+  color:var(--moe);
+  font-weight:900;
+  font-size:14.2px;
+  margin:2px 0 8px;
+  white-space:nowrap;
+}
+.gridMain{display:grid;grid-template-columns:1.35fr 1fr;gap:10px;}
+
+.detailTable{border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+.dtHead{
+  display:grid;grid-template-columns:1fr 1fr 1fr;
+  background:var(--soft);
+  border-bottom:1px solid var(--line);
+  padding:8px 8px;
+  font-weight:900;color:#111827;font-size:var(--fs-table);
+}
+.dtRow{
+  display:grid;grid-template-columns:1fr 1fr 1fr;
+  gap:8px;padding:7px 8px;align-items:center;
+  border-bottom:1px solid #f0f3f5;font-size:var(--fs-table);
+}
+.dtRow:last-child{border-bottom:none;}
+.dtRow:nth-child(even){background:#fbfdfe;}
+
+.pillLvl{border-radius:12px;padding:8px 8px;color:#fff;font-weight:900;text-align:center;font-size:12.2px;white-space:nowrap;}
+.pEx{background:var(--ex);} .pVg{background:var(--vg);} .pGd{background:var(--gd);} .pAc{background:var(--ac);} .pWk{background:var(--wk);}
+.boxVal{border:2px solid #cfd8dc;border-radius:12px;padding:7px 8px;font-weight:900;text-align:center;background:#fff;font-size:12.5px;white-space:nowrap;}
+
+/* ✅ KPI (اعكسها + توسيط النص داخل المربعات) */
+.sideKPIs{display:grid;gap:8px;}
+.sideRow{
+  display:grid;
+  grid-template-columns:1fr 1fr; /* ✅ */
+  gap:8px;
+  align-items:stretch;
+}
+.sideLabel{
+  border:2px solid #0aa38b55;border-radius:12px;
+  padding:7px 8px;color:var(--moe);font-weight:900;font-size:12.2px;
+  display:flex;
+  align-items:center;
+  justify-content:center; /* ✅ */
+  text-align:center;      /* ✅ */
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.sideValue{
+  border:2px solid #cfd8dc;border-radius:12px;
+  padding:7px 8px;font-weight:900;font-size:12.5px;
+  display:flex;
+  align-items:center;
+  justify-content:center; /* ✅ */
+  text-align:center;      /* ✅ */
+  background:#fff;white-space:nowrap;
+}
+
+.chartCard{margin-top:8px;border:2px solid #0aa38b55;border-radius:18px;padding:8px 8px 9px;}
+.chartTitle{text-align:center;color:var(--moe);font-weight:900;font-size:12.8px;margin:2px 0 8px;white-space:nowrap;}
+
+/* donuts row */
+.donutsRow{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:8px;
+  align-items:start;
+}
+.donutItem{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;}
+.donutCanvas{width:var(--donutSize) !important;height:var(--donutSize) !important;}
+.donutLabel,.donutPct{font-weight:900;font-size:12.2px;white-space:nowrap;}
+.donutLabel,.donutPct{max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+
+.barCard{margin-top:8px;border:2px solid #0aa38b55;border-radius:18px;padding:8px 8px 10px;}
+.barCanvas{width:100% !important;height:var(--barH) !important;}
+
+.footer{margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-weight:900;font-size:var(--fs-foot);color:#111827;}
+.footer .fBox{border-top:2px solid #d1d5db;padding-top:8px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* weak */
+.hidden{display:none !important;}
+.weakCard{margin-top:10px;border:2px solid #0aa38b55;border-radius:18px;overflow:hidden;box-shadow:var(--shadow);}
+.weakHead{
+  padding:9px 10px;background:#f4fffb;border-bottom:1px solid #d7efe7;
+  display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+  font-size:12.2px;font-weight:900;
+}
+.badgeInfo{border:2px solid #0aa38b55;background:#fff;border-radius:999px;padding:6px 10px;white-space:nowrap;}
+.badgeInfo.red{border-color:#fecaca;background:#fff1f2;color:#991b1b;}
+.tblWrap{padding:9px 9px 10px;}
+.tbl{width:100%;border-collapse:collapse;font-size:11.2px;table-layout:fixed;}
+.tbl th,.tbl td{border:1px solid #d1d5db;padding:7px 6px;vertical-align:top;}
+.tbl th{background:#f3f4f6;font-weight:900;white-space:nowrap;}
+.tbl td.center{text-align:center;font-weight:900;white-space:nowrap;}
+.tbl td.nameCell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.plan{line-height:1.6;}
+
+/* buttons */
+.fab{position:fixed;left:14px;bottom:14px;z-index:50;display:flex;gap:8px;flex-wrap:wrap;}
+.btn{
+  border:none;border-radius:14px;background:linear-gradient(135deg,var(--moe2),var(--moe));
+  color:#fff;font-weight:900;font-family:inherit;padding:10px 14px;cursor:pointer;
+  box-shadow:0 10px 22px rgba(15,23,42,.18);white-space:nowrap;font-size:12.5px;
+}
+.btn.secondary{background:#fff;color:var(--moe);border:2px solid #0aa38b55;box-shadow:none;}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.35);display:none;align-items:flex-start;justify-content:center;padding:14px;z-index:80; overflow:auto;}
+.overlay.open{display:flex;}
+.modal{
+  width:min(980px,96vw);
+  margin-top:12mm;
+  background:#fff;border-radius:18px;
+  box-shadow:0 18px 40px rgba(15,23,42,.22);
+  border:1px solid #dfe7ea;overflow:hidden;
+}
+.modalHead{
+  padding:10px 12px;background:linear-gradient(135deg,#f4fffb,#fff);
+  border-bottom:1px solid #d7efe7;display:flex;justify-content:space-between;align-items:center;gap:10px;
+}
+.modalHead .t{font-weight:900;color:var(--moe);font-size:14px;white-space:nowrap;}
+.modalHead .x{border:none;background:transparent;font-size:18px;cursor:pointer;width:34px;height:34px;border-radius:10px;}
+.modalHead .x:hover{background:#f3f4f6;}
+.modalBody{padding:10px 12px 10px;}
+
+.formGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 10px;}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0;}
+.field label{font-weight:900;color:#334155;font-size:11.8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.field input,.field select{
+  border:2px solid var(--dangerSoft);
+  background:#fff1f2;
+  border-radius:12px;
+  padding:9px 9px;
+  font-family:inherit;
+  font-weight:900;
+  font-size:12px;
+  outline:none;
+}
+.field input::placeholder{color:#991b1b; opacity:.9; font-weight:900;}
+.field select{color:#111827; background:#fff; border-color:#cfd8dc;}
+.req{color:#b91c1c;font-weight:900;}
+.invalid{border-color:#ef4444 !important;background:#fff1f2 !important;}
+.valid{border-color:#22c55e55 !important; background:#f0fdf4 !important;}
+
+.actions{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;align-items:center;}
+.badge{margin-right:auto;border:2px solid #0aa38b55;color:var(--moe);background:#fff;font-weight:900;font-size:12px;padding:6px 10px;border-radius:999px;white-space:nowrap;}
+.badge.bad{border-color:#fecaca;background:#fff1f2;color:#991b1b;}
+.note{margin-top:10px;border-radius:14px;border:1px solid #fed7aa;background:#fff7ed;padding:9px 10px;font-weight:800;color:#7c2d12;line-height:1.7;font-size:12px;}
+.modalFooterTiny{margin-top:10px;text-align:center;color:#94a3b8;font-weight:800;font-size:11px;}
+
+/* ===== Print (✅ إصلاح الصفحة الفارغة + الهوامش) ===== */
+@media print{
+  @page{ size:A4 portrait; margin:var(--pageMargin); }
+  html,body{overflow:visible !important; height:auto !important;}
+  body{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  .fab,.overlay{display:none !important;}
+  .paper{width:100% !important; margin:0 !important;}
+  .page{margin:0 !important; break-after:auto !important; page-break-after:auto !important;}
+
+  /* ✅ لا تطبع صفحة الضعفاء إذا كانت مخفية */
+  #page2.hidden{ display:none !important; }
+
+  /* ✅ اكسر الصفحة فقط إذا كانت صفحة الضعفاء ظاهرة */
+  #page2:not(.hidden){ break-before:page !important; page-break-before:always !important; }
+
+  /* ✅ الدونات صف واحد */
+  .donutsRow{grid-template-columns:repeat(5,1fr) !important; gap:6px !important;}
+  .donutCanvas{width:72px !important;height:72px !important;}
+  .donutLabel,.donutPct{font-size:12px !important;}
+
+  /* ✅ أهم إصلاح للصفحة الفارغة (الهيدر وحده):
+        لا تمنع كسر صفحة الضعفاء بالكامل — اسمح للجدول يمتد على صفحات */
+  .weakCard{ break-inside:auto !important; page-break-inside:auto !important; }
+  .tbl, .tblWrap{ break-inside:auto !important; page-break-inside:auto !important; }
+  .tbl tr{ break-inside:avoid !important; page-break-inside:avoid !important; } /* يحافظ على الصف */
+  .headerWrap, .metaBox, .card, .chartCard, .barCard, .footer{ break-inside:avoid !important; page-break-inside:avoid !important; }
+
+  /* ✅ منع تمدد البار بشكل يضيف صفحة إضافية */
+  .barCanvas{height:210px !important; max-height:210px !important;}
+}
+
+@media (max-width:1100px){
+  .formGrid{grid-template-columns:repeat(2,1fr);}
+  .donutsRow{grid-template-columns:repeat(3,1fr);}
+  .paper{width:100%;}
+}
+@media (max-width:700px){
+  .paper{width:100%;}
+  .page{padding:12px 12px;}
+  .gridMain{grid-template-columns:1fr;gap:8px;}
+  .metaRow{grid-template-columns:1fr;gap:8px;}
+  .donutsRow{grid-template-columns:repeat(2,1fr);}
+  .headerText .edu{font-size:16px;}
+  .headerText .school{font-size:15px;}
+  .headerText .title{font-size:14px;}
+}
+</style>
+</head>
+
+<body>
+<div class="paper">
+
+  <!-- PAGE 1 -->
+  <div class="page" id="page1">
+    <div class="fitRoot" id="fitRoot">
+
+      <div class="headerWrap">
+        <img src="assets/images/هيدر التحليل .png" alt="هيدر التحليل" id="headerImg1" />
+        <div class="headerOverlay">
+          <div class="headerText" id="headerTextFit">
+            <div class="edu" id="hEdu">—</div>
+            <div class="school" id="hSchool">—</div>
+            <div class="title">تحليل درجات مادة <span id="hSubject">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="afterHeaderTight">
+        <div class="metaRow">
+          <div class="metaBox green">
+            <div class="metaLabel">المرحلة الدراسية / الصف</div>
+            <div class="metaVal" id="tStage">—</div>
+          </div>
+          <div class="metaBox">
+            <div class="metaLabel">السنة / الفصل الدراسي</div>
+            <div class="metaVal" id="tTerm">—</div>
+          </div>
+          <div class="metaBox green">
+            <div class="metaLabel">درجة القياس (الاختبار)</div>
+            <div class="metaVal" id="tFull">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardInner">
+          <div class="sectionTitle">الإحصائيات التفصيلية</div>
+
+          <div class="gridMain">
+            <div class="detailTable">
+              <div class="dtHead"><div style="text-align:center">عدد الطلاب</div><div style="text-align:center">النطاق</div><div style="text-align:center">المستوى</div></div>
+              <div class="dtRow"><div class="boxVal" id="cEx">0</div><div class="boxVal" id="rEx">—</div><div class="pillLvl" style="background:var(--ex)">ممتاز</div></div>
+              <div class="dtRow"><div class="boxVal" id="cVg">0</div><div class="boxVal" id="rVg">—</div><div class="pillLvl" style="background:var(--vg)">جيد جداً</div></div>
+              <div class="dtRow"><div class="boxVal" id="cGd">0</div><div class="boxVal" id="rGd">—</div><div class="pillLvl" style="background:var(--gd)">جيد</div></div>
+              <div class="dtRow"><div class="boxVal" id="cAc">0</div><div class="boxVal" id="rAc">—</div><div class="pillLvl" style="background:var(--ac)">مقبول</div></div>
+              <div class="dtRow"><div class="boxVal" id="cWk">0</div><div class="boxVal" id="rWk">—</div><div class="pillLvl" style="background:var(--wk)">ضعيف</div></div>
+            </div>
+
+            <!-- ✅ KPI: (العنوان يسار/القيمة يمين) لكن كلاهما وسط داخل مربعه -->
+            <div class="sideKPIs">
+              <div class="sideRow"><div class="sideLabel">عدد الطلاب</div><div class="sideValue" id="kN">0</div></div>
+              <div class="sideRow"><div class="sideLabel">أعلى درجة</div><div class="sideValue" id="kMax">0</div></div>
+              <div class="sideRow"><div class="sideLabel">أقل درجة</div><div class="sideValue" id="kMin">0</div></div>
+              <div class="sideRow"><div class="sideLabel">متوسط الدرجات</div><div class="sideValue" id="kAvg">0</div></div>
+              <div class="sideRow"><div class="sideLabel">نسبة التحصيل</div><div class="sideValue" id="kRate">0%</div></div>
+              <div class="sideRow"><div class="sideLabel">مجموع الدرجات</div><div class="sideValue" id="kSum">0</div></div>
+            </div>
+          </div>
+
+          <div class="chartCard">
+            <div class="chartTitle">رسم بياني (نِسب الطلاب لكل تقدير)</div>
+            <div class="donutsRow">
+              <div class="donutItem"><canvas id="dWk" class="donutCanvas"></canvas><div class="donutLabel" style="color:var(--wk)">ضعيف</div><div class="donutPct" id="pWk">0%</div></div>
+              <div class="donutItem"><canvas id="dAc" class="donutCanvas"></canvas><div class="donutLabel" style="color:var(--ac)">مقبول</div><div class="donutPct" id="pAc">0%</div></div>
+              <div class="donutItem"><canvas id="dGd" class="donutCanvas"></canvas><div class="donutLabel" style="color:var(--gd)">جيد</div><div class="donutPct" id="pGd">0%</div></div>
+              <div class="donutItem"><canvas id="dVg" class="donutCanvas"></canvas><div class="donutLabel" style="color:var(--vg)">جيد جداً</div><div class="donutPct" id="pVg">0%</div></div>
+              <div class="donutItem"><canvas id="dEx" class="donutCanvas"></canvas><div class="donutLabel" style="color:var(--ex)">ممتاز</div><div class="donutPct" id="pEx">0%</div></div>
+            </div>
+          </div>
+
+          <div class="barCard">
+            <div class="chartTitle">رسم بياني (عدد الطلاب لكل تقدير)</div>
+            <canvas id="bar" class="barCanvas"></canvas>
+          </div>
+
+          <div class="footer">
+            <div class="fBox">معلم المادة / <span id="fTeacher">—</span></div>
+            <div class="fBox">مدير المدرسة / <span id="fPrincipal">—</span></div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PAGE 2 -->
+  <div class="page hidden" id="page2">
+    <div class="fitRoot" id="fitRoot2">
+
+      <div class="headerWrap">
+        <img src="assets/images/هيدر التحليل .png" alt="هيدر التحليل" id="headerImg2" />
+        <div class="headerOverlay">
+          <div class="headerText" id="headerTextFit2">
+            <div class="edu" id="hEdu2">—</div>
+            <div class="school" id="hSchool2">—</div>
+            <div class="title">خطة علاجية — مادة <span id="hSubject2">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="afterHeaderTight">
+        <div class="metaRow">
+          <div class="metaBox green"><div class="metaLabel">المرحلة الدراسية / الصف</div><div class="metaVal" id="tStage2">—</div></div>
+          <div class="metaBox"><div class="metaLabel">السنة / الفصل الدراسي</div><div class="metaVal" id="tTerm2">—</div></div>
+          <div class="metaBox green"><div class="metaLabel">درجة القياس (الاختبار)</div><div class="metaVal" id="tFull2">—</div></div>
+        </div>
+      </div>
+
+      <div class="weakCard">
+        <div class="weakHead">
+          <div class="badgeInfo" id="weakRule">قاعدة الضعفاء: —</div>
+          <div class="badgeInfo red" id="weakCount">عدد الضعفاء: 0</div>
+        </div>
+
+        <div class="tblWrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th style="width:28%">اسم الطالب</th>
+                <th style="width:10%">الشعبة</th>
+                <th style="width:10%">الدرجة</th>
+                <th style="width:10%">النسبة</th>
+                <th style="width:10%">الفجوة</th>
+                <th style="width:32%">خطة علاجية متنوعة</th>
+              </tr>
+            </thead>
+            <tbody id="weakBody">
+              <tr><td colspan="6" style="text-align:center;font-weight:900;color:#6b7280;">لا توجد بيانات بعد.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="footer" style="padding:0 10px 10px;">
+          <div class="fBox">معلم المادة / <span id="fTeacher2">—</span></div>
+          <div class="fBox">مدير المدرسة / <span id="fPrincipal2">—</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Buttons -->
+<div class="fab">
+  <button class="btn" id="openModal">تحليل</button>
+  <button class="btn secondary" id="printSave">حفظ / طباعة</button>
+</div>
+
+<!-- Modal -->
+<div class="overlay" id="ov">
+  <div class="modal">
+    <div class="modalHead">
+      <div class="t">إدخال البيانات واستيراد الدرجات</div>
+      <button class="x" id="closeOv" title="إغلاق">✕</button>
+    </div>
+    <div class="modalBody">
+
+      <div class="formGrid">
+        <div class="field">
+          <label>إدارة التعليم <span class="req">*</span></label>
+          <input id="inEdu" class="invalid" placeholder="اكتب هنا إدارة التعليم" value="" />
+        </div>
+        <div class="field">
+          <label>اسم المدرسة <span class="req">*</span></label>
+          <input id="inSchool" class="invalid" placeholder="اكتب هنا اسم المدرسة" value="" />
+        </div>
+        <div class="field">
+          <label>اسم مدير المدرسة <span class="req">*</span></label>
+          <input id="inPrincipal" class="invalid" placeholder="اكتب هنا اسم مدير المدرسة" value="" />
+        </div>
+        <div class="field">
+          <label>معلم المادة <span class="req">*</span></label>
+          <input id="inTeacher" class="invalid" placeholder="اكتب هنا اسم معلم المادة" value="" />
+        </div>
+
+        <div class="field">
+          <label>المادة <span class="req">*</span></label>
+          <input id="inSubject" class="invalid" placeholder="اكتب هنا اسم المادة" value="" />
+        </div>
+        <div class="field">
+          <label>المرحلة / الصف <span class="req">*</span></label>
+          <input id="inStage" class="invalid" placeholder="اكتب هنا المرحلة/الصف" value="" />
+        </div>
+        <div class="field">
+          <label>السنة / الفصل الدراسي (اختياري)</label>
+          <input id="inTerm" placeholder="اكتب هنا السنة/الفصل (اختياري)" value="" style="border-color:#cfd8dc;background:#fff;" />
+        </div>
+        <div class="field">
+          <label>درجة الاختبار (اختياري)</label>
+          <select id="inFullMode">
+            <option value="auto">آلي (ذكي)</option>
+            <option value="40">40</option>
+            <option value="60">60</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>رفع ملف الدرجات (Excel/CSV) <span class="req">*</span></label>
+          <input type="file" id="file" class="invalid" accept=".xlsx,.xls,.csv" />
+        </div>
+        <div class="field">
+          <label>تصفية الشُعب (اختياري)</label>
+          <input id="inSections" placeholder="اكتب الشُعب إن رغبت (مثال: 1,2,3)" value="" style="border-color:#cfd8dc;background:#fff;" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <div class="badge bad" id="statusPill">أكمل الحقول الإلزامية</div>
+        <button class="btn secondary" id="dlTemplate" type="button">تنزيل قالب تعبئة (Excel)</button>
+        <button class="btn" id="doAnalyze" type="button" disabled style="opacity:.55; cursor:not-allowed;">بدء التحليل</button>
+      </div>
+
+      <div class="note">
+        <strong>طريقة استخراج ملف الدرجات (تخدم جميع المراحل):</strong><br>
+        نظام نور → التقارير → تقارير الدرجات/رصد الدرجات → كشف رصد درجات مادة → «تصدير إلى Excel».<br>
+        <strong>ملاحظة:</strong> إذا لم يتوفر ملف جاهز، نزّل القالب ثم عبّئ أسماء الطلاب والدرجات وأعد استيراده.
+      </div>
+
+      <div class="modalFooterTiny">تصميم وبرمجة هذه الصفحة: فهد حامد الزهراني</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ✅ مكان مناسب لوضع locale: بعد تحميل Chart.js مباشرة وقبل إنشاء أي رسم */
+Chart.defaults.locale = 'ar-SA';
+
+/* =========================
+   🔒 تعطيل أي Datalabels نهائياً (لو كان موجوداً من بيئة أخرى)
+========================= */
+(function hardDisableDataLabels(){
+  try{
+    if (Chart?.defaults?.plugins){
+      Chart.defaults.plugins.datalabels = Chart.defaults.plugins.datalabels || {};
+      Chart.defaults.plugins.datalabels.display = false;
+      Chart.defaults.plugins.tooltip = Chart.defaults.plugins.tooltip || {};
+    }
+  }catch(e){}
+})();
+
+/* Helpers */
+const $ = (id)=>document.getElementById(id);
+const clean = (s)=> (s??"").toString().replace(/\s+/g," ").trim();
+const normalizeDigits = (str)=>{
+  if(str == null) return "";
+  str = String(str);
+  const map = {'٠':0,'١':1,'٢':2,'٣':3,'٤':4,'٥':5,'٦':6,'٧':7,'٨':8,'٩':9};
+  return str.replace(/[٠-٩]/g,d=>map[d]).replace(/,/g,".");
+};
+const isNumeric = (v)=>{
+  if(v===null||v===undefined) return false;
+  if(typeof v==="number") return Number.isFinite(v);
+  const n = Number(normalizeDigits(v).replace(/[^\d.-]/g,""));
+  return Number.isFinite(n);
+};
+const toNumber = (v)=>{
+  if(typeof v==="number") return v;
+  const n = Number(normalizeDigits(v).replace(/[^\d.-]/g,""));
+  return Number.isFinite(n) ? n : NaN;
+};
+const pct = (a,b)=> b ? (a/b)*100 : 0;
+
+/* Modal */
+const ov = $("ov");
+$("openModal").onclick = ()=> ov.classList.add("open");
+$("closeOv").onclick = ()=> ov.classList.remove("open");
+ov.addEventListener("click",(e)=>{ if(e.target===ov) ov.classList.remove("open"); });
+
+/* Inputs */
+const inEdu = $("inEdu");
+const inSchool = $("inSchool");
+const inPrincipal = $("inPrincipal");
+const inTeacher = $("inTeacher");
+const inSubject = $("inSubject");
+const inStage = $("inStage");
+const inTerm = $("inTerm");
+const inFullMode = $("inFullMode");
+const inSections = $("inSections");
+const fileEl = $("file");
+const statusPill = $("statusPill");
+const analyzeBtn = $("doAnalyze");
+
+let selectedFile = null;
+fileEl.addEventListener("change",(e)=>{ selectedFile = e.target.files?.[0] || null; validateInputs(); });
+
+const required = [inEdu,inSchool,inPrincipal,inTeacher,inSubject,inStage];
+
+function setStatus(text, ok=true){
+  statusPill.textContent = text;
+  statusPill.classList.toggle("bad", !ok);
+  statusPill.style.borderColor = ok ? "#0aa38b55" : "#fecaca";
+  statusPill.style.background = ok ? "#fff" : "#fff1f2";
+  statusPill.style.color = ok ? "var(--moe)" : "#991b1b";
+}
+function markField(el, ok){
+  if(ok){ el.classList.remove("invalid"); el.classList.add("valid"); }
+  else{ el.classList.add("invalid"); el.classList.remove("valid"); }
+}
+function validateInputs(){
+  let ok = true;
+  required.forEach(el=>{
+    const good = !!clean(el.value);
+    markField(el, good);
+    if(!good) ok=false;
+  });
+  const fileOk = !!selectedFile;
+  markField(fileEl, fileOk);
+  if(!fileOk) ok=false;
+
+  setStatus(ok ? "جاهز للتحليل" : "أكمل الحقول الإلزامية", ok);
+  analyzeBtn.disabled = !ok;
+  analyzeBtn.style.opacity = ok ? "1" : ".55";
+  analyzeBtn.style.cursor = ok ? "pointer" : "not-allowed";
+
+  syncHeader();
+  fitAllHeaderText();
+  return ok;
+}
+
+/* Header binding */
+const hEdu = $("hEdu"), hSchool = $("hSchool"), hSubject = $("hSubject");
+const hEdu2 = $("hEdu2"), hSchool2 = $("hSchool2"), hSubject2 = $("hSubject2");
+const tStage = $("tStage"), tTerm = $("tTerm"), tFull = $("tFull");
+const tStage2 = $("tStage2"), tTerm2 = $("tTerm2"), tFull2 = $("tFull2");
+const fTeacher = $("fTeacher"), fPrincipal = $("fPrincipal");
+const fTeacher2 = $("fTeacher2"), fPrincipal2 = $("fPrincipal2");
+
+function syncHeader(){
+  const edu = clean(inEdu.value) || "—";
+  const school = clean(inSchool.value) || "—";
+  const subject = clean(inSubject.value) || "—";
+  const stage = clean(inStage.value) || "—";
+  const term = clean(inTerm.value) || "—";
+  const teacher = clean(inTeacher.value) || "—";
+  const principal = clean(inPrincipal.value) || "—";
+
+  hEdu.textContent = edu; hSchool.textContent = school; hSubject.textContent = subject;
+  hEdu2.textContent = edu; hSchool2.textContent = school; hSubject2.textContent = subject;
+
+  tStage.textContent = stage; tTerm.textContent = term;
+  tStage2.textContent = stage; tTerm2.textContent = term;
+
+  fTeacher.textContent = teacher; fPrincipal.textContent = principal;
+  fTeacher2.textContent = teacher; fPrincipal2.textContent = principal;
+}
+
+/* Fit header text */
+function fitHeaderText(boxId){
+  const box = $(boxId);
+  if(!box) return;
+  const overlay = box.closest(".headerOverlay");
+  if(!overlay) return;
+
+  const edu = box.querySelector(".edu");
+  const school = box.querySelector(".school");
+  const title = box.querySelector(".title");
+
+  edu.style.fontSize = "18px";
+  school.style.fontSize = "17px";
+  title.style.fontSize = "16px";
+
+  const maxW = overlay.clientWidth - 24;
+  const maxH = overlay.clientHeight - 18;
+
+  let guard = 0;
+  while(guard < 34 && (box.scrollWidth > maxW || box.scrollHeight > maxH)){
+    guard++;
+    edu.style.fontSize = (parseFloat(getComputedStyle(edu).fontSize) - 0.7) + "px";
+    school.style.fontSize = (parseFloat(getComputedStyle(school).fontSize) - 0.7) + "px";
+    title.style.fontSize = (parseFloat(getComputedStyle(title).fontSize) - 0.7) + "px";
+  }
+}
+function fitAllHeaderText(){ fitHeaderText("headerTextFit"); fitHeaderText("headerTextFit2"); }
+
+["input","change"].forEach(evt=>{
+  [inEdu,inSchool,inPrincipal,inTeacher,inSubject,inStage,inTerm,inFullMode,inSections].forEach(el=>{
+    el.addEventListener(evt, validateInputs);
+  });
+});
+window.addEventListener("resize", ()=> fitAllHeaderText());
+[$("headerImg1"), $("headerImg2")].forEach(img=>{
+  if(!img) return;
+  img.addEventListener("load", ()=> setTimeout(fitAllHeaderText, 50));
+});
+syncHeader();
+setTimeout(()=>{fitAllHeaderText(); validateInputs();}, 120);
+
+/* Sections */
+function parseSections(v){
+  const s = normalizeDigits(v||"").trim();
+  if(!s) return [];
+  return s.split(/[,،/|]+/).map(x=>x.trim()).filter(Boolean);
+}
+function inferSectionFromSheet(name){
+  const s = normalizeDigits(name||"").trim();
+  const m = s.match(/(?:شعبة|شعبه|ش|قسم|ق)\s*([0-9]+)/) || s.match(/([0-9]{1,2})/);
+  return m ? String(m[1]) : clean(name||"");
+}
+
+/* Column detection */
+function normToken(t){
+  return clean(normalizeDigits(String(t||"")).toLowerCase())
+    .replace(/[()（）【】\[\]{}]/g," ")
+    .replace(/[:：]/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+}
+const P = {
+  name:[/اسم\s*الطالب/,/اسم\s*المتعلم/,/\bالطالب\b/,/\bname\b/],
+  gradeFinal:[/نهاية\s*فصل/,/نهائي/,/final/,/الدرجة\s*النهائية/],
+  gradeSum:[/المجموع/,/مجموع/,/الدرجة/,/total/,/score/],
+  section:[/الشعبة/,/الشعبه/,/القسم/]
+};
+function detectHeaderRow(rows){
+  let bestI=-1, bestS=-1;
+  const scan=Math.min(rows.length, 250);
+  for(let i=0;i<scan;i++){
+    const row=rows[i]||[];
+    const toks=row.map(normToken).filter(Boolean);
+    if(!toks.length) continue;
+    const joined=" "+toks.join(" ")+" ";
+    let s=0;
+    if(P.name.some(rx=>rx.test(joined))) s+=5;
+    if(P.gradeFinal.some(rx=>rx.test(joined))) s+=6;
+    if(P.gradeSum.some(rx=>rx.test(joined))) s+=4;
+    if(P.section.some(rx=>rx.test(joined))) s+=2;
+    if(toks.length>=4) s+=1;
+    if(s>bestS){bestS=s; bestI=i;}
+  }
+  return bestI;
+}
+function pickCol(tokens, rxList){
+  for(let i=0;i<tokens.length;i++){
+    const t=" "+tokens[i]+" ";
+    if(rxList.some(rx=>rx.test(t))) return i;
+  }
+  return -1;
+}
+function buildRecordsFromSheet(rows, sheetName){
+  const h = detectHeaderRow(rows);
+  if(h<0) return [];
+  const header=rows[h]||[];
+  const tokens=header.map(normToken);
+
+  const nameCol = pickCol(tokens, P.name);
+  const sectionCol = pickCol(tokens, P.section);
+
+  let gradeCol = pickCol(tokens, P.gradeFinal);
+  if(gradeCol<0) gradeCol = pickCol(tokens, P.gradeSum);
+
+  if(gradeCol<0){
+    let best=-1, bestCnt=-1, bestVar=-1;
+    for(let c=0;c<tokens.length;c++){
+      let cnt=0, vals=[];
+      for(let r=h+1;r<rows.length;r++){
+        const v=(rows[r]||[])[c];
+        if(isNumeric(v)){
+          const n=toNumber(v);
+          if(n>=0 && n<=200){cnt++; vals.push(n);}
+        }
+      }
+      if(cnt>=6){
+        const mean = vals.reduce((a,b)=>a+b,0)/vals.length;
+        const vari = vals.reduce((a,b)=>a+(b-mean)*(b-mean),0)/vals.length;
+        if(cnt>bestCnt || (cnt===bestCnt && vari>bestVar)){
+          bestCnt=cnt; bestVar=vari; best=c;
+        }
+      }
+    }
+    gradeCol=best;
+  }
+
+  const sectionFromSheet = inferSectionFromSheet(sheetName);
+  const out=[];
+  for(let r=h+1;r<rows.length;r++){
+    const row=rows[r]||[];
+    const name = nameCol>=0 ? clean(row[nameCol]) : "";
+    const gRaw = gradeCol>=0 ? row[gradeCol] : null;
+    const grade = isNumeric(gRaw) ? toNumber(gRaw) : NaN;
+
+    if(!name) continue;
+    if(!Number.isFinite(grade) || grade<0 || grade>200) continue;
+
+    const sec = sectionCol>=0 ? clean(row[sectionCol]) : "";
+    out.push({
+      student: name || "—",
+      grade,
+      section: clean(sec) ? normalizeDigits(sec) : sectionFromSheet
+    });
+  }
+  return out;
+}
+
+/* Full score + weak rule */
+function inferFullScoreSmart(list, mode){
+  if(mode!=="auto") return Number(mode);
+  const mx = Math.max(...list.map(r=>r.grade));
+  const common=[40,60,100,50,30,20];
+  let best=Infinity, pick=mx;
+  for(const c of common){
+    if(c>=mx && Math.abs(c-mx)<=10){
+      const d=Math.abs(c-mx);
+      if(d<best){best=d; pick=c;}
+    }
+  }
+  if(!common.includes(pick)) pick = Math.ceil(mx);
+  return Math.max(1, Math.round(pick));
+}
+function weakCutoff(full){
+  if(full===100) return 49;
+  if(full===60) return 19;
+  if(full===40) return 9;
+  return Math.max(0, Math.floor(full*0.5)-1);
+}
+function band(score, full){
+  const p = pct(score,full);
+  if(p>=90) return "ex";
+  if(p>=80) return "vg";
+  if(p>=70) return "gd";
+  if(p>=50) return "ac";
+  return "wk";
+}
+function ranges(full){
+  const ex0 = Math.ceil(full*0.90);
+  const vg0 = Math.ceil(full*0.80);
+  const gd0 = Math.ceil(full*0.70);
+  const ac0 = Math.ceil(full*0.50);
+  const fmt = (x)=> (Math.round(x*100)/100).toString().replace(/\.0+$/,"");
+  return {
+    ex:`${fmt(ex0)} - ${fmt(full)}`,
+    vg:`${fmt(vg0)} - ${fmt(ex0-0.01)}`,
+    gd:`${fmt(gd0)} - ${fmt(vg0-0.01)}`,
+    ac:`${fmt(ac0)} - ${fmt(gd0-0.01)}`,
+    wk:`0 - ${fmt(ac0-0.01)}`
+  };
+}
+function stats(list, full){
+  const n=list.length;
+  const grades=list.map(x=>x.grade);
+  const sum=grades.reduce((a,b)=>a+b,0);
+  const mx=Math.max(...grades);
+  const mn=Math.min(...grades);
+  const avg=n? sum/n : 0;
+  const rate = pct(avg, full);
+  const c={ex:0,vg:0,gd:0,ac:0,wk:0};
+  list.forEach(r=> c[band(r.grade,full)]++ );
+  return {n,sum,mx,mn,avg,rate,c};
+}
+
+/* Plans */
+const planBank = [
+  "تعزيز المهارات الأساسية: تدريب يومي قصير (10 دقائق) + ورقة عمل علاجية + تقويم أسبوعي وتوثيق التحسن.",
+  "تصحيح الأخطاء الشائعة: تشخيص نوع الخطأ + شرح مصغر + تدريب موجه + إعادة قياس بعد أسبوع.",
+  "دعم بمجموعات صغيرة: تعلم تعاوني + بنك أسئلة متدرج (سهل→متوسط) + واجب علاجي منزلي.",
+  "خطة مشتركة مع ولي الأمر: مهام منزلية محددة + متابعة أسبوعية مختصرة + اختبار محاكاة بعد كل محور.",
+  "أهداف قصيرة قابلة للقياس: مهارة واحدة/أسبوع + تغذية راجعة فردية + رصد تقدم حتى الوصول للمستوى المطلوب."
+];
+function pickPlanByGap(gap, full){
+  const p = pct(full-gap, full);
+  if(p < 20) return planBank[0];
+  if(p < 35) return planBank[1];
+  if(p < 50) return planBank[2];
+  if(p < 65) return planBank[3];
+  return planBank[4];
+}
+
+/* ✅ الدونات: لا tooltips ولا events ولا datalabels + مركزها نسبة صحيحة */
+const centerText = {
+  id:"centerText",
+  afterDraw(chart, args, opts){
+    const t = opts && opts.text;
+    if(!t) return;
+    const {ctx, chartArea:{left,right,top,bottom}} = chart;
+    const x=(left+right)/2, y=(top+bottom)/2;
+    ctx.save();
+    ctx.font="900 16px Tajawal, system-ui";
+    ctx.fillStyle="#111827";
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.fillText(t, x, y);
+    ctx.restore();
+  }
+};
+Chart.register(centerText);
+
+function donut(el, color){
+  const ctx=$(el).getContext("2d");
+  return new Chart(ctx,{
+    type:"doughnut",
+    data:{datasets:[{data:[0,100],backgroundColor:[color,"#e5e7eb"],borderWidth:0}]},
+    options:{
+      responsive:true,
+      maintainAspectRatio:true,
+      aspectRatio:1,
+      animation:false,
+      events: [],
+      plugins:{
+        legend:{display:false},
+        tooltip:{enabled:false},
+        datalabels:{display:false},
+        centerText:{text:"0%"}
+      },
+      cutout:"80%"
+    }
+  });
+}
+function setDonut(ch, percent){
+  const p=Math.max(0,Math.min(100, Math.round(percent)));
+  ch.data.datasets[0].data=[p,100-p];
+  ch.options.plugins.centerText.text = `${p}%`;
+  ch.update();
+}
+
+const css = getComputedStyle(document.documentElement);
+const chWk = donut("dWk", css.getPropertyValue("--wk").trim());
+const chAc = donut("dAc", css.getPropertyValue("--ac").trim());
+const chGd = donut("dGd", css.getPropertyValue("--gd").trim());
+const chVg = donut("dVg", css.getPropertyValue("--vg").trim());
+const chEx = donut("dEx", css.getPropertyValue("--ex").trim());
+
+/* bar labels (داخل الأعمدة) */
+const barValueLabels = {
+  id:"barValueLabels",
+  afterDatasetsDraw(chart){
+    const {ctx} = chart;
+    const meta = chart.getDatasetMeta(0);
+    if(!meta || !meta.data) return;
+    ctx.save();
+    ctx.font = "900 14px Tajawal, system-ui";
+    ctx.fillStyle = "#0f172a";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    meta.data.forEach((bar, i)=>{
+      const v = chart.data.datasets[0].data[i];
+      const p = bar.tooltipPosition();
+      ctx.fillText(String(v ?? 0), p.x, p.y - 6);
+    });
+    ctx.restore();
+  }
+};
+Chart.register(barValueLabels);
+
+const barChart = new Chart($("bar").getContext("2d"),{
+  type:"bar",
+  data:{
+    labels:["ضعيف","مقبول","جيد","جيد جداً","ممتاز"],
+    datasets:[{
+      data:[0,0,0,0,0],
+      backgroundColor:["#ff5a5f","#f08b2f","#3f94e6","#2fb1ab","#35b46f"],
+      borderRadius:16,
+      maxBarThickness:90
+    }]
+  },
+  options:{
+    responsive:true,
+    maintainAspectRatio:false,
+    animation:false,
+    plugins:{
+      legend:{display:false},
+      tooltip:{enabled:true},
+      datalabels:{display:false}
+    },
+    layout:{padding:{top:18}},
+    scales:{
+      y:{beginAtZero:true,ticks:{font:{family:"Tajawal",weight:"900",size:13}},grid:{color:"#e5e7eb"}},
+      x:{ticks:{font:{family:"Tajawal",weight:"900",size:13}},grid:{display:false}}
+    }
+  }
+});
+
+/* Read files */
+function readWorkbook(file){
+  return new Promise((resolve,reject)=>{
+    const fr=new FileReader();
+    fr.onload=(e)=>{
+      try{
+        const data=new Uint8Array(e.target.result);
+        const wb=XLSX.read(data,{type:"array"});
+        const sheets = wb.SheetNames.map(name=>{
+          const ws=wb.Sheets[name];
+          const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+          return {name, rows};
+        });
+        resolve({sheets});
+      }catch(err){reject(err);}
+    };
+    fr.onerror=reject;
+    fr.readAsArrayBuffer(file);
+  });
+}
+function readCSV(file){
+  return new Promise((resolve,reject)=>{
+    const fr=new FileReader();
+    fr.onload=()=>{
+      const text = String(fr.result||"");
+      const rows = text.split(/\r?\n/).filter(Boolean).map(line=> line.split(/[,;\t]/).map(x=>x.trim()));
+      resolve({sheets:[{name:"CSV", rows}]});
+    };
+    fr.onerror=reject;
+    fr.readAsText(file,"utf-8");
+  });
+}
+
+/* Outputs */
+const rEx = $("rEx"), rVg = $("rVg"), rGd = $("rGd"), rAc = $("rAc"), rWk = $("rWk");
+const cEx = $("cEx"), cVg = $("cVg"), cGd = $("cGd"), cAc = $("cAc"), cWk = $("cWk");
+const kN = $("kN"), kMax = $("kMax"), kMin = $("kMin"), kAvg = $("kAvg"), kRate = $("kRate"), kSum = $("kSum");
+const pEx = $("pEx"), pVg = $("pVg"), pGd = $("pGd"), pAc = $("pAc"), pWk = $("pWk");
+const weakRuleEl = $("weakRule"), weakCountEl = $("weakCount"), weakBody = $("weakBody");
+const page2 = $("page2");
+
+function renderWeak(list, full){
+  const cutoff = weakCutoff(full);
+  const weak = list.filter(r=> r.grade <= cutoff).sort((a,b)=> a.grade-b.grade);
+  if(!weak.length){
+    page2.classList.add("hidden");
+    weakBody.innerHTML = `<tr><td colspan="6" style="text-align:center;font-weight:900;color:#6b7280;">لا يوجد طلاب ضمن فئة الضعفاء.</td></tr>`;
+    return;
+  }
+  page2.classList.remove("hidden");
+  weakRuleEl.textContent = `قاعدة الضعفاء: من 0 إلى ${cutoff} (من أصل ${full})`;
+  weakCountEl.textContent = `عدد الضعفاء: ${weak.length}`;
+  weakBody.innerHTML = weak.map(r=>{
+    const per = pct(r.grade,full);
+    const gap = Math.max(0, full - r.grade);
+    const plan = pickPlanByGap(gap, full);
+    return `
+      <tr>
+        <td class="nameCell">${clean(r.student)||"—"}</td>
+        <td class="center">${clean(r.section)||"—"}</td>
+        <td class="center">${Number(r.grade).toFixed(0)}</td>
+        <td class="center">${per.toFixed(1)}%</td>
+        <td class="center" style="color:#991b1b;">${gap.toFixed(0)}</td>
+        <td class="plan">${plan}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+/* Template download */
+$("dlTemplate").addEventListener("click", ()=>{
+  const rows = [["بيانات الطلاب"],["اسم الطالب","الشعبة","الدرجة"]];
+  for(let i=0;i<25;i++) rows.push(["","",""]);
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"] = [{wch:28},{wch:10},{wch:10}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "درجات");
+  XLSX.writeFile(wb, "قالب-تعبئة-الدرجات.xlsx");
+});
+
+/* Analyze */
+$("doAnalyze").addEventListener("click", async ()=>{
+  try{
+    if(!validateInputs()){
+      alert("فضلاً أكمل الحقول الإلزامية (بالأحمر) ثم ارفع ملف الدرجات.");
+      return;
+    }
+    setStatus("جارٍ التحليل...", true);
+
+    const f = selectedFile;
+    const name = (f?.name||"").toLowerCase();
+    const result = name.endsWith(".csv") ? await readCSV(f) : await readWorkbook(f);
+
+    let list=[];
+    (result.sheets||[]).forEach(sh=>{ list = list.concat(buildRecordsFromSheet(sh.rows, sh.name)); });
+
+    const want = parseSections(inSections.value);
+    if(want.length){
+      const set = new Set(want.map(String));
+      list = list.filter(r=> set.has(String(clean(r.section))) );
+    }
+
+    if(!list.length){
+      setStatus("لم تُكتشف بيانات", false);
+      alert("لم يتم العثور على بيانات صالحة داخل الملف. استخدم قالب التعبئة أو تصدير Excel من نور.");
+      return;
+    }
+
+    const full = inferFullScoreSmart(list, inFullMode.value);
+    tFull.textContent = String(full);
+    tFull2.textContent = String(full);
+
+    const rr = ranges(full);
+    rEx.textContent = rr.ex; rVg.textContent = rr.vg; rGd.textContent = rr.gd; rAc.textContent = rr.ac; rWk.textContent = rr.wk;
+
+    const st = stats(list, full);
+    cEx.textContent = st.c.ex; cVg.textContent = st.c.vg; cGd.textContent = st.c.gd; cAc.textContent = st.c.ac; cWk.textContent = st.c.wk;
+
+    kN.textContent = st.n;
+    kMax.textContent = st.mx.toFixed(0);
+    kMin.textContent = st.mn.toFixed(0);
+    kAvg.textContent = st.avg.toFixed(1);
+    kRate.textContent = `${st.rate.toFixed(2)}%`;
+    kSum.textContent = st.sum.toFixed(0);
+
+    const n = st.n || 1;
+    const pc = (x)=> pct(x,n);
+
+    setDonut(chWk, pc(st.c.wk));
+    setDonut(chAc, pc(st.c.ac));
+    setDonut(chGd, pc(st.c.gd));
+    setDonut(chVg, pc(st.c.vg));
+    setDonut(chEx, pc(st.c.ex));
+
+    pWk.textContent = `${Math.round(pc(st.c.wk))}%`;
+    pAc.textContent = `${Math.round(pc(st.c.ac))}%`;
+    pGd.textContent = `${Math.round(pc(st.c.gd))}%`;
+    pVg.textContent = `${Math.round(pc(st.c.vg))}%`;
+    pEx.textContent = `${Math.round(pc(st.c.ex))}%`;
+
+    barChart.data.datasets[0].data = [st.c.wk, st.c.ac, st.c.gd, st.c.vg, st.c.ex];
+    barChart.update();
+
+    renderWeak(list, full);
+
+    syncHeader();
+    fitAllHeaderText();
+    ov.classList.remove("open");
+
+    setStatus("تم التحليل بنجاح", true);
+  }catch(err){
+    console.error(err);
+    setStatus("حدث خطأ", false);
+    alert("حدث خطأ أثناء التحليل. تأكد من الملف ثم أعد المحاولة.");
+  }
+});
+
+/* Print/save */
+$("printSave").addEventListener("click", ()=>{
+  fitAllHeaderText();
+  setTimeout(()=> window.print(), 120);
+});
+window.addEventListener("beforeprint", ()=>{ fitAllHeaderText(); });
+
+</script>
+
+</body>
+</html>

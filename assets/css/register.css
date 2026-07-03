@@ -1,0 +1,264 @@
+:root{
+  --green:#07a869;
+  --blue:#3d7eb9;
+  --teal:#0da9a6;
+  --navy:#15445a;
+  --gold:#c1b489;
+  --gray:#c2c1c1;
+  --support-blue:#3078a6;
+  --support-cyan:#218caa;
+  --support-sky:#69cee3;
+  --purple:#351375;
+  --lavender:#7258a4;
+  --indigo:#7a80ff;
+  --line:#e6eeee;
+  --muted:#6b7d86;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  color:var(--navy);
+  background:#fff;
+  font-family:"IBM Plex Sans Arabic", system-ui, sans-serif;
+}
+.register-page{
+  min-height:100vh;
+  display:grid;
+  grid-template-columns:minmax(360px,52vw) minmax(360px,1fr);
+  align-items:stretch;
+  gap:0;
+  padding:34px 46px;
+}
+.visual-panel{
+  position:relative;
+  overflow:hidden;
+  min-height:calc(100vh - 68px);
+  border-radius:22px 0 22px 0;
+  background:var(--purple);
+}
+.visual-panel::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    linear-gradient(180deg,rgba(53,19,117,.80),rgba(122,128,255,.72)),
+    url("../images/register-school-image.png") center/cover no-repeat;
+  filter:saturate(.85) contrast(1.02);
+}
+.visual-panel::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(135deg,rgba(105,206,227,.12),rgba(53,19,117,.08));
+}
+.corner{
+  position:absolute;
+  width:78px;
+  height:78px;
+  background:#fff;
+  z-index:2;
+}
+.corner.top{
+  top:54px;
+  inset-inline-end:54px;
+  border-radius:0 0 10px 10px;
+}
+.corner.bottom{
+  bottom:54px;
+  inset-inline-start:54px;
+  border-radius:10px 10px 0 0;
+}
+.form-panel{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:40px 54px;
+}
+.form-shell{
+  width:min(520px,100%);
+}
+.brand{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin-bottom:30px;
+}
+.brand-logo{
+  display:block;
+  width:230px;
+  max-width:68%;
+  height:auto;
+  object-fit:contain;
+}
+.welcome{
+  margin:0 0 28px;
+  text-align:center;
+  color:#111827;
+  font-size:25px;
+  font-weight:900;
+}
+.register-form{
+  display:grid;
+  gap:16px;
+}
+.field{
+  display:grid;
+  gap:8px;
+}
+label{
+  color:#24343b;
+  font-size:14px;
+  font-weight:800;
+}
+input,
+select{
+  width:100%;
+  min-height:58px;
+  border:1px solid #dfe7ea;
+  border-radius:12px;
+  padding:0 16px;
+  background:#fff;
+  color:#162f3a;
+  outline:none;
+  font:700 16px "IBM Plex Sans Arabic", system-ui, sans-serif;
+}
+select{
+  appearance:none;
+  -webkit-appearance:none;
+  padding-inline-start:16px;
+  padding-inline-end:48px;
+  background-image:url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7 10l5 5 5-5' stroke='%2315445a' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position:left 18px center;
+  background-size:18px 18px;
+  background-repeat:no-repeat;
+}
+input::placeholder{
+  color:#a6b3bb;
+  font-family:"IBM Plex Sans Arabic", system-ui, sans-serif;
+}
+input:focus,
+select:focus{
+  border-color:var(--teal);
+  box-shadow:0 0 0 4px rgba(13,169,166,.12);
+}
+.field-error{
+  min-height:18px;
+  margin:0;
+  color:#c81e1e;
+  font-size:12px;
+  font-weight:800;
+  line-height:1.5;
+}
+input.input-error{
+  border-color:#c81e1e;
+  box-shadow:0 0 0 4px rgba(200,30,30,.1);
+}
+.preview{
+  position:relative;
+  min-height:82px;
+  padding:0;
+  overflow:hidden;
+  border:1px solid rgba(13,169,166,.32);
+  border-radius:12px;
+  background:#063f48;
+  box-shadow:0 10px 24px rgba(21,68,90,.10);
+}
+.preview img{
+  display:block;
+  width:100%;
+  height:100%;
+  min-height:82px;
+  object-fit:contain;
+}
+.preview-name{
+  position:absolute;
+  inset-inline:86px;
+  top:50%;
+  transform:translateY(-50%);
+  color:#fff;
+  font-size:clamp(15px,2.2vw,24px);
+  font-weight:900;
+  line-height:1.25;
+  text-align:center;
+  text-shadow:0 2px 8px rgba(0,0,0,.34);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.actions{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:12px;
+  margin-top:4px;
+}
+button,
+a{
+  min-height:54px;
+  border:0;
+  border-radius:12px;
+  padding:0 22px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  text-decoration:none;
+  cursor:pointer;
+  font:900 15px "IBM Plex Sans Arabic", system-ui, sans-serif;
+}
+button{
+  color:#fff;
+  background:linear-gradient(135deg,var(--purple),var(--lavender));
+  box-shadow:0 14px 26px rgba(53,19,117,.18);
+}
+a{
+  color:var(--purple);
+  background:#f2f0f8;
+}
+.guest-btn{
+  color:var(--navy);
+  background:#eef5f6;
+  box-shadow:none;
+}
+.hint{
+  margin-top:20px;
+  color:var(--muted);
+  text-align:center;
+  font-size:13px;
+  line-height:1.8;
+}
+.subscription-note{
+  margin:16px 0 0;
+  color:#c81e1e;
+  text-align:center;
+  font-size:14px;
+  font-weight:900;
+  line-height:1.7;
+}
+@media(max-width:900px){
+  .register-page{
+    grid-template-columns:1fr;
+    padding:18px;
+  }
+  .visual-panel{
+    min-height:300px;
+    border-radius:18px;
+  }
+  .form-panel{
+    padding:30px 6px;
+  }
+  .corner{
+    width:58px;
+    height:58px;
+  }
+  .preview{
+    min-height:88px;
+  }
+  .preview img{
+    min-height:88px;
+    object-fit:contain;
+  }
+  .preview-name{
+    inset-inline:74px;
+    font-size:clamp(13px,4.5vw,18px);
+  }
+}
