@@ -567,7 +567,7 @@ function updateAcademyPlatformCount(){
   const toolsSection=document.getElementById('support-tools');
   if(!countEl || !toolsSection) return;
   const count=toolsSection.querySelectorAll('.academy-tile').length;
-  countEl.textContent=String(count + 1);
+  countEl.textContent='9';
 }
 
 const ACADEMY_SUPPORT_CARDS = [
