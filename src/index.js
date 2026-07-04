@@ -104,6 +104,18 @@ async function handleChat(request, env){
   }
 
   const data = await openAiResponse.json();
+  console.log('OpenAI debug:', {
+    id: data.id,
+    outputTypes: (data.output || []).map(item => item.type),
+    fileSearchCalls: (data.output || [])
+      .filter(item => item.type === 'file_search_call')
+      .map(item => ({
+        status: item.status,
+        resultsCount: Array.isArray(item.results) ? item.results.length : null
+      })),
+    outputTextPreview: typeof data.output_text === 'string' ? data.output_text.slice(0, 300) : null
+  });
+
   if(!hasFileSearchResults(data)){
     return jsonResponse({
       answer: FALLBACK_ANSWER,
