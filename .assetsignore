@@ -1,0 +1,10 @@
+.git
+functions
+src
+tmp
+*.docx
+*.pdf
+.env
+wrangler.toml
+node_modules
+knowledge.md

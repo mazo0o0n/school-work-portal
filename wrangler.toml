@@ -1,5 +1,6 @@
 name = "snowy-mud-6e88"
 compatibility_date = "2026-07-03"
+main = "src/index.js"
 
 [[routes]]
 pattern = "mazen.zb-store.com"
@@ -7,3 +8,4 @@ custom_domain = true
 
 [assets]
 directory = "."
+binding = "ASSETS"
