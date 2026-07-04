@@ -43,7 +43,7 @@ export async function onRequestPost({ request, env }){
     return jsonResponse({ answer: FALLBACK_ANSWER, notFound: true }, 400);
   }
 
-  const question = String(payload?.question || '').trim();
+  const question = String(payload?.message || payload?.question || '').trim();
   if(!question){
     return jsonResponse({ answer: FALLBACK_ANSWER, notFound: true }, 400);
   }
