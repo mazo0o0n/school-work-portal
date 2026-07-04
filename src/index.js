@@ -91,6 +91,17 @@ async function handleChat(request, env){
     });
   }catch(error){
     console.error('OpenAI request failed:', error?.message || error);
+    if(env.DEBUG_CHAT === 'true'){
+      return jsonResponse({
+        answer: ASSISTANT_ERROR,
+        debug: {
+          type: 'openai_request_failed',
+          message: String(error?.message || error).slice(0, 1000)
+        },
+        notFound: true
+      }, 502);
+    }
+
     return jsonResponse({ answer: ASSISTANT_ERROR, notFound: true }, 502);
   }
 
@@ -100,6 +111,18 @@ async function handleChat(request, env){
       status: openAiResponse.status,
       body: errorText.slice(0, 1000)
     });
+    if(env.DEBUG_CHAT === 'true'){
+      return jsonResponse({
+        answer: ASSISTANT_ERROR,
+        debug: {
+          type: 'openai_api_error',
+          status: openAiResponse.status,
+          body: errorText.slice(0, 1500)
+        },
+        notFound: true
+      }, 502);
+    }
+
     return jsonResponse({ answer: ASSISTANT_ERROR, notFound: true }, 502);
   }
 
