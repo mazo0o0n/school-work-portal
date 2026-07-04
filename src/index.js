@@ -1,4 +1,5 @@
 const FALLBACK_ANSWER = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
+const ASSISTANT_ERROR = 'حدث خطأ أثناء تشغيل المساعد. حاول مرة أخرى بعد قليل.';
 
 const SYSTEM_PROMPT = [
   'أنت مساعد منصة التنظيم المدرسي والموارد التعليمية.',
@@ -35,6 +36,14 @@ function extractResponseText(data){
   return chunks.join('\n').trim();
 }
 
+function hasFileSearchResults(data){
+  return (data.output || []).some((item) => {
+    return item.type === 'file_search_call' &&
+      Array.isArray(item.results) &&
+      item.results.length > 0;
+  });
+}
+
 async function handleChat(request, env){
   let payload;
   try{
@@ -66,44 +75,43 @@ async function handleChat(request, env){
       },
       body: JSON.stringify({
         model,
-        input: [
-          {
-            role: 'system',
-            content: [
-              {
-                type: 'input_text',
-                text: SYSTEM_PROMPT
-              }
-            ]
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'input_text',
-                text: question
-              }
-            ]
-          }
-        ],
+        instructions: SYSTEM_PROMPT,
+        input: question,
         tools: [
           {
             type: 'file_search',
-            vector_store_ids: [vectorStoreId]
+            vector_store_ids: [vectorStoreId],
+            max_num_results: 5
           }
         ],
+        tool_choice: 'required',
+        include: ['file_search_call.results'],
         max_output_tokens: 600
       })
     });
-  }catch(_){
-    return jsonResponse({ answer: FALLBACK_ANSWER, notFound: true }, 502);
+  }catch(error){
+    console.error('OpenAI request failed:', error?.message || error);
+    return jsonResponse({ answer: ASSISTANT_ERROR, notFound: true }, 502);
   }
 
   if(!openAiResponse.ok){
-    return jsonResponse({ answer: FALLBACK_ANSWER, notFound: true }, 502);
+    const errorText = await openAiResponse.text();
+    console.error('OpenAI API error:', {
+      status: openAiResponse.status,
+      body: errorText.slice(0, 1000)
+    });
+    return jsonResponse({ answer: ASSISTANT_ERROR, notFound: true }, 502);
   }
 
   const data = await openAiResponse.json();
+  if(!hasFileSearchResults(data)){
+    return jsonResponse({
+      answer: FALLBACK_ANSWER,
+      source: 'قاعدة معرفة المنصة',
+      notFound: true
+    });
+  }
+
   const answer = extractResponseText(data) || FALLBACK_ANSWER;
 
   return jsonResponse({
