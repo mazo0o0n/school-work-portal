@@ -140,6 +140,27 @@ async function handleChat(request, env){
   });
 
   if(!hasFileSearchResults(data)){
+    if(env.DEBUG_CHAT === 'true'){
+      return jsonResponse({
+        answer: FALLBACK_ANSWER,
+        source: 'قاعدة معرفة المنصة',
+        notFound: true,
+        debug: {
+          type: 'no_file_search_results',
+          id: data.id,
+          outputTypes: (data.output || []).map(item => item.type),
+          fileSearchCalls: (data.output || [])
+            .filter(item => item.type === 'file_search_call')
+            .map(item => ({
+              status: item.status,
+              resultsCount: Array.isArray(item.results) ? item.results.length : null,
+              keys: Object.keys(item)
+            })),
+          outputTextPreview: typeof data.output_text === 'string' ? data.output_text.slice(0, 500) : null
+        }
+      });
+    }
+
     return jsonResponse({
       answer: FALLBACK_ANSWER,
       source: 'قاعدة معرفة المنصة',
