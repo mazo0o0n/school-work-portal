@@ -593,6 +593,7 @@ const CUSTOM_SUPPORT_CARDS = [
 function renderAcademySupportCards(){
   const grid=document.querySelector('#academy-news .academy-card-grid');
   if(!grid) return;
+  if(grid.querySelector('.academy-tile, .academy-card')) return;
   const cards=[...ACADEMY_SUPPORT_CARDS, ...CUSTOM_SUPPORT_CARDS];
   grid.innerHTML=cards.map(card=>{
     const external = /^https?:\/\//.test(card.href || '');
