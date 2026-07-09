@@ -1,13 +1,8 @@
 const FALLBACK_ANSWER = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
-const ASSISTANT_ERROR = 'حدث خطأ أثناء تشغيل المساعد. حاول مرة أخرى بعد قليل.';
-
-const SYSTEM_PROMPT = [
-  'أنت مساعد منصة التنظيم المدرسي والموارد التعليمية.',
-  'أجب باللغة العربية فقط وبأسلوب واضح ومختصر.',
-  'استخدم المعلومات المسترجعة من قاعدة معرفة المنصة فقط.',
-  'لا تخترع أي إجابة ولا تستخدم معرفة عامة خارج الملفات المتاحة.',
-  `إذا لم تجد معلومة مؤكدة، أرجع النص التالي حرفيًا: "${FALLBACK_ANSWER}"`
-].join('\n');
+const EMBEDDING_MODEL = '@cf/qwen/qwen3-embedding-0.6b';
+const CHAT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
+const MIN_SCORE = 0.55;
+const TOP_K = 4;
 
 function jsonResponse(body, status = 200){
   return new Response(JSON.stringify(body), {
@@ -19,29 +14,52 @@ function jsonResponse(body, status = 200){
   });
 }
 
-function extractResponseText(data){
-  if(typeof data?.output_text === 'string' && data.output_text.trim()){
-    return data.output_text.trim();
+function extractEmbedding(payload){
+  const data =
+    payload?.data ??
+    payload?.result?.data ??
+    payload?.embeddings ??
+    payload?.result?.embeddings;
+
+  if(Array.isArray(data) && Array.isArray(data[0])){
+    return data[0];
   }
 
-  const chunks = [];
-  for(const item of data?.output || []){
-    for(const part of item?.content || []){
-      if(typeof part?.text === 'string'){
-        chunks.push(part.text);
-      }
-    }
+  if(Array.isArray(data) && Array.isArray(data[0]?.embedding)){
+    return data[0].embedding;
   }
 
-  return chunks.join('\n').trim();
+  if(Array.isArray(payload?.embedding)){
+    return payload.embedding;
+  }
+
+  throw new Error('Unable to extract embedding from Workers AI response.');
 }
 
-function hasFileSearchResults(data){
-  return (data.output || []).some((item) => {
-    return item.type === 'file_search_call' &&
-      Array.isArray(item.results) &&
-      item.results.length > 0;
-  });
+function extractGeneratedText(payload){
+  return String(
+    payload?.response ??
+    payload?.result?.response ??
+    payload?.text ??
+    payload?.result?.text ??
+    ''
+  ).trim();
+}
+
+function getMatchesWithText(vectorizeResult){
+  return (vectorizeResult?.matches || [])
+    .map((match) => ({
+      id: match.id,
+      score: Number(match.score || 0),
+      text: String(match.metadata?.text || '').trim(),
+      source: String(match.metadata?.source || 'قاعدة معرفة المنصة'),
+      section: String(match.metadata?.section || 'قاعدة المعرفة')
+    }))
+    .filter((match) => match.text);
+}
+
+function buildDebug(env, data){
+  return env.DEBUG_CHAT === 'true' ? data : null;
 }
 
 async function handleChat(request, env){
@@ -49,131 +67,166 @@ async function handleChat(request, env){
   try{
     payload = await request.json();
   }catch(_){
-    return jsonResponse({ answer: FALLBACK_ANSWER, notFound: true }, 400);
+    return jsonResponse({
+      answer: FALLBACK_ANSWER,
+      source: 'قاعدة معرفة المنصة',
+      notFound: true,
+      debug: null
+    }, 400);
   }
 
   const question = String(payload?.message || payload?.question || '').trim();
   if(!question){
-    return jsonResponse({ answer: FALLBACK_ANSWER, notFound: true }, 400);
-  }
-
-  const apiKey = env.OPENAI_API_KEY;
-  const vectorStoreId = env.OPENAI_VECTOR_STORE_ID;
-  const model = env.OPENAI_MODEL || 'gpt-4.1-mini';
-
-  if(!apiKey || !vectorStoreId){
-    return jsonResponse({ answer: FALLBACK_ANSWER, notFound: true }, 500);
-  }
-
-  let openAiResponse;
-  try{
-    openAiResponse = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model,
-        instructions: SYSTEM_PROMPT,
-        input: question,
-        tools: [
-          {
-            type: 'file_search',
-            vector_store_ids: [vectorStoreId],
-            max_num_results: 5
-          }
-        ],
-        tool_choice: 'required',
-        include: ['file_search_call.results'],
-        max_output_tokens: 600
-      })
-    });
-  }catch(error){
-    console.error('OpenAI request failed:', error?.message || error);
-    if(env.DEBUG_CHAT === 'true'){
-      return jsonResponse({
-        answer: ASSISTANT_ERROR,
-        debug: {
-          type: 'openai_request_failed',
-          message: String(error?.message || error).slice(0, 1000)
-        },
-        notFound: true
-      }, 502);
-    }
-
-    return jsonResponse({ answer: ASSISTANT_ERROR, notFound: true }, 502);
-  }
-
-  if(!openAiResponse.ok){
-    const errorText = await openAiResponse.text();
-    console.error('OpenAI API error:', {
-      status: openAiResponse.status,
-      body: errorText.slice(0, 1000)
-    });
-    if(env.DEBUG_CHAT === 'true'){
-      return jsonResponse({
-        answer: ASSISTANT_ERROR,
-        debug: {
-          type: 'openai_api_error',
-          status: openAiResponse.status,
-          body: errorText.slice(0, 1500)
-        },
-        notFound: true
-      }, 502);
-    }
-
-    return jsonResponse({ answer: ASSISTANT_ERROR, notFound: true }, 502);
-  }
-
-  const data = await openAiResponse.json();
-  console.log('OpenAI debug:', {
-    id: data.id,
-    outputTypes: (data.output || []).map(item => item.type),
-    fileSearchCalls: (data.output || [])
-      .filter(item => item.type === 'file_search_call')
-      .map(item => ({
-        status: item.status,
-        resultsCount: Array.isArray(item.results) ? item.results.length : null
-      })),
-    outputTextPreview: typeof data.output_text === 'string' ? data.output_text.slice(0, 300) : null
-  });
-
-  if(!hasFileSearchResults(data)){
-    if(env.DEBUG_CHAT === 'true'){
-      return jsonResponse({
-        answer: FALLBACK_ANSWER,
-        source: 'قاعدة معرفة المنصة',
-        notFound: true,
-        debug: {
-          type: 'no_file_search_results',
-          id: data.id,
-          outputTypes: (data.output || []).map(item => item.type),
-          fileSearchCalls: (data.output || [])
-            .filter(item => item.type === 'file_search_call')
-            .map(item => ({
-              status: item.status,
-              resultsCount: Array.isArray(item.results) ? item.results.length : null,
-              keys: Object.keys(item)
-            })),
-          outputTextPreview: typeof data.output_text === 'string' ? data.output_text.slice(0, 500) : null
-        }
-      });
-    }
-
     return jsonResponse({
       answer: FALLBACK_ANSWER,
       source: 'قاعدة معرفة المنصة',
-      notFound: true
+      notFound: true,
+      debug: null
+    }, 400);
+  }
+
+  if(!env.AI || !env.VECTORIZE){
+    return jsonResponse({
+      answer: FALLBACK_ANSWER,
+      source: 'قاعدة معرفة المنصة',
+      notFound: true,
+      debug: buildDebug(env, { type: 'missing_bindings' })
+    }, 500);
+  }
+
+  let queryEmbedding;
+  try{
+    const embeddingResult = await env.AI.run(EMBEDDING_MODEL, {
+      text: question
+    });
+    queryEmbedding = extractEmbedding(embeddingResult);
+  }catch(error){
+    console.error('Workers AI embedding failed:', error?.message || error);
+    return jsonResponse({
+      answer: FALLBACK_ANSWER,
+      source: 'قاعدة معرفة المنصة',
+      notFound: true,
+      debug: buildDebug(env, {
+        type: 'embedding_failed',
+        message: String(error?.message || error).slice(0, 1000)
+      })
+    }, 502);
+  }
+
+  let vectorizeResult;
+  try{
+    vectorizeResult = await env.VECTORIZE.query(queryEmbedding, {
+      topK: TOP_K,
+      returnMetadata: true
+    });
+  }catch(error){
+    console.error('Vectorize query failed:', error?.message || error);
+    return jsonResponse({
+      answer: FALLBACK_ANSWER,
+      source: 'قاعدة معرفة المنصة',
+      notFound: true,
+      debug: buildDebug(env, {
+        type: 'vectorize_query_failed',
+        message: String(error?.message || error).slice(0, 1000)
+      })
+    }, 502);
+  }
+
+  const matches = getMatchesWithText(vectorizeResult);
+  const topScore = matches[0]?.score || 0;
+  const usableMatches = matches.filter((match) => match.score >= MIN_SCORE);
+
+  if(!usableMatches.length || topScore < MIN_SCORE){
+    return jsonResponse({
+      answer: FALLBACK_ANSWER,
+      source: 'قاعدة معرفة المنصة',
+      notFound: true,
+      debug: buildDebug(env, {
+        type: 'no_retrieved_context',
+        minScore: MIN_SCORE,
+        topScore,
+        matches: matches.map((match) => ({
+          id: match.id,
+          score: match.score,
+          source: match.source,
+          section: match.section,
+          hasText: Boolean(match.text)
+        }))
+      })
     });
   }
 
-  const answer = extractResponseText(data) || FALLBACK_ANSWER;
+  const context = usableMatches
+    .map((match, index) => {
+      return [
+        `المقطع ${index + 1}`,
+        `المصدر: ${match.source}`,
+        `القسم: ${match.section}`,
+        match.text
+      ].join('\n');
+    })
+    .join('\n\n---\n\n');
+
+  let answer = FALLBACK_ANSWER;
+  try{
+    const generation = await env.AI.run(CHAT_MODEL, {
+      messages: [
+        {
+          role: 'system',
+          content: [
+            'أنت مساعد منصة التنظيم المدرسي والموارد التعليمية.',
+            'أجب فقط من السياق المرفق.',
+            'لا تستخدم معرفة عامة.',
+            'لا تخترع أي معلومة.',
+            `إذا لم تكن الإجابة موجودة في السياق، أرجع هذا النص حرفيًا: "${FALLBACK_ANSWER}"`,
+            'أجب بالعربية وباختصار.'
+          ].join('\n')
+        },
+        {
+          role: 'user',
+          content: [
+            'السياق المسترجع من مستندات المنصة:',
+            context,
+            '',
+            'سؤال المستخدم:',
+            question
+          ].join('\n')
+        }
+      ]
+    });
+    answer = extractGeneratedText(generation) || FALLBACK_ANSWER;
+  }catch(error){
+    console.error('Workers AI generation failed:', error?.message || error);
+    return jsonResponse({
+      answer: FALLBACK_ANSWER,
+      source: 'قاعدة معرفة المنصة',
+      notFound: true,
+      debug: buildDebug(env, {
+        type: 'generation_failed',
+        message: String(error?.message || error).slice(0, 1000)
+      })
+    }, 502);
+  }
+
+  const notFound = answer.trim() === FALLBACK_ANSWER;
 
   return jsonResponse({
     answer,
-    source: answer === FALLBACK_ANSWER ? 'قاعدة معرفة المنصة' : 'ملفات قاعدة المعرفة',
-    notFound: answer === FALLBACK_ANSWER
+    source: notFound ? 'قاعدة معرفة المنصة' : usableMatches[0].source,
+    notFound,
+    debug: buildDebug(env, {
+      type: 'strict_rag_answer',
+      model: CHAT_MODEL,
+      embeddingModel: EMBEDDING_MODEL,
+      minScore: MIN_SCORE,
+      topScore,
+      usedMatches: usableMatches.map((match) => ({
+        id: match.id,
+        score: match.score,
+        source: match.source,
+        section: match.section
+      }))
+    })
   });
 }
 

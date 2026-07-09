@@ -9,3 +9,10 @@ custom_domain = true
 [assets]
 directory = "."
 binding = "ASSETS"
+
+[ai]
+binding = "AI"
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "school_knowledge_index"
