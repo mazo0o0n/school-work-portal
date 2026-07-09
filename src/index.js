@@ -14,6 +14,25 @@ function jsonResponse(body, status = 200){
   });
 }
 
+function withDebug(env, body, debug){
+  if(env.DEBUG_CHAT === 'true'){
+    return {
+      ...body,
+      debug
+    };
+  }
+
+  return body;
+}
+
+function fallbackBody(source = 'قاعدة معرفة المنصة'){
+  return {
+    answer: FALLBACK_ANSWER,
+    source,
+    notFound: true
+  };
+}
+
 function extractEmbedding(payload){
   const data =
     payload?.data ??
@@ -58,90 +77,56 @@ function getMatchesWithText(vectorizeResult){
     .filter((match) => match.text);
 }
 
-function buildDebug(env, data){
-  return env.DEBUG_CHAT === 'true' ? data : null;
+function buildContext(matches){
+  return matches
+    .map((match, index) => {
+      return [
+        `المقطع ${index + 1}`,
+        `المصدر: ${match.source}`,
+        `القسم: ${match.section}`,
+        match.text
+      ].join('\n');
+    })
+    .join('\n\n---\n\n');
 }
 
 async function handleChat(request, env){
-  let payload;
   try{
-    payload = await request.json();
-  }catch(_){
-    return jsonResponse({
-      answer: FALLBACK_ANSWER,
-      source: 'قاعدة معرفة المنصة',
-      notFound: true,
-      debug: null
-    }, 400);
-  }
+    let payload;
+    try{
+      payload = await request.json();
+    }catch(_){
+      return jsonResponse(fallbackBody(), 400);
+    }
 
-  const question = String(payload?.message || payload?.question || '').trim();
-  if(!question){
-    return jsonResponse({
-      answer: FALLBACK_ANSWER,
-      source: 'قاعدة معرفة المنصة',
-      notFound: true,
-      debug: null
-    }, 400);
-  }
+    const question = String(payload?.message || payload?.question || '').trim();
+    if(!question){
+      return jsonResponse(fallbackBody(), 400);
+    }
 
-  if(!env.AI || !env.VECTORIZE){
-    return jsonResponse({
-      answer: FALLBACK_ANSWER,
-      source: 'قاعدة معرفة المنصة',
-      notFound: true,
-      debug: buildDebug(env, { type: 'missing_bindings' })
-    }, 500);
-  }
+    if(!env.AI || !env.VECTORIZE){
+      return jsonResponse(
+        withDebug(env, fallbackBody(), { type: 'missing_bindings' }),
+        500
+      );
+    }
 
-  let queryEmbedding;
-  try{
     const embeddingResult = await env.AI.run(EMBEDDING_MODEL, {
       text: question
     });
-    queryEmbedding = extractEmbedding(embeddingResult);
-  }catch(error){
-    console.error('Workers AI embedding failed:', error?.message || error);
-    return jsonResponse({
-      answer: FALLBACK_ANSWER,
-      source: 'قاعدة معرفة المنصة',
-      notFound: true,
-      debug: buildDebug(env, {
-        type: 'embedding_failed',
-        message: String(error?.message || error).slice(0, 1000)
-      })
-    }, 502);
-  }
+    const queryEmbedding = extractEmbedding(embeddingResult);
 
-  let vectorizeResult;
-  try{
-    vectorizeResult = await env.VECTORIZE.query(queryEmbedding, {
+    const vectorizeResult = await env.VECTORIZE.query(queryEmbedding, {
       topK: TOP_K,
       returnMetadata: true
     });
-  }catch(error){
-    console.error('Vectorize query failed:', error?.message || error);
-    return jsonResponse({
-      answer: FALLBACK_ANSWER,
-      source: 'قاعدة معرفة المنصة',
-      notFound: true,
-      debug: buildDebug(env, {
-        type: 'vectorize_query_failed',
-        message: String(error?.message || error).slice(0, 1000)
-      })
-    }, 502);
-  }
 
-  const matches = getMatchesWithText(vectorizeResult);
-  const topScore = matches[0]?.score || 0;
-  const usableMatches = matches.filter((match) => match.score >= MIN_SCORE);
+    const matches = getMatchesWithText(vectorizeResult);
+    const topScore = matches[0]?.score || 0;
+    const usableMatches = matches.filter((match) => match.score >= MIN_SCORE);
 
-  if(!usableMatches.length || topScore < MIN_SCORE){
-    return jsonResponse({
-      answer: FALLBACK_ANSWER,
-      source: 'قاعدة معرفة المنصة',
-      notFound: true,
-      debug: buildDebug(env, {
+    if(!usableMatches.length || topScore < MIN_SCORE){
+      return jsonResponse(withDebug(env, fallbackBody(), {
         type: 'no_retrieved_context',
         minScore: MIN_SCORE,
         topScore,
@@ -152,23 +137,10 @@ async function handleChat(request, env){
           section: match.section,
           hasText: Boolean(match.text)
         }))
-      })
-    });
-  }
+      }));
+    }
 
-  const context = usableMatches
-    .map((match, index) => {
-      return [
-        `المقطع ${index + 1}`,
-        `المصدر: ${match.source}`,
-        `القسم: ${match.section}`,
-        match.text
-      ].join('\n');
-    })
-    .join('\n\n---\n\n');
-
-  let answer = FALLBACK_ANSWER;
-  try{
+    const context = buildContext(usableMatches);
     const generation = await env.AI.run(CHAT_MODEL, {
       messages: [
         {
@@ -194,27 +166,16 @@ async function handleChat(request, env){
         }
       ]
     });
-    answer = extractGeneratedText(generation) || FALLBACK_ANSWER;
-  }catch(error){
-    console.error('Workers AI generation failed:', error?.message || error);
-    return jsonResponse({
-      answer: FALLBACK_ANSWER,
-      source: 'قاعدة معرفة المنصة',
-      notFound: true,
-      debug: buildDebug(env, {
-        type: 'generation_failed',
-        message: String(error?.message || error).slice(0, 1000)
-      })
-    }, 502);
-  }
 
-  const notFound = answer.trim() === FALLBACK_ANSWER;
+    const answer = extractGeneratedText(generation) || FALLBACK_ANSWER;
+    const notFound = answer.trim() === FALLBACK_ANSWER;
+    const body = {
+      answer,
+      source: notFound ? 'قاعدة معرفة المنصة' : usableMatches[0].source,
+      notFound
+    };
 
-  return jsonResponse({
-    answer,
-    source: notFound ? 'قاعدة معرفة المنصة' : usableMatches[0].source,
-    notFound,
-    debug: buildDebug(env, {
+    return jsonResponse(withDebug(env, body, {
       type: 'strict_rag_answer',
       model: CHAT_MODEL,
       embeddingModel: EMBEDDING_MODEL,
@@ -226,8 +187,17 @@ async function handleChat(request, env){
         source: match.source,
         section: match.section
       }))
-    })
-  });
+    }));
+  }catch(error){
+    console.error('Strict RAG chat failed:', error?.message || error);
+    return jsonResponse(
+      withDebug(env, fallbackBody(), {
+        type: 'strict_rag_failed',
+        message: String(error?.message || error).slice(0, 1000)
+      }),
+      502
+    );
+  }
 }
 
 export default {
