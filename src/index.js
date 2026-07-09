@@ -1,6 +1,6 @@
 const FALLBACK_ANSWER = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
 const EMBEDDING_MODEL = '@cf/qwen/qwen3-embedding-0.6b';
-const CHAT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
+const CHAT_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
 const MIN_SCORE = 0.55;
 const TOP_K = 4;
 
