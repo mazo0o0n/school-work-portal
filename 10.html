@@ -756,35 +756,35 @@ button{font-family:inherit;cursor:pointer}
         <div class="badge new" style="position:absolute;top:10px;inset-inline-end:10px">محدّث</div>
       </a>
 
-      <a class="card" href="https://fhz545-hub.github.io/Teachers/2" target="_blank" rel="noopener" style="text-align:center;position:relative">
+      <a class="card" href="2.html" style="text-align:center;position:relative">
         <div class="ico">📝</div>
         <div class="title" style="margin-top:6px">بوابة أعمال الاختبارات</div>
         <div class="desc">تنظيم أعمال الاختبارات قبلها وأثناءها وبعدها.</div>
         <div class="badge new" style="position:absolute;top:10px;inset-inline-end:10px">محدّث</div>
       </a>
 
-      <a class="card" href="https://fhz545-hub.github.io/taqyeem/" target="_blank" rel="noopener" style="text-align:center;position:relative">
+      <a class="card" href="#" aria-disabled="true" tabindex="-1" style="text-align:center;position:relative">
         <div class="ico">📊</div>
         <div class="title" style="margin-top:6px">تقييم الأداء الوظيفي</div>
         <div class="desc">تخطيط ومراجعة وتقييم.</div>
         <div class="badge new" style="position:absolute;top:10px;inset-inline-end:10px">محدّث</div>
       </a>
 
-      <a class="card" href="https://fhz545-hub.github.io/teachervisit/" target="_blank" rel="noopener" style="text-align:center;position:relative">
+      <a class="card" href="#" aria-disabled="true" tabindex="-1" style="text-align:center;position:relative">
         <div class="ico">👨‍🏫</div>
         <div class="title" style="margin-top:6px">استمارة دعم وتطوير الهيئة التعليمية</div>
         <div class="desc">زيارة معلم — توثيق الدعم والتطوير المهني داخل الصف.</div>
         <div class="badge new" style="position:absolute;top:10px;inset-inline-end:10px">محدّث</div>
       </a>
 
-      <a class="card" href="https://fhz545-hub.github.io/Teachers/1" target="_blank" rel="noopener" style="text-align:center;position:relative">
+      <a class="card" href="1.html" style="text-align:center;position:relative">
         <div class="ico">🧾</div>
         <div class="title" style="margin-top:6px">صانع التقارير</div>
         <div class="desc">إنشاء تقارير تشغيلية وتربوية جاهزة للطباعة.</div>
         <div class="badge" style="position:absolute;top:10px;inset-inline-end:10px;background:#b41d3a;border-color:#b41d3a;color:#fff">جديد</div>
       </a>
 
-      <a class="card" href="https://fhz545-hub.github.io/Teachers/3" target="_blank" rel="noopener" style="text-align:center;position:relative">
+      <a class="card" href="3.html" style="text-align:center;position:relative">
         <div class="ico">📈</div>
         <div class="title" style="margin-top:6px">تحليل النتائج</div>
         <div class="desc">قراءة ذكية لنتائج الطلاب ومؤشرات التحصيل.</div>
@@ -1213,6 +1213,10 @@ setupSearchUI();
 setupPlatforms();
 
 document.querySelector('#announce .close')?.addEventListener('click',()=>{document.getElementById('announce').style.display='none'});
+document.addEventListener('click', event=>{
+  const disabledLink = event.target.closest('a[aria-disabled="true"][href="#"]');
+  if(disabledLink) event.preventDefault();
+});
 </script>
 
 <script type="module">
