@@ -1050,3 +1050,27 @@ document.addEventListener("keydown", (event) => {
 
 updateDateTime();
 setInterval(updateDateTime,1000);
+
+function finishAppBoot(){
+  let released = false;
+  const release = () => {
+    if(released) return;
+    released = true;
+    if(window.__appBootFallback) window.clearTimeout(window.__appBootFallback);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.documentElement.classList.remove("app-booting");
+      });
+    });
+  };
+
+  window.setTimeout(release, 800);
+
+  if(document.fonts?.ready){
+    document.fonts.ready.then(release).catch(release);
+  }else{
+    release();
+  }
+}
+
+finishAppBoot();

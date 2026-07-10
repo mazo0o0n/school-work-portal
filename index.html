@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" class="app-booting">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,12 +7,23 @@
 <style>
 html.preload-dark,
 html.preload-dark body{background:#06111c!important}
+html.app-booting body{
+  opacity:0;
+}
+html:not(.app-booting) body{
+  opacity:1;
+  transition:opacity .12s ease;
+}
 </style>
 <script>
 (function(){
+  document.documentElement.classList.add('app-booting');
   if(localStorage.getItem('preferredTheme') === 'dark'){
     document.documentElement.classList.add('preload-dark');
   }
+  window.__appBootFallback = window.setTimeout(function(){
+    document.documentElement.classList.remove('app-booting');
+  }, 800);
   const hasSchool = (localStorage.getItem('registeredSchoolName') || localStorage.getItem('registeredSchoolBaseName') || '').trim();
   const guestMode = localStorage.getItem('schoolGuestMode') === '1';
   if(!hasSchool && !guestMode){
