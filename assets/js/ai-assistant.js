@@ -328,10 +328,10 @@ function openAiPanel(){
   document.body.style.top = `-${aiPageScrollY}px`;
   document.body.classList.add('ai-panel-open');
   if(aiKnowledgeCount){
-    aiKnowledgeCount.textContent = `تمت تغذية المساعد بـ ${aiKnowledgeItemsCount} سؤال/إجابة من ملفات المنصة`;
+    aiKnowledgeCount.textContent = `${aiKnowledgeItemsCount} سؤال/إجابة متاحة`;
   }
   if(!aiMessages.children.length){
-    addAiMessage(`مرحبًا، أنا مساعد المنصة. تمت تغذيتي بـ ${aiKnowledgeItemsCount} سؤال/إجابة من ملفات المنصة. اسألني عن المنصات، الأدلة والأنظمة، أدوات مساندة، ركن الدعم المدرسي، أو طريقة التسجيل. إجاباتي مبنية على بيانات المنصة فقط.`, 'bot', 'قاعدة معرفة المنصة');
+    addAiMessage('مرحبًا، اسألني عن خدمات المنصة، الأدلة، الأنظمة، أدوات الدعم، أو الأسئلة الشائعة.', 'bot', 'قاعدة معرفة المنصة');
   }
   aiQuestion.focus();
 }

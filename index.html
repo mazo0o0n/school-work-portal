@@ -463,23 +463,23 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
     <div class="ai-head">
       <div>
         <h2>مساعد المنصة</h2>
-        <p>أجيب استنادًا إلى بيانات المنصة فقط.</p>
+        <p>يجيب من قاعدة معرفة المنصة فقط.</p>
       </div>
       <button class="ai-close" id="aiClose" type="button" aria-label="إغلاق المساعد">
         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
       </button>
     </div>
-    <div class="ai-knowledge-count" id="aiKnowledgeCount">عدد الأسئلة والإجابات المتاحة: 0</div>
+    <div class="ai-knowledge-count" id="aiKnowledgeCount">0 سؤال/إجابة متاحة</div>
     <div class="ai-messages" id="aiMessages" aria-live="polite"></div>
     <form class="ai-form" id="aiForm">
-      <input id="aiQuestion" type="text" dir="rtl" placeholder="اكتب سؤالك عن المنصة..." autocomplete="off" aria-label="سؤال للمساعد">
+      <input id="aiQuestion" type="text" dir="rtl" placeholder="اكتب سؤالك هنا..." autocomplete="off" aria-label="سؤال للمساعد">
       <button type="submit">إرسال</button>
     </form>
     <div class="ai-actions">
       <button type="button" id="aiSendQuestions">طلب إضافة السؤال</button>
       <span id="aiPendingCount">0 سؤال للمراجعة</span>
     </div>
-    <p class="ai-privacy-note">قد يتم حفظ الأسئلة غير المجابة لتحسين قاعدة معرفة المنصة دون حفظ بيانات شخصية.</p>
+    <p class="ai-privacy-note">قد تُحفظ الأسئلة غير المجابة لتحسين المعرفة دون بيانات شخصية.</p>
     <div class="ai-review-list" id="aiReviewList" hidden></div>
   </div>
 </aside>
