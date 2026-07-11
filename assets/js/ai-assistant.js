@@ -364,8 +364,11 @@ function openAiPanel(){
   document.body.style.top = `-${aiPageScrollY}px`;
   document.body.classList.add('ai-panel-open');
   renderAiKnowledgeCount();
-  if(!aiMessages.children.length){
+  if(!aiMessages.querySelector('.ai-message')){
     addAiMessage('مرحبًا، اسألني عن خدمات المنصة، الأدلة، الأنظمة، أدوات الدعم، أو الأسئلة الشائعة.', 'bot', 'قاعدة معرفة المنصة');
+  }
+  if(aiSuggestions && !aiSuggestions.hidden){
+    aiMessages.appendChild(aiSuggestions);
   }
   aiQuestion.focus();
 }
@@ -389,10 +392,10 @@ aiForm?.addEventListener('submit', async (event) => {
   await submitAiQuestion(aiQuestion.value);
 });
 
-aiSuggestions?.addEventListener('click', async (event) => {
-  const button = event.target.closest('[data-question]');
-  if(!button || !aiSuggestions.contains(button)) return;
-  await submitAiQuestion(button.dataset.question);
+document.addEventListener('click', async (event) => {
+  const button = event.target.closest('#aiSuggestions [data-question]');
+  if(!button) return;
+  await submitAiQuestion(button.textContent);
 });
 
 aiExportQuestions?.addEventListener('click', () => {

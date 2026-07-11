@@ -37,7 +37,7 @@ html:not(.app-booting) body{
 <link rel="preconnect" href="https://cdnjs.cloudflare.com">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@100;200;300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/index.css">
+<link rel="stylesheet" href="assets/css/index.css?v=20260712-1">
 </head>
 <body class="academy-home">
 <script>
@@ -470,18 +470,19 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
       </button>
     </div>
     <div class="ai-knowledge-count" id="aiKnowledgeCount">118 سؤال/إجابة متاحة</div>
-    <div class="ai-messages" id="aiMessages" aria-live="polite"></div>
-    <section class="ai-suggestions" id="aiSuggestions" aria-labelledby="aiSuggestionsTitle">
-      <h3 id="aiSuggestionsTitle">جرّب أن تسأل:</h3>
-      <div class="ai-suggestion-chips">
-        <button type="button" data-question="وش منصة التنظيم المدرسي؟">وش منصة التنظيم المدرسي؟</button>
-        <button type="button" data-question="ما هي خدمات بوابة التعليم؟">ما هي خدمات بوابة التعليم؟</button>
-        <button type="button" data-question="وش شروط ترقية المعلمين؟">وش شروط ترقية المعلمين؟</button>
-        <button type="button" data-question="ما هو برنامج فرص؟">ما هو برنامج فرص؟</button>
-        <button type="button" data-question="ما هو التطوير المهني التعليمي؟">ما هو التطوير المهني التعليمي؟</button>
-        <button type="button" data-question="ما هو برنامج الدبلوم التأهيلي للتربية البدنية؟">ما هو برنامج الدبلوم التأهيلي للتربية البدنية؟</button>
-      </div>
-    </section>
+    <div class="ai-messages" id="aiMessages" aria-live="polite">
+      <section class="ai-suggestions" id="aiSuggestions" aria-labelledby="aiSuggestionsTitle">
+        <h3 id="aiSuggestionsTitle">جرّب أن تسأل:</h3>
+        <div class="ai-suggestion-chips">
+          <button type="button" data-question="وش منصة التنظيم المدرسي؟">وش منصة التنظيم المدرسي؟</button>
+          <button type="button" data-question="ما هي خدمات بوابة التعليم؟">ما هي خدمات بوابة التعليم؟</button>
+          <button type="button" data-question="وش شروط ترقية المعلمين؟">وش شروط ترقية المعلمين؟</button>
+          <button type="button" data-question="ما هو برنامج فرص؟">ما هو برنامج فرص؟</button>
+          <button type="button" data-question="ما هو التطوير المهني التعليمي؟">ما هو التطوير المهني التعليمي؟</button>
+          <button type="button" data-question="ما هو برنامج الدبلوم التأهيلي للتربية البدنية؟">ما هو برنامج الدبلوم التأهيلي للتربية البدنية؟</button>
+        </div>
+      </section>
+    </div>
     <form class="ai-form" id="aiForm">
       <input id="aiQuestion" type="text" dir="rtl" placeholder="اكتب سؤالك هنا..." autocomplete="off" aria-label="سؤال للمساعد">
       <button type="submit">إرسال</button>
@@ -502,7 +503,7 @@ document.addEventListener('click', function(event){
 });
 </script>
 <script src="assets/js/index.js"></script>
-<script src="assets/js/ai-assistant.js"></script>
+<script src="assets/js/ai-assistant.js?v=20260712-1"></script>
 
 <script src="assets/js/visitor-counter.js"></script>
 

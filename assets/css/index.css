@@ -2249,7 +2249,11 @@ body.dark .ai-messages::-webkit-scrollbar-thumb{
   font-weight:900;
 }
 .ai-suggestions{
-  padding:0 16px 12px;
+  width:100%;
+  padding:4px 0 2px;
+  direction:rtl;
+  text-align:right;
+  justify-self:stretch;
 }
 .ai-suggestions[hidden]{
   display:none !important;
@@ -2267,10 +2271,10 @@ body.dark .ai-messages::-webkit-scrollbar-thumb{
 }
 .ai-suggestion-chips button{
   min-height:30px;
-  border:1px solid #cfe4e7;
+  border:1px solid rgba(13,169,166,.48);
   border-radius:999px;
   padding:4px 10px;
-  background:#f3fafa;
+  background:rgba(13,169,166,.08);
   color:#15445a;
   font:800 11.5px "IBM Plex Sans Arabic", system-ui, sans-serif;
   line-height:1.4;
@@ -2279,7 +2283,7 @@ body.dark .ai-messages::-webkit-scrollbar-thumb{
 .ai-suggestion-chips button:hover,
 .ai-suggestion-chips button:focus-visible{
   border-color:#0da9a6;
-  background:#e7f7f6;
+  background:rgba(13,169,166,.16);
   outline:none;
 }
 .ai-form{
@@ -2444,9 +2448,14 @@ body.dark .ai-suggestions h3{
   color:#cbd5e1;
 }
 body.dark .ai-suggestion-chips button{
-  background:#102235;
-  border-color:#2e4c66;
+  background:rgba(16,34,53,.88);
+  border-color:rgba(13,169,166,.65);
   color:#d7f3ff;
+}
+body.dark .ai-suggestion-chips button:hover,
+body.dark .ai-suggestion-chips button:focus-visible{
+  background:rgba(13,169,166,.2);
+  border-color:#46c7c2;
 }
 body.dark .ai-message.bot.is-missed{
   background:#242626;
@@ -2539,7 +2548,7 @@ body.dark .ai-message.bot.is-missed{
     border:0;
     border-radius:0;
     display:grid;
-    grid-template-rows:auto auto minmax(0,1fr) auto auto auto auto;
+    grid-template-rows:auto auto minmax(0,1fr) auto auto auto;
     background:#ffffff;
     box-shadow:none;
     overflow:hidden;
@@ -2612,9 +2621,8 @@ body.dark .ai-message.bot.is-missed{
     border-top:1px solid #edf1f4;
   }
   .ai-suggestions{
-    padding:8px 12px 10px;
-    background:#ffffff;
-    border-top:1px solid #edf1f4;
+    padding:6px 0 2px;
+    background:transparent;
   }
   .ai-suggestion-chips{
     gap:5px;
@@ -2671,8 +2679,7 @@ body.dark .ai-message.bot.is-missed{
   body.dark .ai-head,
   body.dark .ai-messages,
   body.dark .ai-form,
-  body.dark .ai-actions,
-  body.dark .ai-suggestions{
+  body.dark .ai-actions{
     background:#050505;
   }
   body.dark .ai-head,
