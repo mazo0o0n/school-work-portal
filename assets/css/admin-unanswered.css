@@ -75,6 +75,13 @@ input,select{
 }
 input:focus,select:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(13,169,166,.12)}
 .hint{margin:8px 0 0;color:var(--muted);font-size:13px;font-weight:700}
+.workflow-note{
+  margin:10px 0 0;
+  color:var(--muted);
+  font-size:13px;
+  font-weight:800;
+  line-height:1.7;
+}
 .tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
 .tab{background:#f2f6f7;color:var(--ink);border:1px solid var(--line)}
 .tab.active{background:var(--teal);color:#fff;border-color:var(--teal)}
@@ -137,6 +144,7 @@ dd{margin:5px 0 0;font-weight:800;overflow-wrap:anywhere}
 .actions{display:flex;flex-wrap:wrap;gap:8px}
 .actions button{background:#f3f7f8;color:var(--ink);border:1px solid var(--line)}
 .actions button:hover{border-color:var(--teal)}
+.actions .template-copy{background:#fff9e8;color:#6f5400;border-color:#ead48a}
 .actions .danger{background:#fff1f0;color:var(--danger);border-color:#ffd1cc}
 @media(max-width:760px){
   .admin-header,.question-head{display:grid}

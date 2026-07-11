@@ -101,6 +101,51 @@ function formatDate(value){
   });
 }
 
+function cleanMarkdownQuestion(value){
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .replace(/^#+\s*/, '')
+    .trim() || 'سؤال غير محدد';
+}
+
+function buildKnowledgeTemplate(item){
+  const question = cleanMarkdownQuestion(item?.question);
+  const status = String(item?.status || '-').trim() || '-';
+  const repeatCount = String(item?.repeat_count ?? 0).trim() || '0';
+
+  return [
+    `### ${question}`,
+    '',
+    'الإجابة:',
+    'اكتب الإجابة المؤكدة هنا بناءً على مصدر معتمد من ملفات المنصة.',
+    '',
+    'المصدر:',
+    'اذكر اسم الملف أو المرجع المعتمد هنا.',
+    '',
+    'ملاحظات:',
+    '- أضيف هذا السؤال من سجل الأسئلة غير المجابة.',
+    `- الحالة قبل الإضافة: ${status}`,
+    `- عدد التكرار: ${repeatCount}`
+  ].join('\n');
+}
+
+async function copyText(text){
+  if(navigator.clipboard?.writeText){
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+}
+
 function getSortedFilteredItems(){
   const query = searchInput.value.trim().toLowerCase();
   const filtered = currentItems.filter((item) => {
@@ -266,25 +311,25 @@ questionsList.addEventListener('click', async (event) => {
   if(!button || !card) return;
 
   const id = Number(card.dataset.id);
+  const item = currentItems.find((entry) => Number(entry.id) === id);
+
   if(button.dataset.action === 'copy'){
     const text = card.querySelector('.question-text')?.textContent || '';
     try{
-      if(navigator.clipboard?.writeText){
-        await navigator.clipboard.writeText(text);
-      }else{
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        textarea.remove();
-      }
+      await copyText(text);
       setStatus('تم نسخ نص السؤال.', 'success');
     }catch(_){
       setStatus('تعذر نسخ السؤال من المتصفح.', 'error');
+    }
+    return;
+  }
+
+  if(button.dataset.action === 'copy-template'){
+    try{
+      await copyText(buildKnowledgeTemplate(item));
+      setStatus('تم نسخ قالب المعرفة.', 'success');
+    }catch(_){
+      setStatus('تعذر نسخ قالب المعرفة من المتصفح.', 'error');
     }
     return;
   }
