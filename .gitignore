@@ -28,3 +28,5 @@ build/
 tmp/
 knowledge-files/pdfs/*.pdf
 *.before-*.html
+
+knowledge-files/extracted/
