@@ -15,6 +15,12 @@ const EXPECTED_DIMENSIONS = 1024;
 const MAX_CHARS_PER_CHUNK = 1600;
 const EMBEDDING_BATCH_SIZE = 20;
 
+function printUsage(){
+  console.log('Usage:');
+  console.log('  node tools/ingest-knowledge.js --preview');
+  console.log('  node tools/ingest-knowledge.js --upload');
+}
+
 function slugify(value){
   return String(value || 'section')
     .trim()
@@ -150,6 +156,12 @@ async function createEmbeddings(texts){
 }
 
 async function main(){
+  const mode = process.argv[2];
+  if(mode !== '--preview' && mode !== '--upload'){
+    printUsage();
+    return;
+  }
+
   if(!fs.existsSync(KNOWLEDGE_PATH)){
     throw new Error(`لم يتم العثور على الملف: ${KNOWLEDGE_PATH}`);
   }
@@ -158,6 +170,15 @@ async function main(){
   const chunks = buildChunks(markdown);
   if(!chunks.length){
     throw new Error('لم يتم إنشاء أي chunk من knowledge.md.');
+  }
+
+  if(mode === '--preview'){
+    console.log(`Chunks: ${chunks.length}`);
+    chunks.slice(0, 3).forEach((chunk, index) => {
+      const preview = chunk.text.replace(/\s+/g, ' ').slice(0, 160);
+      console.log(`${index + 1}. ${chunk.metadata.section}: ${preview}${chunk.text.length > 160 ? '...' : ''}`);
+    });
+    return;
   }
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
