@@ -113,6 +113,10 @@ function buildSearchQueries(question){
     queries.push(normalized);
   }
 
+  if(normalized.includes('التطوير المهني التعليمي')){
+    queries.push('استفسارات شائعة حول احتساب نقاط التطوير المهني للترقية');
+  }
+
   if(normalized && !/منصة التنظيم المدرسي/.test(normalized)){
     queries.push(`${normalized} في منصة التنظيم المدرسي`);
   }
