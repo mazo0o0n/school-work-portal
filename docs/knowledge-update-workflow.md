@@ -50,11 +50,14 @@
 
 ```powershell
 cd "$env:USERPROFILE\Documents\منصة التنظيم المدرسي"
+node tools/check-knowledge.js
 node tools/update-knowledge-stats.js
 node tools/ingest-knowledge.js --preview
 node tools/ingest-knowledge.js --upload
 git status --short
 ```
+
+الأمر `node tools/check-knowledge.js` بديل محلي آمن يجمع تحديث العداد عبر `update-knowledge-stats` ومعاينة المعرفة عبر `ingest-knowledge --preview`. لا ينفّذ رفعًا، لذلك لا يغني عن أمر `--upload` عند الرغبة في رفع المعرفة إلى Vectorize.
 
 ## أشياء ممنوعة
 
