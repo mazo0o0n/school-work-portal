@@ -33,6 +33,80 @@ function fallbackBody(source = 'قاعدة معرفة المنصة'){
   };
 }
 
+function getPagePath(payload, request){
+  const explicitPath = String(payload?.page_path || payload?.pagePath || payload?.path || '').trim();
+  if(explicitPath){
+    return explicitPath.slice(0, 300);
+  }
+
+  const referer = request.headers.get('referer');
+  if(!referer){
+    return '';
+  }
+
+  try{
+    return new URL(referer).pathname.slice(0, 300);
+  }catch(_){
+    return '';
+  }
+}
+
+async function saveUnansweredQuestion(env, details){
+  if(!env.UNANSWERED_DB){
+    return;
+  }
+
+  try{
+    const question = String(details.question || '').trim().slice(0, 1000);
+    if(!question){
+      return;
+    }
+
+    const normalizedQuestion = String(details.normalizedQuestion || normalizeArabicQuestion(question)).trim().slice(0, 1000);
+    const reason = String(details.reason || 'unknown').trim().slice(0, 80);
+    const pagePath = String(details.pagePath || '').trim().slice(0, 300);
+    const now = new Date().toISOString();
+
+    if(normalizedQuestion){
+      const existing = await env.UNANSWERED_DB.prepare(
+        'SELECT id FROM unanswered_questions WHERE normalized_question = ?1 LIMIT 1'
+      ).bind(normalizedQuestion).first();
+
+      if(existing?.id){
+        await env.UNANSWERED_DB.prepare(
+          [
+            'UPDATE unanswered_questions',
+            'SET repeat_count = repeat_count + 1,',
+            'reason = ?1,',
+            'page_path = COALESCE(NULLIF(?2, \'\'), page_path),',
+            'updated_at = ?3',
+            'WHERE id = ?4'
+          ].join(' ')
+        ).bind(reason, pagePath, now, existing.id).run();
+        return;
+      }
+    }
+
+    await env.UNANSWERED_DB.prepare(
+      [
+        'INSERT INTO unanswered_questions',
+        '(question, normalized_question, reason, page_path, source, status, repeat_count, created_at, updated_at)',
+        'VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?7)'
+      ].join(' ')
+    ).bind(
+      question,
+      normalizedQuestion,
+      reason,
+      pagePath,
+      'unanswered_auto',
+      'new',
+      now
+    ).run();
+  }catch(error){
+    console.error('Saving unanswered question failed:', error?.message || error);
+  }
+}
+
 function extractEmbedding(payload){
   const data =
     payload?.data ??
@@ -153,6 +227,10 @@ function mergeMatches(matchGroups){
 }
 
 async function handleChat(request, env){
+  let question = '';
+  let normalizedQuestion = '';
+  let pagePath = '';
+
   try{
     let payload;
     try{
@@ -161,18 +239,33 @@ async function handleChat(request, env){
       return jsonResponse(fallbackBody(), 400);
     }
 
-    const question = String(payload?.message || payload?.question || '').trim();
+    question = String(payload?.message || payload?.question || '').trim();
     if(!question){
       return jsonResponse(fallbackBody(), 400);
     }
 
+    normalizedQuestion = normalizeArabicQuestion(question);
+    pagePath = getPagePath(payload, request);
+
     if(isExternalPlatformDefinitionQuestion(question)){
+      await saveUnansweredQuestion(env, {
+        question,
+        normalizedQuestion,
+        pagePath,
+        reason: 'external_guard'
+      });
       return jsonResponse(withDebug(env, fallbackBody(), {
         type: 'external_platform_definition_guard'
       }));
     }
 
     if(!env.AI || !env.VECTORIZE){
+      await saveUnansweredQuestion(env, {
+        question,
+        normalizedQuestion,
+        pagePath,
+        reason: 'missing_bindings'
+      });
       return jsonResponse(
         withDebug(env, fallbackBody(), { type: 'missing_bindings' }),
         500
@@ -201,6 +294,12 @@ async function handleChat(request, env){
     const usableMatches = matches.filter((match) => match.score >= MIN_SCORE);
 
     if(!usableMatches.length || topScore < MIN_SCORE){
+      await saveUnansweredQuestion(env, {
+        question,
+        normalizedQuestion,
+        pagePath,
+        reason: usableMatches.length ? 'low_score' : 'no_matches'
+      });
       return jsonResponse(withDebug(env, fallbackBody(), {
         type: 'no_retrieved_context',
         minScore: MIN_SCORE,
@@ -246,6 +345,15 @@ async function handleChat(request, env){
 
     const answer = extractGeneratedText(generation) || FALLBACK_ANSWER;
     const notFound = answer.trim() === FALLBACK_ANSWER;
+    if(notFound){
+      await saveUnansweredQuestion(env, {
+        question,
+        normalizedQuestion,
+        pagePath,
+        reason: 'generated_fallback'
+      });
+    }
+
     const body = {
       answer,
       source: notFound ? 'قاعدة معرفة المنصة' : usableMatches[0].source,
@@ -267,6 +375,12 @@ async function handleChat(request, env){
     }));
   }catch(error){
     console.error('Strict RAG chat failed:', error?.message || error);
+    await saveUnansweredQuestion(env, {
+      question,
+      normalizedQuestion,
+      pagePath,
+      reason: 'strict_rag_failed'
+    });
     return jsonResponse(
       withDebug(env, fallbackBody(), {
         type: 'strict_rag_failed',
