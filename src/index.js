@@ -391,9 +391,50 @@ async function handleChat(request, env){
   }
 }
 
+async function handleAdminUnanswered(request, env){
+  if(!env.ADMIN_API_TOKEN || !env.UNANSWERED_DB){
+    return jsonResponse({ error: 'Not found' }, 404);
+  }
+
+  const adminToken = request.headers.get('X-Admin-Token') || '';
+  if(adminToken !== env.ADMIN_API_TOKEN){
+    return jsonResponse({ error: 'Forbidden' }, 403);
+  }
+
+  const url = new URL(request.url);
+  const status = String(url.searchParams.get('status') || 'new').trim().slice(0, 40) || 'new';
+
+  const totalResult = await env.UNANSWERED_DB.prepare(
+    'SELECT COUNT(*) AS count FROM unanswered_questions WHERE status = ?1'
+  ).bind(status).first();
+
+  const itemsResult = await env.UNANSWERED_DB.prepare(
+    [
+      'SELECT id, question, reason, status, repeat_count, created_at, updated_at',
+      'FROM unanswered_questions',
+      'WHERE status = ?1',
+      'ORDER BY updated_at DESC',
+      'LIMIT 50'
+    ].join(' ')
+  ).bind(status).all();
+
+  return jsonResponse({
+    total_new: Number(totalResult?.count || 0),
+    items: itemsResult?.results || []
+  });
+}
+
 export default {
   async fetch(request, env){
     const url = new URL(request.url);
+
+    if(url.pathname === '/api/admin/unanswered'){
+      if(request.method !== 'GET'){
+        return jsonResponse({ error: 'Method not allowed' }, 405);
+      }
+
+      return handleAdminUnanswered(request, env);
+    }
 
     if(url.pathname === '/api/chat'){
       if(request.method !== 'POST'){

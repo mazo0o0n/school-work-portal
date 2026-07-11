@@ -45,6 +45,29 @@ npx wrangler d1 execute school-unanswered-questions --local --command "SELECT qu
 
 4. كرر السؤال نفسه وتأكد أن `repeat_count` يزيد بدل إنشاء صف جديد.
 
+## عرض الأسئلة غير المجابة عبر API
+
+يستخدم endpoint الإداري:
+
+```text
+GET /api/admin/unanswered
+```
+
+يجب إرسال header باسم `X-Admin-Token` مطابق لقيمة `ADMIN_API_TOKEN` في بيئة Cloudflare.
+
+مثال PowerShell:
+
+```powershell
+$headers = @{ 'X-Admin-Token' = $env:ADMIN_API_TOKEN }
+Invoke-RestMethod -Uri 'http://127.0.0.1:8788/api/admin/unanswered' -Headers $headers
+```
+
+لعرض حالة مختلفة:
+
+```powershell
+Invoke-RestMethod -Uri 'http://127.0.0.1:8788/api/admin/unanswered?status=reviewed' -Headers $headers
+```
+
 ## تنبيه خصوصية
 
 التسجيل مخصص لتحسين قاعدة معرفة مساعد المنصة فقط. لا يتم حفظ IP أو بيانات شخصية حساسة. البيانات المحفوظة تقتصر على السؤال، صيغته المطبعة، سبب عدم الإجابة، مسار الصفحة إن توفر، وحالة المراجعة.
