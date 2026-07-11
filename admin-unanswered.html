@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>إدارة الأسئلة غير المجابة | منصة التنظيم المدرسي</title>
-  <link rel="stylesheet" href="assets/css/admin-unanswered.css?v=20260711-2">
+  <link rel="stylesheet" href="assets/css/admin-unanswered.css?v=20260711-4">
 </head>
 <body>
   <main class="admin-shell">
@@ -24,6 +24,27 @@
         <button id="connectBtn" type="button">اتصال</button>
       </div>
       <p class="hint">لا يتم حفظ الرمز في المتصفح، ويبقى في الذاكرة حتى تحديث الصفحة أو تسجيل الخروج.</p>
+    </section>
+
+    <section class="statistics admin-content" aria-labelledby="statisticsTitle" hidden>
+      <div class="statistics-head">
+        <div>
+          <p class="statistics-kicker">نظرة سريعة على جميع الحالات</p>
+          <h2 id="statisticsTitle">ملخص الأسئلة</h2>
+        </div>
+        <span class="statistics-alert" id="statisticsAlert" role="status" aria-live="polite" hidden>تعذر تحديث الإحصائيات.</span>
+      </div>
+      <div class="status-stats" aria-label="أعداد الأسئلة حسب الحالة">
+        <article class="new-stat"><span>جديد</span><strong id="newStatsCount">—</strong></article>
+        <article class="reviewed-stat"><span>تمت المراجعة</span><strong id="reviewedStatsCount">—</strong></article>
+        <article class="added-stat"><span>أضيف للمعرفة</span><strong id="addedStatsCount">—</strong></article>
+        <article class="ignored-stat"><span>متجاهل</span><strong id="ignoredStatsCount">—</strong></article>
+      </div>
+      <div class="insights-grid" aria-label="مؤشرات الأسئلة">
+        <article><span>أكثر سبب عدم إجابة تكرارًا</span><strong id="topReason">لا توجد بيانات كافية</strong></article>
+        <article><span>أكثر سؤال تكررًا</span><strong id="topQuestion">لا توجد بيانات كافية</strong></article>
+        <article><span>إجمالي الأسئلة الظاهرة حاليًا</span><strong id="visibleQuestionsCount">0</strong></article>
+      </div>
     </section>
 
     <section class="toolbar admin-content" aria-label="أدوات التصفية" hidden>
@@ -82,6 +103,6 @@
     </article>
   </template>
 
-  <script src="assets/js/admin-unanswered.js?v=20260711-2"></script>
+  <script src="assets/js/admin-unanswered.js?v=20260711-4"></script>
 </body>
 </html>

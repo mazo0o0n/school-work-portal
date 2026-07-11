@@ -9,6 +9,10 @@ const questionTemplate = document.getElementById('questionTemplate');
 const statusLine = document.getElementById('statusLine');
 const totalCount = document.getElementById('totalCount');
 const currentStatus = document.getElementById('currentStatus');
+const statisticsAlert = document.getElementById('statisticsAlert');
+const topReason = document.getElementById('topReason');
+const topQuestion = document.getElementById('topQuestion');
+const visibleQuestionsCount = document.getElementById('visibleQuestionsCount');
 const tabs = [...document.querySelectorAll('.tab')];
 const adminContent = [...document.querySelectorAll('.admin-content')];
 
@@ -28,7 +32,15 @@ const reasonLabels = {
   generated_fallback: 'رد افتراضي من المساعد',
   no_matches: 'لا توجد نتيجة مناسبة',
   low_score: 'نتيجة ضعيفة',
-  external_guard: 'خارج نطاق معرفة المنصة'
+  external_guard: 'خارج نطاق معرفة المنصة',
+  unknown: 'غير معروف'
+};
+
+const statisticsCountElements = {
+  new: document.getElementById('newStatsCount'),
+  reviewed: document.getElementById('reviewedStatsCount'),
+  added_to_knowledge: document.getElementById('addedStatsCount'),
+  ignored: document.getElementById('ignoredStatsCount')
 };
 
 function setStatus(message, type = ''){
@@ -73,7 +85,7 @@ function requireToken(){
   return false;
 }
 
-async function apiRequest(url, options = {}){
+async function apiRequest(url, options = {}, resetOnForbidden = true){
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -83,7 +95,9 @@ async function apiRequest(url, options = {}){
   });
 
   if(response.status === 403){
-    resetSession('رمز الإدارة غير صحيح أو انتهت صلاحية الجلسة.', 'error');
+    if(resetOnForbidden){
+      resetSession('رمز الإدارة غير صحيح أو انتهت صلاحية الجلسة.', 'error');
+    }
     throw new Error('رمز الإدارة غير صحيح أو انتهت صلاحية الجلسة.');
   }
 
@@ -139,7 +153,65 @@ function buildKnowledgeTemplate(item){
 
 function displayReason(value){
   const reason = String(value || '').trim();
-  return reasonLabels[reason] || reason || '-';
+  return reasonLabels[reason] || reason || reasonLabels.unknown;
+}
+
+function renderVisibleCount(items){
+  visibleQuestionsCount.textContent = items.length.toLocaleString('ar-SA');
+}
+
+function renderAggregateInsights(items){
+  if(!items.length){
+    topReason.textContent = 'لا توجد بيانات كافية';
+    topQuestion.textContent = 'لا توجد بيانات كافية';
+    return;
+  }
+
+  const reasonCounts = items.reduce((counts, item) => {
+    const reason = String(item.reason || 'unknown').trim() || 'unknown';
+    counts.set(reason, (counts.get(reason) || 0) + 1);
+    return counts;
+  }, new Map());
+  const [mostCommonReason, reasonCount] = [...reasonCounts.entries()]
+    .sort((a, b) => b[1] - a[1])[0];
+  topReason.textContent = `${displayReason(mostCommonReason)} (${reasonCount.toLocaleString('ar-SA')})`;
+
+  const mostRepeated = items.reduce((topItem, item) => {
+    return Number(item.repeat_count || 0) > Number(topItem.repeat_count || 0) ? item : topItem;
+  }, items[0]);
+  const repeatCount = Number(mostRepeated.repeat_count || 0);
+  topQuestion.textContent = `${cleanMarkdownQuestion(mostRepeated.question)} (${repeatCount.toLocaleString('ar-SA')})`;
+}
+
+async function loadStatistics(){
+  statisticsAlert.hidden = true;
+  topReason.textContent = 'لا توجد بيانات كافية';
+  topQuestion.textContent = 'لا توجد بيانات كافية';
+  Object.values(statisticsCountElements).forEach((element) => {
+    element.textContent = '—';
+  });
+
+  try{
+    const statuses = Object.keys(statisticsCountElements);
+    const responses = await Promise.all(statuses.map((status) => {
+      return apiRequest(`/api/admin/unanswered?status=${encodeURIComponent(status)}`, {}, false);
+    }));
+
+    const allItems = [];
+    responses.forEach((data, index) => {
+      if(!Array.isArray(data.items)) throw new Error('Invalid statistics response');
+      statisticsCountElements[statuses[index]].textContent = data.items.length.toLocaleString('ar-SA');
+      allItems.push(...data.items);
+    });
+    renderAggregateInsights(allItems);
+  }catch(_){
+    Object.values(statisticsCountElements).forEach((element) => {
+      element.textContent = '—';
+    });
+    topReason.textContent = 'لا توجد بيانات كافية';
+    topQuestion.textContent = 'لا توجد بيانات كافية';
+    statisticsAlert.hidden = false;
+  }
 }
 
 function normalizeCardActions(card){
@@ -204,6 +276,7 @@ function renderItems(){
   const items = getSortedFilteredItems();
   totalCount.textContent = `${items.length} سؤال`;
   currentStatus.textContent = `الحالة: ${statusLabels[activeStatus] || activeStatus}`;
+  renderVisibleCount(items);
 
   if(!items.length){
     const empty = document.createElement('div');
@@ -242,6 +315,7 @@ async function loadQuestions(){
     renderItems();
     adminTokenInput.value = '';
     setStatus('متصل. تم تحديث البيانات بنجاح.', 'success');
+    await loadStatistics();
   }catch(error){
     currentItems = [];
     renderItems();

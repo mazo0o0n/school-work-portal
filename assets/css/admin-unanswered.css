@@ -36,7 +36,7 @@ button:disabled{opacity:.55;cursor:wait}
   display:grid;
   gap:16px;
 }
-.admin-header,.token-panel,.toolbar,.summary,.status-line,.question-card{
+.admin-header,.token-panel,.toolbar,.statistics,.summary,.status-line,.question-card{
   background:var(--panel);
   border:1px solid var(--line);
   border-radius:10px;
@@ -89,6 +89,37 @@ input:focus,select:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(13,1
 .status-line{padding:12px 16px;font-weight:800;color:var(--muted)}
 .status-line.success{color:var(--green)}
 .status-line.error{color:var(--danger)}
+.statistics{
+  padding:20px;
+  display:grid;
+  gap:16px;
+  border-top:4px solid var(--teal);
+  background:linear-gradient(135deg,#fff,#f3fbfb);
+}
+.statistics-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.statistics-head h2{margin:0;font-size:20px}
+.statistics-kicker{margin:0 0 3px;color:var(--teal);font-size:12px;font-weight:900}
+.statistics-alert{color:var(--danger);font-size:13px;font-weight:900}
+.status-stats,.insights-grid{display:grid;gap:10px}
+.status-stats{grid-template-columns:repeat(4,1fr)}
+.insights-grid{grid-template-columns:repeat(3,1fr)}
+.status-stats article,.insights-grid article{
+  display:grid;
+  gap:6px;
+  min-width:0;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:#fbfdfd;
+}
+.status-stats span,.insights-grid span{color:var(--muted);font-size:13px;font-weight:900}
+.status-stats strong{font-size:26px}
+.insights-grid strong{font-size:15px;line-height:1.7;overflow-wrap:anywhere}
+.status-stats article{border-top:3px solid var(--teal);background:#fff}
+.status-stats .reviewed-stat{border-top-color:var(--gold)}
+.status-stats .added-stat{border-top-color:var(--green)}
+.status-stats .ignored-stat{border-top-color:var(--muted)}
+.insights-grid article{background:#edf7f7}
 .summary{
   display:flex;
   justify-content:space-between;
@@ -148,6 +179,8 @@ dd{margin:5px 0 0;font-weight:800;overflow-wrap:anywhere}
 .actions .danger{background:#fff1f0;color:var(--danger);border-color:#ffd1cc}
 @media(max-width:760px){
   .admin-header,.question-head{display:grid}
-  .token-row,.tools-row,.meta-grid{grid-template-columns:1fr}
+  .token-row,.tools-row,.meta-grid,.insights-grid{grid-template-columns:1fr}
+  .status-stats{grid-template-columns:repeat(2,1fr)}
+  .statistics-head{align-items:flex-start;flex-direction:column}
   .summary{display:grid}
 }
