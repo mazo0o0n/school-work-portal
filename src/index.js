@@ -120,6 +120,19 @@ function buildSearchQueries(question){
   return [...new Set(queries)].slice(0, 2);
 }
 
+function isExternalPlatformDefinitionQuestion(question){
+  const normalized = normalizeArabicQuestion(question);
+  if(!normalized.includes('منصة') || normalized.includes('منصة التنظيم المدرسي')){
+    return false;
+  }
+
+  if(/\b(رابط|اين|موجود|موجودة|ضمن|داخل|في الموقع)\b/.test(normalized)){
+    return false;
+  }
+
+  return /\b(ما هو|ما هي|عرفني|اشرح)\s+.*منصة\s+/.test(normalized);
+}
+
 function mergeMatches(matchGroups){
   const byId = new Map();
   matchGroups.flat().forEach((match) => {
@@ -143,6 +156,12 @@ async function handleChat(request, env){
     const question = String(payload?.message || payload?.question || '').trim();
     if(!question){
       return jsonResponse(fallbackBody(), 400);
+    }
+
+    if(isExternalPlatformDefinitionQuestion(question)){
+      return jsonResponse(withDebug(env, fallbackBody(), {
+        type: 'external_platform_definition_guard'
+      }));
     }
 
     if(!env.AI || !env.VECTORIZE){
