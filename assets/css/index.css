@@ -2080,6 +2080,7 @@ body.dark .academy-footer{
   bottom:24px;
   z-index:1200;
   font-family:"IBM Plex Sans Arabic", system-ui, sans-serif;
+  pointer-events:none;
 }
 .ai-toggle{
   min-height:48px;
@@ -2096,6 +2097,7 @@ body.dark .academy-footer{
   cursor:pointer;
   box-shadow:0 0 0 4px rgba(61,126,185,.16),0 16px 34px rgba(7,168,105,.28);
   animation:aiWatermarkBlink 1.8s ease-in-out infinite;
+  pointer-events:auto;
 }
 .ai-toggle img{
   width:30px;
@@ -2126,6 +2128,7 @@ body.dark .academy-footer{
   text-align:right;
   box-shadow:0 22px 56px rgba(15,23,42,.22);
   overflow:hidden;
+  pointer-events:auto;
 }
 .ai-head{
   display:flex;
@@ -2378,9 +2381,6 @@ body.dark .ai-form input{
 body.dark .ai-message.bot.is-missed{
   background:#242626;
   color:#FFFFFF;
-}
-body.ai-panel-open{
-  width:100%;
 }
 @media(max-width:900px){
   .academy-hero{
