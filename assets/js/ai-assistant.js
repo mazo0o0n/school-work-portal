@@ -14,8 +14,33 @@ const aiPendingCount = document.getElementById('aiPendingCount');
 const aiKnowledgeCount = document.getElementById('aiKnowledgeCount');
 const unansweredStorageKey = 'platformAiUnansweredQuestions';
 const aiReviewWhatsappNumber = '966558834103';
-const aiKnowledgeItemsCount = 118;
+const aiKnowledgeItemsFallback = 118;
+let aiKnowledgeItemsCount = aiKnowledgeItemsFallback;
 let aiPageScrollY = 0;
+
+function renderAiKnowledgeCount(){
+  if(aiKnowledgeCount){
+    aiKnowledgeCount.textContent = `${aiKnowledgeItemsCount} سؤال/إجابة متاحة`;
+  }
+}
+
+async function loadAiKnowledgeCount(){
+  try{
+    const response = await fetch('assets/data/knowledge-stats.json');
+    if(!response.ok) throw new Error('Knowledge stats request failed');
+
+    const stats = await response.json();
+    if(!Number.isInteger(stats.qa_count) || stats.qa_count < 0){
+      throw new Error('Invalid knowledge stats');
+    }
+    aiKnowledgeItemsCount = stats.qa_count;
+  }catch(_){
+    aiKnowledgeItemsCount = aiKnowledgeItemsFallback;
+  }
+  renderAiKnowledgeCount();
+}
+
+loadAiKnowledgeCount();
 
 const apiFallbackAnswer = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
 
@@ -327,9 +352,7 @@ function openAiPanel(){
   aiPageScrollY = window.scrollY || document.documentElement.scrollTop || 0;
   document.body.style.top = `-${aiPageScrollY}px`;
   document.body.classList.add('ai-panel-open');
-  if(aiKnowledgeCount){
-    aiKnowledgeCount.textContent = `${aiKnowledgeItemsCount} سؤال/إجابة متاحة`;
-  }
+  renderAiKnowledgeCount();
   if(!aiMessages.children.length){
     addAiMessage('مرحبًا، اسألني عن خدمات المنصة، الأدلة، الأنظمة، أدوات الدعم، أو الأسئلة الشائعة.', 'bot', 'قاعدة معرفة المنصة');
   }
