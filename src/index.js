@@ -122,15 +122,19 @@ function buildSearchQueries(question){
 
 function isExternalPlatformDefinitionQuestion(question){
   const normalized = normalizeArabicQuestion(question);
-  if(!normalized.includes('منصة') || normalized.includes('منصة التنظيم المدرسي')){
+  const original = String(question || '').trim();
+  const combined = `${original} ${normalized}`;
+
+  if(!combined.includes('منصة') || combined.includes('منصة التنظيم المدرسي')){
     return false;
   }
 
-  if(/\b(رابط|اين|موجود|موجودة|ضمن|داخل|في الموقع)\b/.test(normalized)){
+  if(/\b(رابط|اين|وين|فين|القى|ألقى|موجود|موجودة|ضمن|داخل|في الموقع)\b/.test(combined)){
     return false;
   }
 
-  return /\b(ما هو|ما هي|عرفني|اشرح)\s+.*منصة\s+/.test(normalized);
+  return /(^|\s)(وش|وشو|ايش|ما هو|ما هي)\s+منصة\s+\S+/.test(combined) ||
+    /\b(عرفني على|اشرح)\s+منصة\s+\S+/.test(combined);
 }
 
 function mergeMatches(matchGroups){
