@@ -26,4 +26,5 @@ build/
 .agents/
 .codex/
 tmp/
+knowledge-files/pdfs/*.pdf
 *.before-*.html

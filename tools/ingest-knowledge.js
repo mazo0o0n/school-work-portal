@@ -6,6 +6,7 @@ const { spawnSync } = require('node:child_process');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const KNOWLEDGE_PATH = path.join(ROOT_DIR, 'knowledge.md');
+const APPROVED_KNOWLEDGE_DIR = path.join(ROOT_DIR, 'knowledge-files', 'approved');
 const OUT_DIR = path.join(ROOT_DIR, 'tmp');
 const OUT_FILE = path.join(OUT_DIR, 'knowledge-vectors.ndjson');
 
@@ -28,6 +29,29 @@ function slugify(value){
     .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/g, '')
     .toLowerCase() || 'section';
+}
+
+function displayPath(filePath){
+  return path.relative(ROOT_DIR, filePath).replace(/\\/g, '/');
+}
+
+function getKnowledgeSources(){
+  const sources = [];
+
+  if(fs.existsSync(KNOWLEDGE_PATH)){
+    sources.push(KNOWLEDGE_PATH);
+  }
+
+  if(fs.existsSync(APPROVED_KNOWLEDGE_DIR)){
+    fs.readdirSync(APPROVED_KNOWLEDGE_DIR)
+      .filter((name) => name.toLowerCase().endsWith('.md'))
+      .sort((a, b) => a.localeCompare(b))
+      .forEach((name) => {
+        sources.push(path.join(APPROVED_KNOWLEDGE_DIR, name));
+      });
+  }
+
+  return sources;
 }
 
 function splitLongText(text, maxChars){
@@ -71,7 +95,8 @@ function splitLongText(text, maxChars){
   });
 }
 
-function buildChunks(markdown){
+function buildChunks(markdown, sourcePath){
+  const source = displayPath(sourcePath);
   const sections = [];
   let currentParent = '';
   const matches = [...markdown.matchAll(/^(#{2,3})\s+(.+)$/gm)]
@@ -90,7 +115,7 @@ function buildChunks(markdown){
       id: `k_${String(index + 1).padStart(4, '0')}`,
       text,
       metadata: {
-        source: 'knowledge.md',
+        source,
         section: 'قاعدة المعرفة'
       }
     }));
@@ -109,7 +134,7 @@ function buildChunks(markdown){
         id: `${slugify(title)}-${partIndex + 1}`,
         text: chunkText,
         metadata: {
-          source: 'knowledge.md',
+          source,
           section: title
         }
       });
@@ -173,21 +198,32 @@ async function main(){
     return;
   }
 
-  if(!fs.existsSync(KNOWLEDGE_PATH)){
-    throw new Error(`لم يتم العثور على الملف: ${KNOWLEDGE_PATH}`);
+  const sources = getKnowledgeSources();
+  if(!sources.length){
+    throw new Error(`لم يتم العثور على أي ملفات معرفة. أضف knowledge.md أو ملفات Markdown داخل ${APPROVED_KNOWLEDGE_DIR}.`);
   }
 
-  const markdown = fs.readFileSync(KNOWLEDGE_PATH, "utf8");
-  const chunks = buildChunks(markdown);
+  const chunks = sources.flatMap((sourcePath) => {
+    const markdown = fs.readFileSync(sourcePath, "utf8");
+    return buildChunks(markdown, sourcePath);
+  }).map((chunk, index) => ({
+    ...chunk,
+    id: `k_${String(index + 1).padStart(4, '0')}`
+  }));
+
   if(!chunks.length){
-    throw new Error('لم يتم إنشاء أي chunk من knowledge.md.');
+    throw new Error('لم يتم إنشاء أي chunk من ملفات المعرفة.');
   }
 
   if(mode === '--preview'){
+    console.log(`Knowledge files: ${sources.length}`);
+    sources.forEach((sourcePath) => {
+      console.log(`- ${displayPath(sourcePath)}`);
+    });
     console.log(`Chunks: ${chunks.length}`);
     chunks.slice(0, 5).forEach((chunk, index) => {
       const preview = chunk.text.replace(/\s+/g, ' ').slice(0, 160);
-      console.log(`${index + 1}. ${chunk.metadata.section}: ${preview}${chunk.text.length > 160 ? '...' : ''}`);
+      console.log(`${index + 1}. [${chunk.metadata.source}] ${chunk.metadata.section}: ${preview}${chunk.text.length > 160 ? '...' : ''}`);
     });
     return;
   }
