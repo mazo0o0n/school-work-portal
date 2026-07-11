@@ -471,6 +471,17 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
     </div>
     <div class="ai-knowledge-count" id="aiKnowledgeCount">118 سؤال/إجابة متاحة</div>
     <div class="ai-messages" id="aiMessages" aria-live="polite"></div>
+    <section class="ai-suggestions" id="aiSuggestions" aria-labelledby="aiSuggestionsTitle">
+      <h3 id="aiSuggestionsTitle">جرّب أن تسأل:</h3>
+      <div class="ai-suggestion-chips">
+        <button type="button" data-question="وش منصة التنظيم المدرسي؟">وش منصة التنظيم المدرسي؟</button>
+        <button type="button" data-question="ما هي خدمات بوابة التعليم؟">ما هي خدمات بوابة التعليم؟</button>
+        <button type="button" data-question="وش شروط ترقية المعلمين؟">وش شروط ترقية المعلمين؟</button>
+        <button type="button" data-question="ما هو برنامج فرص؟">ما هو برنامج فرص؟</button>
+        <button type="button" data-question="ما هو التطوير المهني التعليمي؟">ما هو التطوير المهني التعليمي؟</button>
+        <button type="button" data-question="ما هو برنامج الدبلوم التأهيلي للتربية البدنية؟">ما هو برنامج الدبلوم التأهيلي للتربية البدنية؟</button>
+      </div>
+    </section>
     <form class="ai-form" id="aiForm">
       <input id="aiQuestion" type="text" dir="rtl" placeholder="اكتب سؤالك هنا..." autocomplete="off" aria-label="سؤال للمساعد">
       <button type="submit">إرسال</button>
