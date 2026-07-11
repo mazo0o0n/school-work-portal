@@ -5,6 +5,7 @@ const aiClose = document.getElementById('aiClose');
 const aiForm = document.getElementById('aiForm');
 const aiQuestion = document.getElementById('aiQuestion');
 const aiMessages = document.getElementById('aiMessages');
+const aiSuggestions = document.getElementById('aiSuggestions');
 const aiExportQuestions = document.getElementById('aiExportQuestions');
 const aiShowQuestions = document.getElementById('aiShowQuestions');
 const aiSendQuestions = document.getElementById('aiSendQuestions');
@@ -346,6 +347,16 @@ async function answerQuestion(question){
   }
 }
 
+async function submitAiQuestion(question){
+  const normalizedQuestion = String(question || '').trim();
+  if(!normalizedQuestion) return;
+
+  aiQuestion.value = '';
+  if(aiSuggestions) aiSuggestions.hidden = true;
+  await answerQuestion(normalizedQuestion);
+  aiQuestion.focus();
+}
+
 function openAiPanel(){
   aiPanel.hidden = false;
   aiToggle.setAttribute('aria-expanded', 'true');
@@ -375,10 +386,13 @@ aiClose?.addEventListener('click', closeAiPanel);
 
 aiForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const question = aiQuestion.value.trim();
-  if(!question) return;
-  aiQuestion.value = '';
-  await answerQuestion(question);
+  await submitAiQuestion(aiQuestion.value);
+});
+
+aiSuggestions?.addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-question]');
+  if(!button || !aiSuggestions.contains(button)) return;
+  await submitAiQuestion(button.dataset.question);
 });
 
 aiExportQuestions?.addEventListener('click', () => {
