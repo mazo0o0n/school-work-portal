@@ -90,6 +90,47 @@ function buildContext(matches){
     .join('\n\n---\n\n');
 }
 
+function normalizeArabicQuestion(value){
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/\u0640/g, '')
+    .replace(/[إأآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/\b(وشو|ايش|وش)\b/g, 'ما هو')
+    .replace(/\b(وين|فين)\b/g, 'اين')
+    .replace(/\b(ابي|ابغى)\b/g, 'اريد')
+    .replace(/\bمنصه\b/g, 'منصة')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildSearchQueries(question){
+  const normalized = normalizeArabicQuestion(question);
+  const queries = [question];
+
+  if(normalized && normalized !== question){
+    queries.push(normalized);
+  }
+
+  if(normalized && !/منصة التنظيم المدرسي/.test(normalized)){
+    queries.push(`${normalized} في منصة التنظيم المدرسي`);
+  }
+
+  return [...new Set(queries)].slice(0, 2);
+}
+
+function mergeMatches(matchGroups){
+  const byId = new Map();
+  matchGroups.flat().forEach((match) => {
+    const current = byId.get(match.id);
+    if(!current || match.score > current.score){
+      byId.set(match.id, match);
+    }
+  });
+  return [...byId.values()].sort((a, b) => b.score - a.score).slice(0, TOP_K);
+}
+
 async function handleChat(request, env){
   try{
     let payload;
@@ -111,17 +152,24 @@ async function handleChat(request, env){
       );
     }
 
-    const embeddingResult = await env.AI.run(EMBEDDING_MODEL, {
-      text: question
-    });
-    const queryEmbedding = extractEmbedding(embeddingResult);
+    const searchQueries = buildSearchQueries(question);
+    const matchGroups = [];
 
-    const vectorizeResult = await env.VECTORIZE.query(queryEmbedding, {
-      topK: TOP_K,
-      returnMetadata: true
-    });
+    for(const query of searchQueries){
+      const embeddingResult = await env.AI.run(EMBEDDING_MODEL, {
+        text: query
+      });
+      const queryEmbedding = extractEmbedding(embeddingResult);
 
-    const matches = getMatchesWithText(vectorizeResult);
+      const vectorizeResult = await env.VECTORIZE.query(queryEmbedding, {
+        topK: TOP_K,
+        returnMetadata: true
+      });
+
+      matchGroups.push(getMatchesWithText(vectorizeResult));
+    }
+
+    const matches = mergeMatches(matchGroups);
     const topScore = matches[0]?.score || 0;
     const usableMatches = matches.filter((match) => match.score >= MIN_SCORE);
 
