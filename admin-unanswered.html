@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>إدارة الأسئلة غير المجابة | منصة التنظيم المدرسي</title>
+  <link rel="stylesheet" href="assets/css/admin-unanswered.css">
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-header">
+      <div>
+        <p class="admin-kicker">منصة التنظيم المدرسي والموارد التعليمية</p>
+        <h1>إدارة الأسئلة غير المجابة</h1>
+        <p>مراجعة الأسئلة المحفوظة تلقائيًا من مساعد المنصة وتحديث حالتها.</p>
+      </div>
+      <button class="ghost-btn" id="logoutBtn" type="button" hidden>تسجيل خروج</button>
+    </header>
+
+    <section class="token-panel" aria-label="رمز الإدارة">
+      <label for="adminToken">رمز الإدارة</label>
+      <div class="token-row">
+        <input id="adminToken" type="password" autocomplete="off" placeholder="أدخل Admin Token">
+        <button id="connectBtn" type="button">اتصال</button>
+      </div>
+      <p class="hint">لا يتم حفظ الرمز في المتصفح، ويبقى في الذاكرة حتى تحديث الصفحة أو تسجيل الخروج.</p>
+    </section>
+
+    <section class="toolbar admin-content" aria-label="أدوات التصفية" hidden>
+      <div class="tabs" role="tablist" aria-label="حالات الأسئلة">
+        <button class="tab active" type="button" data-status="new">جديد</button>
+        <button class="tab" type="button" data-status="reviewed">تمت المراجعة</button>
+        <button class="tab" type="button" data-status="added_to_knowledge">أضيف للمعرفة</button>
+        <button class="tab" type="button" data-status="ignored">متجاهل</button>
+      </div>
+      <div class="tools-row">
+        <input id="searchInput" type="search" placeholder="بحث داخل الأسئلة">
+        <select id="sortSelect" aria-label="ترتيب النتائج">
+          <option value="newest">الأحدث</option>
+          <option value="oldest">الأقدم</option>
+          <option value="repeat">الأكثر تكرارًا</option>
+        </select>
+        <button id="refreshBtn" type="button">تحديث البيانات</button>
+      </div>
+    </section>
+
+    <section class="status-line" id="statusLine" role="status" aria-live="polite">
+      أدخل رمز الإدارة ثم اضغط اتصال.
+    </section>
+
+    <section class="summary admin-content" aria-label="ملخص" hidden>
+      <span id="totalCount">0 سؤال</span>
+      <span id="currentStatus">الحالة: جديد</span>
+    </section>
+
+    <section class="questions-list admin-content" id="questionsList" aria-label="قائمة الأسئلة" hidden></section>
+  </main>
+
+  <template id="questionTemplate">
+    <article class="question-card">
+      <div class="question-head">
+        <h2 class="question-text"></h2>
+        <span class="status-badge"></span>
+      </div>
+      <dl class="meta-grid">
+        <div><dt>سبب عدم الإجابة</dt><dd class="reason"></dd></div>
+        <div><dt>عدد التكرار</dt><dd class="repeat"></dd></div>
+        <div><dt>مسار الصفحة</dt><dd class="page-path"></dd></div>
+        <div><dt>المصدر</dt><dd class="source"></dd></div>
+        <div><dt>تاريخ الإنشاء</dt><dd class="created"></dd></div>
+        <div><dt>آخر تحديث</dt><dd class="updated"></dd></div>
+      </dl>
+      <div class="actions">
+        <button type="button" data-action="copy">نسخ السؤال</button>
+        <button type="button" data-status-action="new">new</button>
+        <button type="button" data-status-action="reviewed">reviewed</button>
+        <button type="button" data-status-action="added_to_knowledge">added_to_knowledge</button>
+        <button type="button" data-status-action="ignored">ignored</button>
+        <button class="danger" type="button" data-action="delete">حذف</button>
+      </div>
+    </article>
+  </template>
+
+  <script src="assets/js/admin-unanswered.js"></script>
+</body>
+</html>
