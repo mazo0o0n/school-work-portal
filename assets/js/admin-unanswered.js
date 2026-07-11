@@ -24,6 +24,13 @@ const statusLabels = {
   ignored: 'متجاهل'
 };
 
+const reasonLabels = {
+  generated_fallback: 'رد افتراضي من المساعد',
+  no_matches: 'لا توجد نتيجة مناسبة',
+  low_score: 'نتيجة ضعيفة',
+  external_guard: 'خارج نطاق معرفة المنصة'
+};
+
 function setStatus(message, type = ''){
   statusLine.textContent = message;
   statusLine.className = `status-line ${type}`.trim();
@@ -111,6 +118,7 @@ function cleanMarkdownQuestion(value){
 function buildKnowledgeTemplate(item){
   const question = cleanMarkdownQuestion(item?.question);
   const status = String(item?.status || '-').trim() || '-';
+  const statusLabel = statusLabels[status] ? `${statusLabels[status]} (${status})` : status;
   const repeatCount = String(item?.repeat_count ?? 0).trim() || '0';
 
   return [
@@ -124,9 +132,25 @@ function buildKnowledgeTemplate(item){
     '',
     'ملاحظات:',
     '- أضيف هذا السؤال من سجل الأسئلة غير المجابة.',
-    `- الحالة قبل الإضافة: ${status}`,
+    `- الحالة قبل الإضافة: ${statusLabel}`,
     `- عدد التكرار: ${repeatCount}`
   ].join('\n');
+}
+
+function displayReason(value){
+  const reason = String(value || '').trim();
+  return reasonLabels[reason] || reason || '-';
+}
+
+function normalizeCardActions(card){
+  card.querySelectorAll('[data-action="copy"]').forEach((button) => {
+    button.remove();
+  });
+
+  card.querySelectorAll('[data-status-action]').forEach((button) => {
+    const status = button.dataset.statusAction;
+    button.textContent = statusLabels[status] || status;
+  });
 }
 
 async function copyText(text){
@@ -192,10 +216,11 @@ function renderItems(){
   items.forEach((item) => {
     const card = questionTemplate.content.firstElementChild.cloneNode(true);
     card.dataset.id = item.id;
+    normalizeCardActions(card);
     const question = String(item.question || '-');
     card.querySelector('.question-text').textContent = question;
     card.querySelector('.status-badge').textContent = statusLabels[item.status] || item.status || '-';
-    card.querySelector('.reason').textContent = item.reason || '-';
+    card.querySelector('.reason').textContent = displayReason(item.reason);
     card.querySelector('.repeat').textContent = item.repeat_count || 0;
     card.querySelector('.page-path').textContent = item.page_path || '-';
     card.querySelector('.source').textContent = item.source || '-';
@@ -216,7 +241,7 @@ async function loadQuestions(){
     setAdminVisible(true);
     renderItems();
     adminTokenInput.value = '';
-    setStatus('تم تحديث البيانات بنجاح.', 'success');
+    setStatus('متصل. تم تحديث البيانات بنجاح.', 'success');
   }catch(error){
     currentItems = [];
     renderItems();
@@ -312,17 +337,6 @@ questionsList.addEventListener('click', async (event) => {
 
   const id = Number(card.dataset.id);
   const item = currentItems.find((entry) => Number(entry.id) === id);
-
-  if(button.dataset.action === 'copy'){
-    const text = card.querySelector('.question-text')?.textContent || '';
-    try{
-      await copyText(text);
-      setStatus('تم نسخ نص السؤال.', 'success');
-    }catch(_){
-      setStatus('تعذر نسخ السؤال من المتصفح.', 'error');
-    }
-    return;
-  }
 
   if(button.dataset.action === 'copy-template'){
     try{
