@@ -2380,10 +2380,7 @@ body.dark .ai-message.bot.is-missed{
   color:#FFFFFF;
 }
 body.ai-panel-open{
-  position:fixed;
-  inset:0;
   width:100%;
-  overflow:hidden;
 }
 @media(max-width:900px){
   .academy-hero{
