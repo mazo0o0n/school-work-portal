@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>حالة معرفة المساعد | منصة التنظيم المدرسي</title>
+  <link rel="stylesheet" href="assets/css/assistant-status.css">
+</head>
+<body>
+  <main class="status-shell">
+    <header class="page-header">
+      <div>
+        <p class="page-kicker">منصة التنظيم المدرسي والموارد التعليمية</p>
+        <h1>حالة معرفة المساعد</h1>
+        <p>ملخص داخلي سريع لإحصائيات المعرفة وأدوات إدارتها.</p>
+      </div>
+      <button id="refreshStats" type="button">تحديث الإحصائيات</button>
+    </header>
+
+    <section class="load-status" id="loadStatus" role="status" aria-live="polite">
+      جارٍ تحميل إحصائيات المعرفة...
+    </section>
+
+    <section class="stats-grid" aria-label="إحصائيات المعرفة">
+      <article class="stat-card">
+        <span>الأسئلة والإجابات</span>
+        <strong id="qaCount">—</strong>
+      </article>
+      <article class="stat-card">
+        <span>مصادر المعرفة</span>
+        <strong id="sourcesCount">—</strong>
+      </article>
+      <article class="stat-card wide">
+        <span>آخر تحديث للعداد</span>
+        <strong id="updatedAt">—</strong>
+      </article>
+    </section>
+
+    <p class="fallback-note" id="fallbackNote" hidden>
+      سيبقى fallback الخاص بعداد المساعد يعمل حتى عند تعذر تحميل ملف الإحصائيات.
+    </p>
+
+    <section class="panel" aria-labelledby="linksTitle">
+      <h2 id="linksTitle">روابط داخلية</h2>
+      <div class="link-grid">
+        <a class="link-card" href="admin-unanswered.html">
+          <strong>إدارة الأسئلة غير المجابة</strong>
+          <span>مراجعة الأسئلة وتحديث حالتها.</span>
+        </a>
+        <a class="link-card" href="index.html">
+          <strong>الصفحة الرئيسية</strong>
+          <span>فتح المنصة واختبار المساعد.</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="commandsTitle">
+      <h2 id="commandsTitle">أوامر مفيدة</h2>
+      <div class="commands-list">
+        <div class="command-row"><code>node tools/check-knowledge.js</code><button class="copy-command" type="button">نسخ</button></div>
+        <div class="command-row"><code>node tools/update-knowledge-stats.js</code><button class="copy-command" type="button">نسخ</button></div>
+        <div class="command-row"><code>node tools/ingest-knowledge.js --preview</code><button class="copy-command" type="button">نسخ</button></div>
+        <div class="command-row"><code>node tools/ingest-knowledge.js --upload</code><button class="copy-command" type="button">نسخ</button></div>
+        <div class="command-row"><code>git status --short</code><button class="copy-command" type="button">نسخ</button></div>
+      </div>
+    </section>
+
+    <section class="panel safety-panel" aria-labelledby="safetyTitle">
+      <h2 id="safetyTitle">ملاحظات أمان</h2>
+      <ul>
+        <li>لا تعرض <code>ADMIN_API_TOKEN</code>.</li>
+        <li>لا تستخدم <code>git add .</code>.</li>
+        <li>لا تضف <code>knowledge-files/extracted</code>.</li>
+        <li>لا ترفع المعرفة إلا بعد <code>preview</code>.</li>
+      </ul>
+    </section>
+  </main>
+
+  <script src="assets/js/assistant-status.js"></script>
+</body>
+</html>
