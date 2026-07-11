@@ -73,7 +73,17 @@ function splitLongText(text, maxChars){
 
 function buildChunks(markdown){
   const sections = [];
-  const matches = [...markdown.matchAll(/^#\s+(.+)$/gm)];
+  let currentParent = '';
+  const matches = [...markdown.matchAll(/^(#{2,3})\s+(.+)$/gm)]
+    .filter((match) => {
+      const level = match[1].length;
+      const title = match[2].trim();
+      if(level === 2){
+        currentParent = title;
+        return true;
+      }
+      return currentParent !== 'أسئلة شائعة';
+    });
 
   if(!matches.length){
     return splitLongText(markdown, MAX_CHARS_PER_CHUNK).map((text, index) => ({
@@ -88,15 +98,16 @@ function buildChunks(markdown){
 
   for(let index = 0; index < matches.length; index += 1){
     const match = matches[index];
-    const title = match[1].trim();
+    const title = match[2].trim();
     const start = match.index;
     const end = matches[index + 1]?.index ?? markdown.length;
     const sectionText = markdown.slice(start, end).trim();
 
     for(const [partIndex, text] of splitLongText(sectionText, MAX_CHARS_PER_CHUNK).entries()){
+      const chunkText = text.startsWith('#') ? text : `${match[0]}\n\n${text}`;
       sections.push({
         id: `${slugify(title)}-${partIndex + 1}`,
-        text,
+        text: chunkText,
         metadata: {
           source: 'knowledge.md',
           section: title
@@ -174,7 +185,7 @@ async function main(){
 
   if(mode === '--preview'){
     console.log(`Chunks: ${chunks.length}`);
-    chunks.slice(0, 3).forEach((chunk, index) => {
+    chunks.slice(0, 5).forEach((chunk, index) => {
       const preview = chunk.text.replace(/\s+/g, ' ').slice(0, 160);
       console.log(`${index + 1}. ${chunk.metadata.section}: ${preview}${chunk.text.length > 160 ? '...' : ''}`);
     });
