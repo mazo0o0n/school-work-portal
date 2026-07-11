@@ -16,3 +16,7 @@ binding = "AI"
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "school_knowledge_index"
+[[d1_databases]]
+binding = "UNANSWERED_DB"
+database_name = "school-unanswered-questions"
+database_id = "34747b5a-9df1-4a7d-98b0-5cbce29358ae"
