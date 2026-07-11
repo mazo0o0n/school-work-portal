@@ -68,6 +68,27 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8788/api/admin/unanswered' -Headers $he
 Invoke-RestMethod -Uri 'http://127.0.0.1:8788/api/admin/unanswered?status=reviewed' -Headers $headers
 ```
 
+لتغيير حالة سؤال:
+
+```powershell
+Invoke-RestMethod -Method Patch -Uri 'http://127.0.0.1:8788/api/admin/unanswered/1' -Headers $headers -ContentType 'application/json' -Body '{"status":"reviewed"}'
+```
+
+القيم المسموحة للحالة:
+
+```text
+new
+reviewed
+added_to_knowledge
+ignored
+```
+
+لحذف سؤال غير مهم:
+
+```powershell
+Invoke-RestMethod -Method Delete -Uri 'http://127.0.0.1:8788/api/admin/unanswered/1' -Headers $headers
+```
+
 ## تنبيه خصوصية
 
 التسجيل مخصص لتحسين قاعدة معرفة مساعد المنصة فقط. لا يتم حفظ IP أو بيانات شخصية حساسة. البيانات المحفوظة تقتصر على السؤال، صيغته المطبعة، سبب عدم الإجابة، مسار الصفحة إن توفر، وحالة المراجعة.

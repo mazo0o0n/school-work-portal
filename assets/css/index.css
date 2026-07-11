@@ -2188,7 +2188,26 @@ body.dark .academy-footer{
   display:grid;
   gap:10px;
   padding:16px;
-  direction:rtl;
+  direction:ltr;
+  scrollbar-color:#5a5a5a transparent;
+  scrollbar-width:thin;
+  overscroll-behavior:contain;
+}
+.ai-messages::-webkit-scrollbar{
+  width:8px;
+}
+.ai-messages::-webkit-scrollbar-track{
+  background:transparent;
+}
+.ai-messages::-webkit-scrollbar-thumb{
+  background:#5a5a5a;
+  border-radius:999px;
+}
+body.dark .ai-messages{
+  scrollbar-color:#c0c0c1 transparent;
+}
+body.dark .ai-messages::-webkit-scrollbar-thumb{
+  background:#c0c0c1;
 }
 .ai-message{
   padding:10px 12px;
@@ -2201,14 +2220,14 @@ body.dark .academy-footer{
   unicode-bidi:plaintext;
 }
 .ai-message.user{
-  justify-self:start;
+  justify-self:end;
   max-width:86%;
   background:#D9FDD3;
   color:#000000;
   border-bottom-right-radius:6px;
 }
 .ai-message.bot{
-  justify-self:end;
+  justify-self:start;
   max-width:92%;
   background:#FFFFFF;
   color:#000000;

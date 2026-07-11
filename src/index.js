@@ -424,9 +424,82 @@ async function handleAdminUnanswered(request, env){
   });
 }
 
+function getAdminQuestionId(pathname){
+  const match = pathname.match(/^\/api\/admin\/unanswered\/(\d+)$/);
+  return match ? Number(match[1]) : 0;
+}
+
+function isAdminRequestAllowed(request, env){
+  if(!env.ADMIN_API_TOKEN || !env.UNANSWERED_DB){
+    return { ok: false, response: jsonResponse({ error: 'Not found' }, 404) };
+  }
+
+  const adminToken = request.headers.get('X-Admin-Token') || '';
+  if(adminToken !== env.ADMIN_API_TOKEN){
+    return { ok: false, response: jsonResponse({ error: 'Forbidden' }, 403) };
+  }
+
+  return { ok: true };
+}
+
+async function handleAdminUnansweredItem(request, env, id){
+  const auth = isAdminRequestAllowed(request, env);
+  if(!auth.ok){
+    return auth.response;
+  }
+
+  if(!id){
+    return jsonResponse({ error: 'Invalid id' }, 400);
+  }
+
+  if(request.method === 'PATCH'){
+    let payload;
+    try{
+      payload = await request.json();
+    }catch(_){
+      return jsonResponse({ error: 'Invalid JSON' }, 400);
+    }
+
+    const allowedStatuses = new Set(['new', 'reviewed', 'added_to_knowledge', 'ignored']);
+    const status = String(payload?.status || '').trim();
+    if(!allowedStatuses.has(status)){
+      return jsonResponse({ error: 'Invalid status' }, 400);
+    }
+
+    const result = await env.UNANSWERED_DB.prepare(
+      'UPDATE unanswered_questions SET status = ?1, updated_at = ?2 WHERE id = ?3'
+    ).bind(status, new Date().toISOString(), id).run();
+
+    return jsonResponse({
+      ok: true,
+      id,
+      status,
+      changed: Number(result?.meta?.changes || 0)
+    });
+  }
+
+  if(request.method === 'DELETE'){
+    const result = await env.UNANSWERED_DB.prepare(
+      'DELETE FROM unanswered_questions WHERE id = ?1'
+    ).bind(id).run();
+
+    return jsonResponse({
+      ok: true,
+      id,
+      deleted: Number(result?.meta?.changes || 0)
+    });
+  }
+
+  return jsonResponse({ error: 'Method not allowed' }, 405);
+}
+
 export default {
   async fetch(request, env){
     const url = new URL(request.url);
+
+    if(url.pathname.startsWith('/api/admin/unanswered/')){
+      return handleAdminUnansweredItem(request, env, getAdminQuestionId(url.pathname));
+    }
 
     if(url.pathname === '/api/admin/unanswered'){
       if(request.method !== 'GET'){

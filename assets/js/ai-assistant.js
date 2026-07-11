@@ -14,6 +14,7 @@ const aiPendingCount = document.getElementById('aiPendingCount');
 const aiKnowledgeCount = document.getElementById('aiKnowledgeCount');
 const unansweredStorageKey = 'platformAiUnansweredQuestions';
 const aiReviewWhatsappNumber = '966558834103';
+const aiKnowledgeItemsCount = 118;
 let aiPageScrollY = 0;
 
 const apiFallbackAnswer = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
@@ -326,8 +327,11 @@ function openAiPanel(){
   aiPageScrollY = window.scrollY || document.documentElement.scrollTop || 0;
   document.body.style.top = `-${aiPageScrollY}px`;
   document.body.classList.add('ai-panel-open');
+  if(aiKnowledgeCount){
+    aiKnowledgeCount.textContent = `تمت تغذية المساعد بـ ${aiKnowledgeItemsCount} سؤال/إجابة من ملفات المنصة`;
+  }
   if(!aiMessages.children.length){
-    addAiMessage('مرحبًا، أنا مساعد المنصة. اسألني عن المنصات، الأدلة والأنظمة، أدوات مساندة، ركن الدعم المدرسي، أو طريقة التسجيل. إجاباتي مبنية على بيانات المنصة فقط.', 'bot', 'قاعدة معرفة المنصة');
+    addAiMessage(`مرحبًا، أنا مساعد المنصة. تمت تغذيتي بـ ${aiKnowledgeItemsCount} سؤال/إجابة من ملفات المنصة. اسألني عن المنصات، الأدلة والأنظمة، أدوات مساندة، ركن الدعم المدرسي، أو طريقة التسجيل. إجاباتي مبنية على بيانات المنصة فقط.`, 'bot', 'قاعدة معرفة المنصة');
   }
   aiQuestion.focus();
 }
