@@ -31,13 +31,13 @@ html:not(.app-booting) body{
   }
 })();
 </script>
-<link rel="icon" type="image/png" href="assets/images/favicon.png">
+<link rel="icon" type="image/png" href="assets/images/favicon-transparent.png?v=20260712-1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://cdnjs.cloudflare.com">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@100;200;300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/index.css?v=20260712-1">
+<link rel="stylesheet" href="assets/css/index.css?v=20260712-2">
 </head>
 <body class="academy-home">
 <script>
@@ -465,9 +465,12 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
         <h2>مساعد المنصة</h2>
         <p>يجيب من قاعدة معرفة المنصة فقط.</p>
       </div>
-      <button class="ai-close" id="aiClose" type="button" aria-label="إغلاق المساعد">
-        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-      </button>
+      <div class="ai-head-actions">
+        <button class="ai-clear-conversation" id="aiClearConversation" type="button">مسح المحادثة</button>
+        <button class="ai-close" id="aiClose" type="button" aria-label="إغلاق المساعد">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
     </div>
     <div class="ai-knowledge-count" id="aiKnowledgeCount">118 سؤال/إجابة متاحة</div>
     <div class="ai-messages" id="aiMessages" aria-live="polite">
@@ -502,7 +505,7 @@ document.addEventListener('click', function(event){
 });
 </script>
 <script src="assets/js/index.js"></script>
-<script src="assets/js/ai-assistant.js?v=20260712-1"></script>
+<script src="assets/js/ai-assistant.js?v=20260712-5"></script>
 
 <script src="assets/js/visitor-counter.js"></script>
 

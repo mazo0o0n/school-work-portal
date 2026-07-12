@@ -2151,6 +2151,27 @@ body.dark .academy-footer{
   font-size:13px;
   font-weight:700;
 }
+.ai-head-actions{
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+.ai-clear-conversation{
+  min-height:32px;
+  border:1px solid #cfe4e7;
+  border-radius:999px;
+  padding:0 10px;
+  background:rgba(13,169,166,.08);
+  color:#315463;
+  font:800 11px "IBM Plex Sans Arabic", system-ui, sans-serif;
+  cursor:pointer;
+}
+.ai-clear-conversation:hover,
+.ai-clear-conversation:focus-visible{
+  border-color:#0da9a6;
+  background:rgba(13,169,166,.16);
+  outline:none;
+}
 .ai-close{
   width:34px;
   height:34px;
@@ -2393,7 +2414,8 @@ body.dark .ai-head{
   border-color:#243648;
 }
 body.dark .ai-head h2,
-body.dark .ai-close{
+body.dark .ai-close,
+body.dark .ai-clear-conversation{
   color:#f8fafc;
 }
 body.dark .ai-head p,
@@ -2401,8 +2423,12 @@ body.dark .ai-actions{
   color:#cbd5e1;
 }
 body.dark .ai-close,
+body.dark .ai-clear-conversation,
 body.dark .ai-actions button{
   background:#0b1320;
+}
+body.dark .ai-clear-conversation{
+  border-color:rgba(13,169,166,.55);
 }
 body.dark .ai-actions #aiSendQuestions{
   background:#07a869;
@@ -2506,31 +2532,31 @@ body.dark .ai-message.bot.is-missed{
     grid-template-columns:1fr;
   }
   .ai-assistant{
-    right:18px;
+    right:max(14px,env(safe-area-inset-right));
     left:auto;
-    bottom:18px;
+    bottom:max(14px,env(safe-area-inset-bottom));
     z-index:1500;
   }
   .ai-toggle{
-    width:64px;
-    min-height:64px;
-    height:64px;
+    width:58px;
+    min-height:58px;
+    height:58px;
     padding:0;
     border-radius:50%;
-    border:3px solid #0da9a6;
+    border:2px solid #69cee3;
     justify-content:center;
     font-size:0;
-    background:#ffffff;
+    background:linear-gradient(145deg,#0da9a6,#07a869);
     direction:rtl;
-    box-shadow:0 0 0 4px rgba(61,126,185,.28),0 12px 28px rgba(7,168,105,.34);
+    box-shadow:0 0 0 4px rgba(13,169,166,.18),0 12px 28px rgba(7,168,105,.34);
     overflow:hidden;
   }
   .ai-toggle img{
-    width:100%;
-    height:100%;
-    object-fit:cover;
-    object-position:center 42%;
-    transform:scale(1.35);
+    width:29px;
+    height:29px;
+    object-fit:contain;
+    object-position:center;
+    transform:none;
   }
   .ai-toggle span{
     position:absolute;
@@ -2575,6 +2601,11 @@ body.dark .ai-message.bot.is-missed{
     height:46px;
     border-radius:50%;
     font-size:18px;
+  }
+  .ai-clear-conversation{
+    min-height:32px;
+    padding:0 9px;
+    font-size:10.5px;
   }
   .ai-notice{
     margin:10px 14px 0;
