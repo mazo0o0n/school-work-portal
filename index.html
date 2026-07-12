@@ -37,7 +37,7 @@ html:not(.app-booting) body{
 <link rel="preconnect" href="https://cdnjs.cloudflare.com">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@100;200;300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/index.css?v=20260712-2">
+<link rel="stylesheet" href="assets/css/index.css?v=20260712-3">
 </head>
 <body class="academy-home">
 <script>
@@ -493,6 +493,7 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
       <button type="button" id="aiSendQuestions">طلب إضافة السؤال</button>
       <span id="aiPendingCount">0 سؤال للمراجعة</span>
     </div>
+    <p class="ai-review-hint" id="aiReviewHint" role="status" aria-live="polite" hidden>تم تسجيل السؤال للمراجعة عند عدم توفر إجابة.</p>
     <p class="ai-privacy-note">قد تُحفظ الأسئلة غير المجابة لتحسين المعرفة دون بيانات شخصية.</p>
     <div class="ai-review-list" id="aiReviewList" hidden></div>
   </div>
@@ -505,7 +506,7 @@ document.addEventListener('click', function(event){
 });
 </script>
 <script src="assets/js/index.js"></script>
-<script src="assets/js/ai-assistant.js?v=20260712-5"></script>
+<script src="assets/js/ai-assistant.js?v=20260712-6"></script>
 
 <script src="assets/js/visitor-counter.js"></script>
 

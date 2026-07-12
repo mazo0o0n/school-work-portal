@@ -10,6 +10,7 @@ const aiSuggestions = document.getElementById('aiSuggestions');
 const aiExportQuestions = document.getElementById('aiExportQuestions');
 const aiShowQuestions = document.getElementById('aiShowQuestions');
 const aiSendQuestions = document.getElementById('aiSendQuestions');
+const aiReviewHint = document.getElementById('aiReviewHint');
 const aiClearQuestions = document.getElementById('aiClearQuestions');
 const aiReviewList = document.getElementById('aiReviewList');
 const aiPendingCount = document.getElementById('aiPendingCount');
@@ -25,6 +26,7 @@ const aiGreetingText = 'مرحبًا، اسألني عن خدمات المنصة
 const aiGreetingSource = 'قاعدة معرفة المنصة';
 let aiKnowledgeItemsCount = aiKnowledgeItemsFallback;
 let aiPageScrollY = 0;
+let aiReviewHintTimeout = 0;
 
 function renderAiKnowledgeCount(){
   if(aiKnowledgeCount){
@@ -124,7 +126,22 @@ function isMobileAssistantView(){
   return window.matchMedia('(max-width: 900px)').matches;
 }
 
-const apiFallbackAnswer = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
+const legacyApiFallbackAnswer = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
+const apiFallbackAnswer = 'لم أجد إجابة موثقة لهذا السؤال داخل ملفات المنصة حاليًا.\nجرّب صياغة أبسط، أو اضغط "طلب إضافة السؤال" ليتم مراجعته وإضافته لاحقًا.';
+
+function hideAiReviewHint(){
+  window.clearTimeout(aiReviewHintTimeout);
+  aiReviewHintTimeout = 0;
+  if(aiReviewHint) aiReviewHint.hidden = true;
+  aiSendQuestions?.classList.remove('is-recommended');
+}
+
+function showAiReviewHint(){
+  hideAiReviewHint();
+  if(aiReviewHint) aiReviewHint.hidden = false;
+  aiSendQuestions?.classList.add('is-recommended');
+  aiReviewHintTimeout = window.setTimeout(hideAiReviewHint, 7000);
+}
 
 function normalizeQuestion(value){
   return String(value || '')
@@ -421,7 +438,7 @@ async function findAnswer(question){
   return {
     answer,
     source: data.source || 'قاعدة معرفة المنصة',
-    missed: Boolean(data.notFound) || answer === apiFallbackAnswer
+    missed: Boolean(data.notFound) || answer === apiFallbackAnswer || answer === legacyApiFallbackAnswer
   };
 }
 
@@ -447,6 +464,7 @@ function addMissedQuestionMessage(text = apiFallbackAnswer){
 }
 
 async function answerQuestion(question){
+  hideAiReviewHint();
   addAiMessage(question, 'user');
   try{
     const answer = await findAnswer(question);
@@ -455,10 +473,12 @@ async function answerQuestion(question){
       return;
     }
     saveUnansweredQuestion(question);
-    addMissedQuestionMessage(answer?.answer || apiFallbackAnswer);
+    addMissedQuestionMessage();
+    showAiReviewHint();
   }catch(_){
     saveUnansweredQuestion(question);
     addMissedQuestionMessage();
+    showAiReviewHint();
   }
 }
 
@@ -509,6 +529,7 @@ aiToggle?.addEventListener('click', () => {
 aiClose?.addEventListener('click', closeAiPanel);
 
 aiClearConversation?.addEventListener('click', () => {
+  hideAiReviewHint();
   try{
     sessionStorage.removeItem(aiConversationSessionKey);
   }catch(_){
@@ -564,6 +585,7 @@ aiShowQuestions?.addEventListener('click', () => {
 });
 
 aiSendQuestions?.addEventListener('click', () => {
+  hideAiReviewHint();
   const message = buildReviewMessage();
   if(!message){
     addAiMessage('لا توجد أسئلة غير مجابة لإرسالها حاليًا.', 'bot', 'سجل الأسئلة غير المجابة');

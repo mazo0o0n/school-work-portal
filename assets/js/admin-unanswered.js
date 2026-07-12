@@ -2,6 +2,7 @@ const adminTokenInput = document.getElementById('adminToken');
 const connectBtn = document.getElementById('connectBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 const refreshBtn = document.getElementById('refreshBtn');
+const bulkCopyBtn = document.getElementById('bulkCopyBtn');
 const searchInput = document.getElementById('searchInput');
 const sortSelect = document.getElementById('sortSelect');
 const questionsList = document.getElementById('questionsList');
@@ -389,6 +390,24 @@ logoutBtn.addEventListener('click', () => {
 });
 
 refreshBtn.addEventListener('click', loadQuestions);
+bulkCopyBtn.addEventListener('click', async () => {
+  const items = getSortedFilteredItems();
+  if(!items.length){
+    setStatus('لا توجد أسئلة ظاهرة لنسخها.', 'error');
+    return;
+  }
+
+  const markdown = items
+    .map((item) => `${buildKnowledgeTemplate(item)}\n\n---`)
+    .join('\n\n');
+
+  try{
+    await copyText(markdown);
+    setStatus('تم نسخ القوالب الظاهرة.', 'success');
+  }catch(_){
+    setStatus('تعذر نسخ القوالب الظاهرة من المتصفح.', 'error');
+  }
+});
 searchInput.addEventListener('input', renderItems);
 sortSelect.addEventListener('change', renderItems);
 

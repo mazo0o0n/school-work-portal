@@ -85,7 +85,8 @@ input:focus,select:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(13,1
 .tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
 .tab{background:#f2f6f7;color:var(--ink);border:1px solid var(--line)}
 .tab.active{background:var(--teal);color:#fff;border-color:var(--teal)}
-.tools-row{grid-template-columns:1fr minmax(150px,210px) auto}
+.tools-row{grid-template-columns:1fr minmax(150px,210px) auto auto}
+.bulk-copy-btn{background:#0b6674}
 .status-line{padding:12px 16px;font-weight:800;color:var(--muted)}
 .status-line.success{color:var(--green)}
 .status-line.error{color:var(--danger)}
