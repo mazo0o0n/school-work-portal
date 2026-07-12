@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>اختبار أسئلة مساعد المنصة</title>
+  <link rel="stylesheet" href="assets/css/assistant-test.css">
+</head>
+<body>
+  <main class="test-page">
+    <header class="test-header">
+      <div>
+        <p class="eyebrow">صفحة داخلية للمطور</p>
+        <h1>اختبار أسئلة مساعد المنصة</h1>
+        <p>انسخ الأسئلة واختبرها يدويًا. لا ترسل هذه الصفحة أي طلب إلى المساعد ولا تحفظ النتائج.</p>
+      </div>
+      <button type="button" id="copyAllQuestions">نسخ كل الأسئلة</button>
+    </header>
+
+    <p id="copyStatus" class="copy-status" role="status" aria-live="polite"></p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>السؤال</th>
+            <th>المتوقع</th>
+            <th>المصدر المتوقع</th>
+            <th>الحالة اليدوية ✅/❌/⚠️</th>
+            <th>ملاحظات</th>
+          </tr>
+        </thead>
+        <tbody id="questionsTableBody"></tbody>
+      </table>
+    </div>
+  </main>
+  <script src="assets/js/assistant-test.js"></script>
+</body>
+</html>

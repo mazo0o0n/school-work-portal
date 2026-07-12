@@ -69,6 +69,10 @@ git status --short
 
 الأمر `node tools/check-knowledge.js` بديل محلي آمن يجمع تحديث العداد عبر `update-knowledge-stats` ومعاينة المعرفة عبر `ingest-knowledge --preview`. لا ينفّذ رفعًا، لذلك لا يغني عن أمر `--upload` عند الرغبة في رفع المعرفة إلى Vectorize.
 
+## التحقق بعد تعديل المعرفة
+
+بعد أي تعديل معرفة، شغّل `node tools/check-knowledge.js` ثم `node tools/ingest-knowledge.js --export-vectors`. تحقّق من أن عدد سطور `tmp/knowledge-vectors.ndjson` يطابق عدد مقاطع `preview` قبل تنفيذ أي Vectorize upsert. بعد الرفع اختبر الأسئلة على الموقع الحقيقي، ثم نفّذ commit وpush فقط بعد التأكد والموافقة.
+
 ## أشياء ممنوعة
 
 - لا تعرض `ADMIN_API_TOKEN`.
