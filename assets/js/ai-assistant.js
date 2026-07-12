@@ -4,6 +4,7 @@ const aiPanel = document.getElementById('aiPanel');
 const aiClose = document.getElementById('aiClose');
 const aiClearConversation = document.getElementById('aiClearConversation');
 const aiForm = document.getElementById('aiForm');
+const aiSubmit = document.getElementById('aiSubmit');
 const aiQuestion = document.getElementById('aiQuestion');
 const aiMessages = document.getElementById('aiMessages');
 const aiSuggestions = document.getElementById('aiSuggestions');
@@ -27,6 +28,12 @@ const aiGreetingSource = 'قاعدة معرفة المنصة';
 let aiKnowledgeItemsCount = aiKnowledgeItemsFallback;
 let aiPageScrollY = 0;
 let aiReviewHintTimeout = 0;
+let aiRequestPending = false;
+let aiHistoryEntryActive = false;
+
+function setAiConversationStarted(started){
+  aiPanel.classList.toggle('ai-conversation-started', Boolean(started));
+}
 
 function renderAiKnowledgeCount(){
   if(aiKnowledgeCount){
@@ -457,6 +464,7 @@ function addAiMessage(text, type = 'bot', source = '', missed = false, persist =
   aiMessages.appendChild(message);
   aiMessages.scrollTop = aiMessages.scrollHeight;
   if(persist) persistAiConversation();
+  return message;
 }
 
 function addMissedQuestionMessage(text = apiFallbackAnswer){
@@ -466,8 +474,12 @@ function addMissedQuestionMessage(text = apiFallbackAnswer){
 async function answerQuestion(question){
   hideAiReviewHint();
   addAiMessage(question, 'user');
+  const loadingMessage = addAiMessage('جاري البحث في معرفة المنصة...', 'bot', '', false, false);
+  loadingMessage.classList.add('ai-loading');
+  aiMessages.setAttribute('aria-busy', 'true');
   try{
     const answer = await findAnswer(question);
+    loadingMessage.remove();
     if(answer && !answer.missed){
       addAiMessage(answer.answer, 'bot', answer.source);
       return;
@@ -476,24 +488,46 @@ async function answerQuestion(question){
     addMissedQuestionMessage();
     showAiReviewHint();
   }catch(_){
+    loadingMessage.remove();
     saveUnansweredQuestion(question);
     addMissedQuestionMessage();
     showAiReviewHint();
+  }finally{
+    loadingMessage.remove();
+    aiMessages.removeAttribute('aria-busy');
   }
 }
 
 async function submitAiQuestion(question){
   const normalizedQuestion = String(question || '').trim();
-  if(!normalizedQuestion) return;
+  if(!normalizedQuestion || aiRequestPending) return;
 
+  aiRequestPending = true;
+  aiSubmit.disabled = true;
   aiQuestion.value = '';
   if(aiSuggestions) aiSuggestions.hidden = true;
+  setAiConversationStarted(true);
   if(isMobileAssistantView()) aiQuestion.blur();
-  await answerQuestion(normalizedQuestion);
-  window.requestAnimationFrame(() => {
-    aiMessages.scrollTop = aiMessages.scrollHeight;
-  });
-  if(!isMobileAssistantView()) aiQuestion.focus();
+  try{
+    await answerQuestion(normalizedQuestion);
+    window.requestAnimationFrame(() => {
+      aiMessages.scrollTop = aiMessages.scrollHeight;
+    });
+  }finally{
+    aiRequestPending = false;
+    aiSubmit.disabled = false;
+    if(!isMobileAssistantView()) aiQuestion.focus();
+  }
+}
+
+function addAiMobileHistoryEntry(){
+  if(!isMobileAssistantView() || aiHistoryEntryActive) return;
+  try{
+    history.pushState({ ...history.state, aiAssistantOpen: true }, '');
+    aiHistoryEntryActive = true;
+  }catch(_){
+    aiHistoryEntryActive = false;
+  }
 }
 
 function openAiPanel(){
@@ -503,6 +537,7 @@ function openAiPanel(){
   document.body.style.top = `-${aiPageScrollY}px`;
   document.body.classList.add('ai-panel-open');
   setAiPanelSessionState(true);
+  addAiMobileHistoryEntry();
   renderAiKnowledgeCount();
   if(!aiMessages.querySelector('.ai-message')){
     addAiMessage(aiGreetingText, 'bot', aiGreetingSource);
@@ -513,13 +548,18 @@ function openAiPanel(){
   if(!isMobileAssistantView()) aiQuestion.focus();
 }
 
-function closeAiPanel(){
+function closeAiPanel(options = {}){
+  const shouldRemoveHistoryEntry = aiHistoryEntryActive && !options.fromHistory;
   aiPanel.hidden = true;
   aiToggle.setAttribute('aria-expanded', 'false');
   document.body.classList.remove('ai-panel-open');
   setAiPanelSessionState(false);
   document.body.style.top = '';
   window.scrollTo(0, aiPageScrollY);
+  if(shouldRemoveHistoryEntry){
+    aiHistoryEntryActive = false;
+    history.back();
+  }
 }
 
 aiToggle?.addEventListener('click', () => {
@@ -538,6 +578,7 @@ aiClearConversation?.addEventListener('click', () => {
   aiMessages.querySelectorAll('.ai-message').forEach((message) => message.remove());
   aiQuestion.value = '';
   aiQuestion.blur();
+  setAiConversationStarted(false);
   if(aiSuggestions){
     aiSuggestions.hidden = false;
   }
@@ -605,8 +646,16 @@ document.addEventListener('keydown', (event) => {
   if(event.key === 'Escape' && !aiPanel.hidden) closeAiPanel();
 });
 
+window.addEventListener('popstate', () => {
+  if(!aiHistoryEntryActive || aiPanel.hidden) return;
+  aiHistoryEntryActive = false;
+  closeAiPanel({ fromHistory: true });
+});
+
 updatePendingCount();
 updateKnowledgeCount();
-const restoredAiConversation = restoreAiConversation();
-if(aiSuggestions) aiSuggestions.hidden = restoredAiConversation;
+restoreAiConversation();
+const restoredAiConversationStarted = Boolean(aiMessages.querySelector('.ai-message.user'));
+setAiConversationStarted(restoredAiConversationStarted);
+if(aiSuggestions) aiSuggestions.hidden = restoredAiConversationStarted;
 if(wasAiPanelOpen()) openAiPanel();

@@ -486,8 +486,13 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
       </section>
     </div>
     <form class="ai-form" id="aiForm">
+      <button class="ai-submit" id="aiSubmit" type="submit" aria-label="إرسال السؤال">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 19V5M6.5 10.5 12 5l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>إرسال</span>
+      </button>
       <input id="aiQuestion" type="text" dir="rtl" placeholder="اكتب سؤالك هنا..." autocomplete="off" aria-label="سؤال للمساعد">
-      <button type="submit">إرسال</button>
     </form>
     <div class="ai-actions">
       <button type="button" id="aiSendQuestions">طلب إضافة السؤال</button>

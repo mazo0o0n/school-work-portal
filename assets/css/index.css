@@ -2203,6 +2203,13 @@ body.dark .academy-footer{
   font-weight:800;
   text-align:center;
 }
+.ai-panel.ai-conversation-started .ai-head > div:first-child,
+.ai-panel.ai-conversation-started .ai-knowledge-count{
+  display:none;
+}
+.ai-panel.ai-conversation-started .ai-head{
+  justify-content:flex-start;
+}
 .ai-messages{
   max-height:310px;
   overflow:auto;
@@ -2259,6 +2266,12 @@ body.dark .ai-messages::-webkit-scrollbar-thumb{
   background:#FFFFFF;
   color:#000000;
 }
+.ai-message.ai-loading{
+  color:#526b78;
+  font-size:12.5px;
+  font-weight:800;
+  opacity:.9;
+}
 .ai-review-action-word{
   color:#dc2626;
   font-weight:900;
@@ -2310,12 +2323,14 @@ body.dark .ai-messages::-webkit-scrollbar-thumb{
 }
 .ai-form{
   display:grid;
-  grid-template-columns:1fr auto;
+  grid-template-columns:auto 1fr;
   gap:8px;
   padding:0 16px 14px;
+  direction:rtl;
 }
 .ai-form input{
   min-height:44px;
+  min-width:0;
   border:1px solid #dfe7ea;
   border-radius:12px;
   padding:0 12px;
@@ -2338,6 +2353,16 @@ body.dark .ai-messages::-webkit-scrollbar-thumb{
   font:800 13px "IBM Plex Sans Arabic", system-ui, sans-serif;
   padding:0 14px;
   cursor:pointer;
+}
+.ai-submit svg{
+  width:20px;
+  height:20px;
+  display:none;
+  margin:auto;
+}
+.ai-submit:disabled{
+  cursor:not-allowed;
+  opacity:.52;
 }
 .ai-actions{
   display:flex;
@@ -2597,6 +2622,9 @@ body.dark .ai-message.bot.is-missed{
   .ai-panel[hidden]{
     display:none;
   }
+  .ai-panel.ai-conversation-started{
+    grid-template-rows:auto minmax(0,1fr) auto auto auto;
+  }
   .ai-head{
     min-height:74px;
     align-items:center;
@@ -2609,6 +2637,10 @@ body.dark .ai-message.bot.is-missed{
   }
   .ai-head p{
     font-size:12px;
+  }
+  .ai-panel.ai-conversation-started .ai-head{
+    min-height:58px;
+    padding-block:6px;
   }
   .ai-close{
     width:46px;
@@ -2659,7 +2691,7 @@ body.dark .ai-message.bot.is-missed{
   .ai-form{
     position:sticky;
     bottom:0;
-    grid-template-columns:1fr 52px;
+    grid-template-columns:52px 1fr;
     gap:8px;
     padding:10px 12px calc(10px + env(safe-area-inset-bottom));
     background:#ffffff;
@@ -2690,15 +2722,19 @@ body.dark .ai-message.bot.is-missed{
     min-height:52px;
     border-radius:50%;
     padding:0;
-    font-size:0;
     position:relative;
     background:#07a869;
   }
-  .ai-form button::before{
-    content:"\f1d8";
-    font-family:"Font Awesome 6 Free";
-    font-weight:900;
-    font-size:18px;
+  .ai-submit svg{
+    display:block;
+  }
+  .ai-submit span{
+    position:absolute;
+    width:1px;
+    height:1px;
+    overflow:hidden;
+    clip:rect(0 0 0 0);
+    white-space:nowrap;
   }
   .ai-actions{
     padding:0 12px 12px;
