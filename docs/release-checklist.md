@@ -1,8 +1,26 @@
-# قائمة فحص ما قبل الإصدار
+# قائمة فحص الإصدار
 
-تُراجع هذه القائمة قبل أي `push` أو `deploy`. لا تنفّذ أوامر الرفع أو النشر دون موافقة صريحة.
+## قبل التعديل
 
-## 1. حالة Git
+- حدّد الملفات المسموحة ولا تفحص المشروع كاملًا.
+- راجع حالة العمل دون لمس تغييرات المستخدم:
+
+```powershell
+git status --short
+git --no-pager diff --name-only
+```
+
+## بعد التعديل
+
+```powershell
+git diff --check
+git --no-pager diff --name-only
+```
+
+- شغّل فحوص syntax المرتبطة بالملفات المعدلة فقط.
+- راجع الصفحة على الجوال وسطح المكتب عند تعديل الواجهة.
+
+## قبل commit
 
 ```powershell
 git status --short
@@ -10,46 +28,56 @@ git diff --check
 git diff --cached --name-only
 ```
 
-## 2. البحث عن مؤشرات الأسرار
+- ممنوع `git add .`.
+- استخدم `git add path/to/file` للمسارات المقصودة فقط.
+- لا تنفذ commit دون موافقة صريحة.
 
-يعرض الأمر أسماء الملفات المطابقة فقط. راجع النتائج دون طباعة محتوى الأسرار:
+## قبل push
 
-```powershell
-git --no-pager grep -I -l -E "API_KEY|apiKey|TOKEN|token|SECRET|secret|PASSWORD|password|PRIVATE KEY|OPENAI_API_KEY|CLOUDFLARE_API_TOKEN|ADMIN_API_TOKEN|TELEGRAM|BOT_TOKEN|\.env"
-```
+- راجع أسماء الملفات داخل آخر commit.
+- تأكد من عدم وجود أسرار أو ملفات مؤقتة أو extracted.
+- لا تنفذ push دون موافقة صريحة.
 
-## 3. الملفات الحساسة المتتبعة
+## بعد push
 
-```powershell
-git --no-pager ls-files | Select-String -Pattern "\.env|\.wrangler|knowledge-files/extracted|\.key|\.pem|id_rsa|secret|token"
-```
+- تحقق من الفرع والـ commit المنشورين.
+- راقب فحوص CI إن وجدت.
+- لا تنفذ deploy تلقائيًا.
 
-أي نتيجة تحتاج تحققًا قبل المتابعة. لا تفتح ملفات الأسرار أو تعرض محتواها.
-
-## 4. فحص JavaScript عند الحاجة
-
-```powershell
-node --check assets/js/ai-assistant.js
-node --check assets/js/admin-unanswered.js
-node --check assets/js/assistant-status.js
-```
-
-## 5. فحص المعرفة عند تعديلها
+## عند تعديل المعرفة
 
 ```powershell
 node tools/check-knowledge.js
-node tools/ingest-knowledge.js --export-vectors
-(Get-Content ".\tmp\knowledge-vectors.ndjson" | Measure-Object -Line).Lines
 ```
 
-يجب مطابقة عدد سطور ملف vectors مع عدد مقاطع `preview` قبل أي `upsert`.
+- طابق عدد preview chunks مع vectors قبل أي upsert.
+- لا تشغّل upload أو Vectorize upsert إلا بطلب صريح.
 
-## 6. إضافة الملفات بأمان
+## عند تعديل المساعد
 
-- ممنوع استخدام `git add .`.
-- استخدم `git add` مع المسارات المحددة فقط.
-- راجع `git diff --cached --name-only` قبل أي commit.
+```powershell
+node --check assets/js/ai-assistant.js
+node --check assets/js/assistant-test.js
+```
 
-## 7. الموافقة النهائية
+- اختبر الإرسال، Enter، chips، الاستعادة، المسح، التحميل، والجوال.
 
-لا تنفّذ `commit` أو `push` أو `deploy` إلا بعد مراجعة المستخدم وموافقته الصريحة.
+## عند تعديل SEO
+
+- راجع title وdescription وcanonical وOpen Graph.
+- تحقق أن الصفحات العامة فقط موجودة في sitemap.
+- تحقق أن الصفحات الداخلية تحمل noindex أو محجوبة في robots حسب الحاجة.
+
+## فحص الجوال
+
+- اختبر 390×844 وعدم وجود تمرير أفقي.
+- اختبر مناطق اللمس، لوحة المفاتيح، RTL، والوضعين الداكن والفاتح.
+
+## فحص الأمان
+
+```powershell
+git --no-pager grep -I -l -E "API_KEY|apiKey|TOKEN|token|SECRET|secret|PASSWORD|password|PRIVATE KEY|OPENAI_API_KEY|CLOUDFLARE_API_TOKEN|ADMIN_API_TOKEN|BOT_TOKEN|\.env"
+git --no-pager ls-files | Select-String -Pattern "\.env|\.wrangler|knowledge-files/extracted|\.key|\.pem|id_rsa|secret|token"
+```
+
+راجع أسماء الملفات الناتجة دون طباعة محتوى حساس. كل نتيجة غير مؤكدة تحتاج تحققًا.

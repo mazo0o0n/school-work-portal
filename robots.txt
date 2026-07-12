@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin-unanswered.html
+Disallow: /assistant-test.html
+Disallow: /assistant-status.html
+
+Sitemap: https://mazen.zb-store.com/sitemap.xml

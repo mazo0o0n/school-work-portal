@@ -13,10 +13,21 @@
       <div>
         <p class="eyebrow">صفحة داخلية للمطور</p>
         <h1>اختبار أسئلة مساعد المنصة</h1>
-        <p>انسخ الأسئلة واختبرها يدويًا. لا ترسل هذه الصفحة أي طلب إلى المساعد ولا تحفظ النتائج.</p>
+        <p>قائمة اختبار يدوية مستقلة؛ لا تستدعي المساعد ولا ترسل نتائج إلى backend.</p>
       </div>
-      <button type="button" id="copyAllQuestions">نسخ كل الأسئلة</button>
+      <div class="header-actions">
+        <button type="button" id="copyAllQuestions">نسخ كل الأسئلة</button>
+        <button type="button" id="copyReport">نسخ تقرير مختصر</button>
+        <button type="button" id="clearResults" class="danger-button">مسح النتائج</button>
+      </div>
     </header>
+
+    <section class="summary" aria-label="ملخص نتائج الاختبار">
+      <article><strong id="totalCount">0</strong><span>عدد الأسئلة</span></article>
+      <article><strong id="passedCount">0</strong><span>ناجح</span></article>
+      <article><strong id="failedCount">0</strong><span>فاشل</span></article>
+      <article><strong id="reviewCount">0</strong><span>يحتاج مراجعة</span></article>
+    </section>
 
     <p id="copyStatus" class="copy-status" role="status" aria-live="polite"></p>
 
@@ -24,10 +35,11 @@
       <table>
         <thead>
           <tr>
+            <th>التصنيف</th>
             <th>السؤال</th>
             <th>المتوقع</th>
             <th>المصدر المتوقع</th>
-            <th>الحالة اليدوية ✅/❌/⚠️</th>
+            <th>الحالة اليدوية</th>
             <th>ملاحظات</th>
           </tr>
         </thead>
