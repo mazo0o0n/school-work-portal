@@ -9,6 +9,7 @@ const KNOWLEDGE_PATH = path.join(ROOT_DIR, 'knowledge.md');
 const APPROVED_KNOWLEDGE_DIR = path.join(ROOT_DIR, 'knowledge-files', 'approved');
 const OUT_DIR = path.join(ROOT_DIR, 'tmp');
 const OUT_FILE = path.join(OUT_DIR, 'knowledge-vectors.ndjson');
+const TEMP_OUT_FILE = `${OUT_FILE}.tmp`;
 
 const MODEL = '@cf/qwen/qwen3-embedding-0.6b';
 const INDEX_NAME = 'school_knowledge_index';
@@ -19,6 +20,7 @@ const EMBEDDING_BATCH_SIZE = 20;
 function printUsage(){
   console.log('Usage:');
   console.log('  node tools/ingest-knowledge.js --preview');
+  console.log('  node tools/ingest-knowledge.js --export-vectors');
   console.log('  node tools/ingest-knowledge.js --upload');
 }
 
@@ -191,9 +193,57 @@ async function createEmbeddings(texts){
   return extractEmbeddings(payload);
 }
 
+async function generateVectorFile(chunks){
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+  fs.rmSync(OUT_FILE, { force: true });
+  fs.rmSync(TEMP_OUT_FILE, { force: true });
+
+  try{
+    const vectors = [];
+    for(let index = 0; index < chunks.length; index += EMBEDDING_BATCH_SIZE){
+      const batch = chunks.slice(index, index + EMBEDDING_BATCH_SIZE);
+      const embeddings = await createEmbeddings(batch.map((chunk) => chunk.text));
+
+      if(embeddings.length !== batch.length){
+        throw new Error(`عدد embeddings لا يطابق عدد chunks في الدفعة ${index / EMBEDDING_BATCH_SIZE + 1}.`);
+      }
+
+      embeddings.forEach((values, batchIndex) => {
+        if(!Array.isArray(values) || values.length !== EXPECTED_DIMENSIONS){
+          throw new Error(`أبعاد embedding غير صحيحة: المتوقع ${EXPECTED_DIMENSIONS}، الفعلي ${values?.length}.`);
+        }
+
+        const chunk = batch[batchIndex];
+        vectors.push({
+          id: chunk.id,
+          values,
+          metadata: {
+            ...chunk.metadata,
+            text: chunk.text
+          }
+        });
+      });
+
+      console.log(`تم توليد embeddings لعدد ${Math.min(index + EMBEDDING_BATCH_SIZE, chunks.length)} من ${chunks.length} chunks.`);
+    }
+
+    fs.writeFileSync(
+      TEMP_OUT_FILE,
+      vectors.map((vector) => JSON.stringify(vector)).join('\n') + '\n',
+      'utf8'
+    );
+    fs.renameSync(TEMP_OUT_FILE, OUT_FILE);
+    return vectors;
+  }catch(error){
+    fs.rmSync(TEMP_OUT_FILE, { force: true });
+    fs.rmSync(OUT_FILE, { force: true });
+    throw new Error(`فشل توليد ملف vectors: ${error.message || error}`);
+  }
+}
+
 async function main(){
   const mode = process.argv[2];
-  if(mode !== '--preview' && mode !== '--upload'){
+  if(mode !== '--preview' && mode !== '--export-vectors' && mode !== '--upload'){
     printUsage();
     return;
   }
@@ -228,43 +278,14 @@ async function main(){
     return;
   }
 
-  fs.mkdirSync(OUT_DIR, { recursive: true });
-
-  const vectors = [];
-  for(let index = 0; index < chunks.length; index += EMBEDDING_BATCH_SIZE){
-    const batch = chunks.slice(index, index + EMBEDDING_BATCH_SIZE);
-    const embeddings = await createEmbeddings(batch.map((chunk) => chunk.text));
-
-    if(embeddings.length !== batch.length){
-      throw new Error(`عدد embeddings لا يطابق عدد chunks في الدفعة ${index / EMBEDDING_BATCH_SIZE + 1}.`);
-    }
-
-    embeddings.forEach((values, batchIndex) => {
-      if(!Array.isArray(values) || values.length !== EXPECTED_DIMENSIONS){
-        throw new Error(`أبعاد embedding غير صحيحة: المتوقع ${EXPECTED_DIMENSIONS}، الفعلي ${values?.length}.`);
-      }
-
-      const chunk = batch[batchIndex];
-      vectors.push({
-        id: chunk.id,
-        values,
-        metadata: {
-          ...chunk.metadata,
-          text: chunk.text
-        }
-      });
-    });
-
-    console.log(`تم توليد embeddings لعدد ${Math.min(index + EMBEDDING_BATCH_SIZE, chunks.length)} من ${chunks.length} chunks.`);
-  }
-
-  fs.writeFileSync(
-    OUT_FILE,
-    vectors.map((vector) => JSON.stringify(vector)).join('\n') + '\n',
-    "utf8"
-  );
-
+  const vectors = await generateVectorFile(chunks);
   console.log(`تم إنشاء ملف Vectorize: ${OUT_FILE}`);
+  console.log(`عدد vectors المولّدة: ${vectors.length}`);
+
+  if(mode === '--export-vectors'){
+    console.log('تم التصدير فقط دون رفع أي vectors إلى Vectorize.');
+    return;
+  }
 
   const wranglerArgs = [
     'wrangler@latest',

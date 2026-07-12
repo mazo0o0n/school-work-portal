@@ -27,21 +27,30 @@
    node tools/ingest-knowledge.js --preview
    ```
 
-9. بعد مراجعة المعاينة والتأكد من صحة المحتوى، ارفع المعرفة إلى Vectorize:
+9. لتوليد ملف vectors دون رفعه، استخدم:
+
+   ```powershell
+   node tools/ingest-knowledge.js --export-vectors
+   (Get-Content ".\tmp\knowledge-vectors.ndjson" | Measure-Object -Line).Lines
+   ```
+
+   ينشئ الأمر `tmp/knowledge-vectors.ndjson` فقط ولا يرفع إلى Vectorize. تحقق من عدد السطور ومطابقته لعدد المقاطع في `preview` قبل تنفيذ أي upsert.
+
+10. بعد مراجعة المعاينة والتأكد من صحة المحتوى، ارفع المعرفة إلى Vectorize:
 
    ```powershell
    node tools/ingest-knowledge.js --upload
    ```
 
-10. إذا فشل الرفع بسبب مشكلة في المسار العربي على Windows، استخدم:
+11. إذا فشل الرفع بسبب مشكلة في المسار العربي على Windows، استخدم:
 
     ```powershell
     npx wrangler@latest vectorize upsert school_knowledge_index --file ".\tmp\knowledge-vectors.ndjson" --batch-size 500
     ```
 
-11. اختبر المساعد محليًا أو على الرابط المنشور، وتحقق من الإجابة الجديدة.
-12. بعد التأكد، ارجع إلى صفحة الإدارة وغيّر حالة السؤال إلى **أضيف للمعرفة**.
-13. عند استخدام Git:
+12. اختبر المساعد محليًا أو على الرابط المنشور، وتحقق من الإجابة الجديدة.
+13. بعد التأكد، ارجع إلى صفحة الإدارة وغيّر حالة السؤال إلى **أضيف للمعرفة**.
+14. عند استخدام Git:
     - يُمنع استخدام `git add .`.
     - استخدم `git add` للملفات المحددة فقط.
     - لا تنفّذ `commit` أو `push` أو `deploy` إلا بموافقة صريحة.
@@ -53,6 +62,7 @@ cd "$env:USERPROFILE\Documents\منصة التنظيم المدرسي"
 node tools/check-knowledge.js
 node tools/update-knowledge-stats.js
 node tools/ingest-knowledge.js --preview
+node tools/ingest-knowledge.js --export-vectors
 node tools/ingest-knowledge.js --upload
 git status --short
 ```
