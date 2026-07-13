@@ -3035,3 +3035,40 @@ body.dark .ai-notice,
     padding-inline:16px;
   }
 }
+
+@media(min-width:1024px) and (max-height:900px){
+  .top-header{
+    padding-block:6px;
+  }
+  .site-nav{
+    min-height:92px;
+    padding-block:10px;
+  }
+  .academy-page{
+    margin-block:18px 48px;
+  }
+  .academy-hero{
+    gap:16px;
+  }
+  .academy-main-banner{
+    min-height:250px;
+    padding:32px 36px;
+  }
+  .academy-main-banner h1{
+    font-size:clamp(32px,3.2vw,44px);
+  }
+  .academy-main-banner p{
+    margin-bottom:18px;
+  }
+  .academy-section{
+    margin-top:22px;
+  }
+  .academy-feature-card{
+    min-height:190px;
+    padding:20px;
+  }
+  .academy-footer{
+    margin-top:28px;
+    padding:22px;
+  }
+}
