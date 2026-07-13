@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>إدارة الأسئلة غير المجابة | منصة التنظيم المدرسي</title>
-  <link rel="stylesheet" href="assets/css/admin-unanswered.css?v=20260712-5">
+  <link rel="stylesheet" href="assets/css/admin-unanswered.css?v=20260713-1">
 </head>
 <body>
   <main class="admin-shell">
@@ -36,6 +36,7 @@
         <span class="statistics-alert" id="statisticsAlert" role="status" aria-live="polite" hidden>تعذر تحديث الإحصائيات.</span>
       </div>
       <div class="status-stats" aria-label="أعداد الأسئلة حسب الحالة">
+        <article class="total-stat"><span>الإجمالي</span><strong id="allStatsCount">—</strong></article>
         <article class="new-stat"><span>جديد</span><strong id="newStatsCount">—</strong></article>
         <article class="reviewed-stat"><span>تمت المراجعة</span><strong id="reviewedStatsCount">—</strong></article>
         <article class="added-stat"><span>أضيف للمعرفة</span><strong id="addedStatsCount">—</strong></article>
@@ -56,7 +57,10 @@
         <button class="tab" type="button" data-status="ignored">متجاهل</button>
       </div>
       <div class="tools-row">
-        <input id="searchInput" type="search" placeholder="بحث داخل الأسئلة">
+        <input id="searchInput" type="search" placeholder="بحث داخل الأسئلة" aria-label="البحث داخل الأسئلة">
+        <select id="reasonFilter" aria-label="فلترة حسب سبب عدم الإجابة">
+          <option value="">كل أسباب عدم الإجابة</option>
+        </select>
         <select id="sortSelect" aria-label="ترتيب النتائج">
           <option value="newest">الأحدث</option>
           <option value="oldest">الأقدم</option>
@@ -95,6 +99,7 @@
         <div><dt>آخر تحديث</dt><dd class="updated"></dd></div>
       </dl>
       <div class="actions">
+        <button type="button" data-action="copy-question">نسخ السؤال</button>
         <button class="template-copy" type="button" data-action="copy-template">نسخ كقالب معرفة</button>
         <button type="button" data-status-action="new">جديد</button>
         <button type="button" data-status-action="reviewed">تمت المراجعة</button>
@@ -105,6 +110,6 @@
     </article>
   </template>
 
-  <script src="assets/js/admin-unanswered.js?v=20260712-5"></script>
+  <script src="assets/js/admin-unanswered.js?v=20260713-1"></script>
 </body>
 </html>

@@ -4,6 +4,7 @@ const logoutBtn = document.getElementById('logoutBtn');
 const refreshBtn = document.getElementById('refreshBtn');
 const bulkCopyBtn = document.getElementById('bulkCopyBtn');
 const searchInput = document.getElementById('searchInput');
+const reasonFilter = document.getElementById('reasonFilter');
 const sortSelect = document.getElementById('sortSelect');
 const questionsList = document.getElementById('questionsList');
 const questionTemplate = document.getElementById('questionTemplate');
@@ -43,6 +44,7 @@ const statisticsCountElements = {
   added_to_knowledge: document.getElementById('addedStatsCount'),
   ignored: document.getElementById('ignoredStatsCount')
 };
+const allStatsCount = document.getElementById('allStatsCount');
 
 function setStatus(message, type = ''){
   statusLine.textContent = message;
@@ -191,6 +193,7 @@ async function loadStatistics(){
   Object.values(statisticsCountElements).forEach((element) => {
     element.textContent = '—';
   });
+  allStatsCount.textContent = '—';
 
   try{
     const statuses = Object.keys(statisticsCountElements);
@@ -204,6 +207,7 @@ async function loadStatistics(){
       statisticsCountElements[statuses[index]].textContent = data.items.length.toLocaleString('ar-SA');
       allItems.push(...data.items);
     });
+    allStatsCount.textContent = allItems.length.toLocaleString('ar-SA');
     renderAggregateInsights(allItems);
   }catch(_){
     Object.values(statisticsCountElements).forEach((element) => {
@@ -211,8 +215,30 @@ async function loadStatistics(){
     });
     topReason.textContent = 'لا توجد بيانات كافية';
     topQuestion.textContent = 'لا توجد بيانات كافية';
+    allStatsCount.textContent = '—';
     statisticsAlert.hidden = false;
   }
+}
+
+function updateReasonFilter(){
+  const selectedReason = reasonFilter.value;
+  const reasons = [...new Set(currentItems.map((item) => String(item.reason || 'unknown').trim() || 'unknown'))]
+    .sort((a, b) => displayReason(a).localeCompare(displayReason(b), 'ar'));
+
+  reasonFilter.replaceChildren();
+  const allOption = document.createElement('option');
+  allOption.value = '';
+  allOption.textContent = 'كل أسباب عدم الإجابة';
+  reasonFilter.appendChild(allOption);
+
+  reasons.forEach((reason) => {
+    const option = document.createElement('option');
+    option.value = reason;
+    option.textContent = displayReason(reason);
+    reasonFilter.appendChild(option);
+  });
+
+  reasonFilter.value = reasons.includes(selectedReason) ? selectedReason : '';
 }
 
 function normalizeCardActions(card){
@@ -245,7 +271,10 @@ async function copyText(text){
 
 function getSortedFilteredItems(){
   const query = searchInput.value.trim().toLowerCase();
+  const selectedReason = reasonFilter.value;
   const filtered = currentItems.filter((item) => {
+    const itemReason = String(item.reason || 'unknown').trim() || 'unknown';
+    if(selectedReason && itemReason !== selectedReason) return false;
     if(!query) return true;
     return [
       item.question,
@@ -282,7 +311,7 @@ function renderItems(){
   if(!items.length){
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = currentItems.length ? 'لا توجد نتائج مطابقة للبحث.' : 'لا توجد أسئلة في هذه الحالة.';
+    empty.textContent = currentItems.length ? 'لا توجد نتائج مطابقة للفلتر.' : 'لا توجد أسئلة غير مجابة حاليًا.';
     questionsList.appendChild(empty);
     return;
   }
@@ -312,6 +341,7 @@ async function loadQuestions(){
   try{
     const data = await apiRequest(`/api/admin/unanswered?status=${encodeURIComponent(activeStatus)}`);
     currentItems = Array.isArray(data.items) ? data.items : [];
+    updateReasonFilter();
     setAdminVisible(true);
     renderItems();
     adminTokenInput.value = '';
@@ -409,6 +439,7 @@ bulkCopyBtn.addEventListener('click', async () => {
   }
 });
 searchInput.addEventListener('input', renderItems);
+reasonFilter.addEventListener('change', renderItems);
 sortSelect.addEventListener('change', renderItems);
 
 tabs.forEach((tab) => {
@@ -430,6 +461,16 @@ questionsList.addEventListener('click', async (event) => {
 
   const id = Number(card.dataset.id);
   const item = currentItems.find((entry) => Number(entry.id) === id);
+
+  if(button.dataset.action === 'copy-question'){
+    try{
+      await copyText(cleanMarkdownQuestion(item?.question));
+      setStatus('تم نسخ السؤال.', 'success');
+    }catch(_){
+      setStatus('تعذر نسخ السؤال من المتصفح.', 'error');
+    }
+    return;
+  }
 
   if(button.dataset.action === 'copy-template'){
     try{

@@ -53,6 +53,21 @@ node tools/check-knowledge.js
 - طابق عدد preview chunks مع vectors قبل أي upsert.
 - لا تشغّل upload أو Vectorize upsert إلا بطلب صريح.
 
+## قبل أي تحديث معرفة كبير
+
+1. شغّل `node tools/check-knowledge.js`.
+2. اقرأ عداد الأسئلة والإجابات.
+3. اقرأ عدد Preview chunks وسجله.
+4. بعد الموافقة، شغّل `node tools/ingest-knowledge.js --export-vectors`.
+5. تحقق من عدد أسطر `tmp/knowledge-vectors.ndjson` ومطابقته للمقاطع.
+6. إذا كان `CLOUDFLARE_API_TOKEN` الحالي مخصصًا لـWorkers AI ولا يملك صلاحية Vectorize، أزله من جلسة الطرفية فقط دون طباعته، ثم استخدم جلسة Wrangler المصرح بها.
+7. بعد موافقة صريحة فقط، نفّذ `npx wrangler@latest vectorize upsert school_knowledge_index --file ".\tmp\knowledge-vectors.ndjson" --batch-size 500`.
+8. اختبر الموقع والأسئلة المستهدفة.
+9. استخدم `git add` للملفات المحددة فقط، ولا تستخدم `git add .`.
+10. نفّذ commit وpush بعد نجاح الاختبار والموافقة فقط.
+
+> تحذير: لا تضف `knowledge-import` إلى Git؛ فهو مصدر خام مؤقت وليس معرفة معتمدة.
+
 ## عند تعديل المساعد
 
 ```powershell

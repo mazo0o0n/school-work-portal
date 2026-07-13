@@ -22,6 +22,7 @@
   const copyStatus = document.getElementById('copyStatus');
   const summary = {
     total: document.getElementById('totalCount'),
+    untested: document.getElementById('untestedCount'),
     passed: document.getElementById('passedCount'),
     failed: document.getElementById('failedCount'),
     review: document.getElementById('reviewCount')
@@ -65,6 +66,7 @@
   function updateSummary() {
     const values = questions.map((_, index) => results[index]?.status || statuses[0]);
     summary.total.textContent = String(questions.length);
+    summary.untested.textContent = String(values.filter(value => value === 'لم يختبر').length);
     summary.passed.textContent = String(values.filter(value => value === 'نجح').length);
     summary.failed.textContent = String(values.filter(value => value === 'فشل').length);
     summary.review.textContent = String(values.filter(value => value === 'يحتاج مراجعة').length);

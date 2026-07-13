@@ -18,17 +18,32 @@
 | `assistant-status.html` | حالة معرفة المساعد للمطور |
 | `admin-unanswered.html` | إدارة الأسئلة غير المجابة |
 
+### صفحات عامة
+
+- `index.html`
+- `about.html`
+- `guide.html`
+- `privacy.html`
+
+### صفحات داخلية وإدارية
+
+- `assistant-test.html`
+- `assistant-status.html`
+- `admin-unanswered.html`
+
 ## مجلد assets
 
 - `assets/css`: تنسيقات الواجهات.
 - `assets/js`: منطق واجهات المتصفح.
 - `assets/images`: الصور والشعارات والأيقونات.
+- `assets/knowledge-images`: صور مرتبطة بمقاطع المعرفة؛ لا تُعدّل أثناء مهمة معرفة جارية.
 
 ## المعرفة
 
 - `knowledge.md`: ملف المعرفة الرئيسي.
 - `knowledge-files/approved`: ملفات معرفة معتمدة.
 - `knowledge-files/extracted`: محتوى خام؛ ممنوع إضافته إلى Git.
+- `knowledge-import`: مواد خام مؤقتة للاستيراد؛ لا تدخل Git ولا تُعامل كمعرفة معتمدة.
 
 ## Backend
 
@@ -49,4 +64,5 @@
 - لا تستخدم `git add .`.
 - لا deploy دون موافقة صريحة.
 - لا تعدل RAG دون طلب صريح.
+- لا تعدل `src/index.js` أو `wrangler.toml` أو ملفات المعرفة أو الأدوات أثناء مراجعات الواجهة والتوثيق.
 - لا تعرض أسرارًا أو بيانات اعتماد.

@@ -11,7 +11,7 @@ button:hover, button:focus-visible { background:#12404a; outline:2px solid #72e4
 .test-header p { margin:.35rem 0; color:#c4d7d3; }
 .eyebrow { color:#72e4c8!important; font-weight:700; }
 .header-actions { display:flex; flex-wrap:wrap; gap:.5rem; }
-.summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75rem; margin:1.25rem 0; }
+.summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.75rem; margin:1.25rem 0; }
 .summary article { padding:1rem; border:1px solid #234550; border-radius:.8rem; background:#0d2934; text-align:center; }
 .summary strong,.summary span { display:block; }
 .summary strong { color:#72e4c8; font-size:1.6rem; }
