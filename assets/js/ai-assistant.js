@@ -65,6 +65,7 @@ function persistAiConversation(){
       role: message.classList.contains('user') ? 'user' : 'assistant',
       text: message.dataset.messageText || '',
       source: message.dataset.messageSource || '',
+      customType: normalizeAiCustomType(message.dataset.messageCustomType),
       images: getAiMessageImages(message)
     })).filter((message) => message.text).slice(-aiMaxStoredMessages);
 
@@ -97,8 +98,9 @@ function restoreAiConversation(){
       const text = String(message.text || '').trim();
       if(!text) return;
       const source = typeof message.source === 'string' ? message.source : '';
+      const customType = normalizeAiCustomType(message.customType);
       const images = normalizeAiImages(message.images);
-      addAiMessage(text, message.role === 'user' ? 'user' : 'bot', source, false, false, images);
+      addAiMessage(text, message.role === 'user' ? 'user' : 'bot', source, false, false, images, customType);
     });
     return Boolean(aiMessages.querySelector('.ai-message'));
   }catch(_){
@@ -448,8 +450,13 @@ async function findAnswer(question){
     answer,
     source: data.source || 'قاعدة معرفة المنصة',
     missed: Boolean(data.notFound) || answer === apiFallbackAnswer || answer === legacyApiFallbackAnswer,
-    images: normalizeAiImages(data.images)
+    images: normalizeAiImages(data.images),
+    customType: normalizeAiCustomType(data.customType)
   };
+}
+
+function normalizeAiCustomType(value){
+  return value === 'nora' ? 'nora' : '';
 }
 
 function normalizeAiImages(value){
@@ -511,12 +518,15 @@ function appendAiImages(message, images){
   });
 }
 
-function addAiMessage(text, type = 'bot', source = '', missed = false, persist = true, images = []){
+function addAiMessage(text, type = 'bot', source = '', missed = false, persist = true, images = [], customType = ''){
   const message = document.createElement('div');
   const safeImages = normalizeAiImages(images);
+  const safeCustomType = type === 'bot' ? normalizeAiCustomType(customType) : '';
   message.className = `ai-message ${type}${missed ? ' is-missed' : ''}`;
+  if(safeCustomType === 'nora') message.classList.add('ai-message-nora');
   message.dataset.messageText = text;
   message.dataset.messageSource = source;
+  if(safeCustomType) message.dataset.messageCustomType = safeCustomType;
   if(safeImages.length) message.dataset.messageImages = JSON.stringify(safeImages);
   message.textContent = text;
   appendAiImages(message, safeImages);
@@ -546,7 +556,7 @@ async function answerQuestion(question){
     const answer = await findAnswer(question);
     loadingMessage.remove();
     if(answer && !answer.missed){
-      addAiMessage(answer.answer, 'bot', answer.source, false, true, answer.images);
+      addAiMessage(answer.answer, 'bot', answer.source, false, true, answer.images, answer.customType);
       return;
     }
     saveUnansweredQuestion(question);

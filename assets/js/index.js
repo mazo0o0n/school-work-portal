@@ -998,26 +998,32 @@ updateSupportSlider();
 /* ===== Top Bar Date / Time / Dark Mode ===== */
 function updateDateTime(){
   const now = new Date();
+  const dateText = now.toLocaleDateString("en-GB");
+  const timeText = now.toLocaleTimeString("ar-SA", {
+    hour:"numeric",
+    minute:"2-digit"
+  });
 
-  const dateEl = document.getElementById("dateNow");
-  const timeEl = document.getElementById("timeNow");
-
-  if(dateEl){
-    dateEl.textContent = now.toLocaleDateString("en-GB");
-  }
-
-  if(timeEl){
-    timeEl.textContent = now.toLocaleTimeString("ar-SA", {
-      hour:"numeric",
-      minute:"2-digit"
-    });
-  }
+  document.querySelectorAll("[data-current-date]").forEach((element) => {
+    element.textContent = dateText;
+  });
+  document.querySelectorAll("[data-current-time]").forEach((element) => {
+    element.textContent = timeText;
+  });
 }
 
 function toggleDark(){
   const isDark = document.body.classList.toggle("dark");
   localStorage.setItem("preferredTheme", isDark ? "dark" : "light");
   updateThemeLogos();
+  updateThemeToggleState();
+}
+
+function updateThemeToggleState(){
+  const isDark = document.body.classList.contains("dark");
+  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(isDark));
+  });
 }
 
 function updateThemeLogos(){
@@ -1049,6 +1055,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 updateDateTime();
+updateThemeToggleState();
 setInterval(updateDateTime,1000);
 
 function finishAppBoot(){

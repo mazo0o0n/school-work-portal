@@ -201,6 +201,15 @@ function normalizeArabicQuestion(value){
     .trim();
 }
 
+function isNooraMessage(question){
+  const words = normalizeArabicQuestion(question)
+    .replace(/[^\u0600-\u06FF0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return words.length > 0 && words.length <= 4 && words.some((word) => word === 'نورة' || word === 'نوره');
+}
+
 const ACADEMIC_CALENDAR_IMAGE = Object.freeze({
   src: '/assets/knowledge-images/academic-calendar-1448-1449-2026-2027.jpg',
   alt: 'التقويم الدراسي 1448 / 1449 هـ - 2026 / 2027 م',
@@ -294,6 +303,15 @@ async function handleChat(request, env){
 
     normalizedQuestion = normalizeArabicQuestion(question);
     pagePath = getPagePath(payload, request);
+
+    if(isNooraMessage(question)){
+      return jsonResponse(withDebug(env, {
+        answer: 'أحلى حاجة بالحياة 🖤🖤',
+        source: 'رد مخصص',
+        customType: 'nora',
+        notFound: false
+      }, { type: 'custom_noora_response' }));
+    }
 
     if(isExternalPlatformDefinitionQuestion(question)){
       await saveUnansweredQuestion(env, {
