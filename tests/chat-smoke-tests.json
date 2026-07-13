@@ -1,0 +1,46 @@
+[
+  {
+    "name": "برنامج فرص",
+    "question": "ما هو برنامج فرص؟",
+    "shouldFallback": false,
+    "expectedSourceIncludes": "furas"
+  },
+  {
+    "name": "ترقيات المعلمين",
+    "question": "ما شروط ترقية المعلمين؟",
+    "shouldFallback": false,
+    "expectedSourceIncludes": "teacher-promotions"
+  },
+  {
+    "name": "التطوير المهني",
+    "question": "ما المقصود بالتطوير المهني؟",
+    "shouldFallback": false
+  },
+  {
+    "name": "سؤال خارج النطاق",
+    "question": "كم سعر الدولار؟",
+    "shouldFallback": true
+  },
+  {
+    "name": "التقويم الدراسي",
+    "question": "التقويم الدراسي",
+    "shouldFallback": false,
+    "expectedImages": true
+  },
+  {
+    "name": "الرد السري",
+    "question": "07/07/2027MN",
+    "expectedAnswerIncludes": "نورة احلى حاجة بالحياة",
+    "shouldFallback": false
+  },
+  {
+    "name": "نورة دون اختصار",
+    "question": "نورة",
+    "shouldNotInclude": "احلى حاجة بالحياة"
+  },
+  {
+    "name": "نوره دون اختصار",
+    "question": "نوره",
+    "shouldNotInclude": "احلى حاجة بالحياة"
+  }
+]

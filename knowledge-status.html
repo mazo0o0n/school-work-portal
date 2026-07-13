@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>حالة معرفة المساعد | منصة التنظيم المدرسي</title>
+  <link rel="stylesheet" href="assets/css/knowledge-status.css">
+</head>
+<body>
+  <main class="status-shell">
+    <header class="status-header">
+      <div>
+        <p class="kicker">أداة داخلية للمطور</p>
+        <h1>حالة معرفة المساعد</h1>
+        <p>ملخص محلي لإحصاءات المعرفة وروابط الإدارة، دون اتصال بـD1 إلا بعد إدخال رمز الإدارة يدويًا.</p>
+      </div>
+      <button id="themeToggle" type="button" aria-label="تبديل الوضع الداكن" aria-pressed="false">تغيير الثيم</button>
+    </header>
+
+    <section class="stats-panel" aria-labelledby="knowledgeStatsTitle">
+      <div class="section-head">
+        <h2 id="knowledgeStatsTitle">إحصاءات المعرفة</h2>
+        <button id="refreshStats" type="button">تحديث</button>
+      </div>
+      <div class="stats-grid">
+        <article><span>الأسئلة/الإجابات</span><strong id="qaCount">—</strong></article>
+        <article><span>مصادر المعرفة</span><strong id="sourcesCount">—</strong></article>
+        <article><span>آخر تحديث</span><strong id="updatedAt">—</strong></article>
+        <article><span>حالة ملف stats</span><strong id="statsState">جاري التحميل…</strong></article>
+      </div>
+      <p id="statsMessage" class="message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="admin-panel" aria-labelledby="unansweredTitle">
+      <div class="section-head">
+        <div>
+          <h2 id="unansweredTitle">الأسئلة غير المجابة</h2>
+          <p>يتطلب إدخال Admin Token. يبقى الرمز في ذاكرة الصفحة فقط.</p>
+        </div>
+        <strong id="unansweredCount">غير متاح</strong>
+      </div>
+      <div class="token-row">
+        <input id="adminToken" type="password" autocomplete="off" placeholder="أدخل Admin Token" aria-label="رمز الإدارة">
+        <button id="loadUnanswered" type="button">تحميل العدد</button>
+        <button id="clearToken" class="secondary" type="button">مسح الرمز</button>
+      </div>
+      <p id="adminMessage" class="message" role="status" aria-live="polite">يتطلب إدخال التوكن أو يظل العدد غير متاح.</p>
+    </section>
+
+    <section class="links-panel" aria-labelledby="linksTitle">
+      <h2 id="linksTitle">روابط داخلية</h2>
+      <nav class="link-grid" aria-label="أدوات الإدارة والمساعدة">
+        <a href="admin-unanswered.html">إدارة الأسئلة غير المجابة</a>
+        <a href="assistant-test.html">اختبار المساعد</a>
+        <a href="privacy.html">سياسة الخصوصية</a>
+        <a href="guide.html">دليل الاستخدام</a>
+      </nav>
+    </section>
+  </main>
+  <script src="assets/js/knowledge-status.js"></script>
+</body>
+</html>

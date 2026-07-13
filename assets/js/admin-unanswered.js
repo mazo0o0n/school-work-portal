@@ -14,6 +14,8 @@ const currentStatus = document.getElementById('currentStatus');
 const statisticsAlert = document.getElementById('statisticsAlert');
 const topReason = document.getElementById('topReason');
 const topQuestion = document.getElementById('topQuestion');
+const topRepeatedList = document.getElementById('topRepeatedList');
+const reasonDistribution = document.getElementById('reasonDistribution');
 const visibleQuestionsCount = document.getElementById('visibleQuestionsCount');
 const tabs = [...document.querySelectorAll('.tab')];
 const adminContent = [...document.querySelectorAll('.admin-content')];
@@ -134,23 +136,20 @@ function cleanMarkdownQuestion(value){
 
 function buildKnowledgeTemplate(item){
   const question = cleanMarkdownQuestion(item?.question);
-  const status = String(item?.status || '-').trim() || '-';
-  const statusLabel = statusLabels[status] ? `${statusLabels[status]} (${status})` : status;
-  const repeatCount = String(item?.repeat_count ?? 0).trim() || '0';
 
   return [
     `### ${question}`,
     '',
-    'الإجابة:',
-    'اكتب الإجابة المؤكدة هنا بناءً على مصدر معتمد من ملفات المنصة.',
+    '**الإجابة:**',
+    '...',
     '',
-    'المصدر:',
-    'اذكر اسم الملف أو المرجع المعتمد هنا.',
+    '**المصدر:**',
+    '...',
     '',
-    'ملاحظات:',
-    '- أضيف هذا السؤال من سجل الأسئلة غير المجابة.',
-    `- الحالة قبل الإضافة: ${statusLabel}`,
-    `- عدد التكرار: ${repeatCount}`
+    '**ملاحظات المراجعة:**',
+    '- تمت مراجعة الإجابة بشريًا:',
+    '- المصدر رسمي أو موثوق:',
+    '- مناسب للإضافة إلى approved:'
   ].join('\n');
 }
 
@@ -163,10 +162,19 @@ function renderVisibleCount(items){
   visibleQuestionsCount.textContent = items.length.toLocaleString('ar-SA');
 }
 
+function renderUnavailableList(element){
+  element.replaceChildren();
+  const item = document.createElement('li');
+  item.textContent = 'غير متوفر';
+  element.appendChild(item);
+}
+
 function renderAggregateInsights(items){
   if(!items.length){
     topReason.textContent = 'لا توجد بيانات كافية';
     topQuestion.textContent = 'لا توجد بيانات كافية';
+    renderUnavailableList(topRepeatedList);
+    renderUnavailableList(reasonDistribution);
     return;
   }
 
@@ -184,12 +192,34 @@ function renderAggregateInsights(items){
   }, items[0]);
   const repeatCount = Number(mostRepeated.repeat_count || 0);
   topQuestion.textContent = `${cleanMarkdownQuestion(mostRepeated.question)} (${repeatCount.toLocaleString('ar-SA')})`;
+
+  topRepeatedList.replaceChildren();
+  [...items]
+    .sort((a, b) => Number(b.repeat_count || 0) - Number(a.repeat_count || 0))
+    .slice(0, 5)
+    .forEach((item) => {
+      const listItem = document.createElement('li');
+      const count = Number(item.repeat_count || 0).toLocaleString('ar-SA');
+      listItem.textContent = `${cleanMarkdownQuestion(item.question)} — ${count} تكرار`;
+      topRepeatedList.appendChild(listItem);
+    });
+
+  reasonDistribution.replaceChildren();
+  [...reasonCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .forEach(([reason, count]) => {
+      const listItem = document.createElement('li');
+      listItem.textContent = `${displayReason(reason)}: ${count.toLocaleString('ar-SA')}`;
+      reasonDistribution.appendChild(listItem);
+    });
 }
 
 async function loadStatistics(){
   statisticsAlert.hidden = true;
   topReason.textContent = 'لا توجد بيانات كافية';
   topQuestion.textContent = 'لا توجد بيانات كافية';
+  renderUnavailableList(topRepeatedList);
+  renderUnavailableList(reasonDistribution);
   Object.values(statisticsCountElements).forEach((element) => {
     element.textContent = '—';
   });
@@ -215,6 +245,8 @@ async function loadStatistics(){
     });
     topReason.textContent = 'لا توجد بيانات كافية';
     topQuestion.textContent = 'لا توجد بيانات كافية';
+    renderUnavailableList(topRepeatedList);
+    renderUnavailableList(reasonDistribution);
     allStatsCount.textContent = '—';
     statisticsAlert.hidden = false;
   }
@@ -321,10 +353,16 @@ function renderItems(){
     card.dataset.id = item.id;
     normalizeCardActions(card);
     const question = String(item.question || '-');
+    const repeatCount = Number(item.repeat_count || 0);
+    if(repeatCount >= 5){
+      card.classList.add('is-high-repeat');
+    }else if(repeatCount >= 3){
+      card.classList.add('is-repeated');
+    }
     card.querySelector('.question-text').textContent = question;
     card.querySelector('.status-badge').textContent = statusLabels[item.status] || item.status || '-';
     card.querySelector('.reason').textContent = displayReason(item.reason);
-    card.querySelector('.repeat').textContent = item.repeat_count || 0;
+    card.querySelector('.repeat').textContent = repeatCount;
     card.querySelector('.page-path').textContent = item.page_path || '-';
     card.querySelector('.source').textContent = item.source || '-';
     card.querySelector('.created').textContent = formatDate(item.created_at);

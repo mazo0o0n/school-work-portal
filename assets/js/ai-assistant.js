@@ -518,6 +518,40 @@ function appendAiImages(message, images){
   });
 }
 
+async function copyAiText(text){
+  if(navigator.clipboard?.writeText){
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+}
+
+function appendAiCopyButton(message, text){
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'ai-copy-answer';
+  button.textContent = 'نسخ الإجابة';
+  button.addEventListener('click', async () => {
+    try{
+      await copyAiText(text);
+      button.textContent = 'تم النسخ';
+      window.setTimeout(() => { button.textContent = 'نسخ الإجابة'; }, 1400);
+    }catch(_){
+      button.textContent = 'تعذر النسخ';
+      window.setTimeout(() => { button.textContent = 'نسخ الإجابة'; }, 1800);
+    }
+  });
+  message.appendChild(button);
+}
+
 function addAiMessage(text, type = 'bot', source = '', missed = false, persist = true, images = [], customType = ''){
   const message = document.createElement('div');
   const safeImages = normalizeAiImages(images);
@@ -536,6 +570,7 @@ function addAiMessage(text, type = 'bot', source = '', missed = false, persist =
     sourceEl.textContent = `المصدر: ${source}`;
     message.appendChild(sourceEl);
   }
+  if(type === 'bot' && source) appendAiCopyButton(message, text);
   aiMessages.appendChild(message);
   aiMessages.scrollTop = aiMessages.scrollHeight;
   if(persist) persistAiConversation();
@@ -549,7 +584,7 @@ function addMissedQuestionMessage(text = apiFallbackAnswer){
 async function answerQuestion(question){
   hideAiReviewHint();
   addAiMessage(question, 'user');
-  const loadingMessage = addAiMessage('جاري البحث في معرفة المنصة...', 'bot', '', false, false);
+  const loadingMessage = addAiMessage('جاري البحث في ملفات المنصة...', 'bot', '', false, false);
   loadingMessage.classList.add('ai-loading');
   aiMessages.setAttribute('aria-busy', 'true');
   try{
@@ -564,9 +599,7 @@ async function answerQuestion(question){
     showAiReviewHint();
   }catch(_){
     loadingMessage.remove();
-    saveUnansweredQuestion(question);
-    addMissedQuestionMessage();
-    showAiReviewHint();
+    addAiMessage('تعذر الاتصال بالمساعد الآن. تحقق من الشبكة ثم حاول مرة أخرى.', 'bot', 'حالة الاتصال', false, false);
   }finally{
     loadingMessage.remove();
     aiMessages.removeAttribute('aria-busy');

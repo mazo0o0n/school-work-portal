@@ -16,6 +16,7 @@
 | `10.html` | أداة داخلية إضافية |
 | `assistant-test.html` | اختبار يدوي داخلي للمساعد، noindex |
 | `assistant-status.html` | حالة معرفة المساعد للمطور |
+| `knowledge-status.html` | لوحة داخلية لحالة المعرفة وإحصاءات ملف stats وروابط الإدارة |
 | `admin-unanswered.html` | إدارة الأسئلة غير المجابة |
 
 ### صفحات عامة
@@ -29,6 +30,7 @@
 
 - `assistant-test.html`
 - `assistant-status.html`
+- `knowledge-status.html`
 - `admin-unanswered.html`
 
 ## مجلد assets
@@ -37,6 +39,8 @@
 - `assets/js`: منطق واجهات المتصفح.
 - `assets/images`: الصور والشعارات والأيقونات.
 - `assets/knowledge-images`: صور مرتبطة بمقاطع المعرفة؛ لا تُعدّل أثناء مهمة معرفة جارية.
+- `assets/css/knowledge-status.css`: تنسيق صفحة حالة المعرفة في الوضعين الفاتح والداكن.
+- `assets/js/knowledge-status.js`: تحميل إحصاءات المعرفة والعدد الإداري الاختياري دون حفظ التوكن.
 
 ## المعرفة
 
@@ -54,10 +58,18 @@
 - `tools/check-knowledge.js`: تحديث العداد وتشغيل preview بأمان.
 - `tools/ingest-knowledge.js`: preview/export/upload حسب الخيار المصرح.
 - `tools/update-knowledge-stats.js`: تحديث إحصاءات المعرفة.
+- `tools/test-chat.ps1`: تشغيل اختبارات smoke على `/api/chat` لعنوان يحدده المطور.
+
+## الاختبارات
+
+- `tests/chat-smoke-tests.json`: حالات أساسية لاختبار المعرفة، fallback، الصور، والرد السري.
 
 ## docs
 
 توثيق سير العمل، الإصدار، الأمن، الاختبارات، الروابط، والأداء.
+
+- `docs/knowledge-file-standard.md`: معيار تنسيق ومراجعة ملفات المعرفة.
+- `docs/knowledge-update-workflow.md`: دورة تحديث المعرفة من السؤال غير المجاب حتى الاختبار والاعتماد.
 
 ## قواعد مهمة
 
