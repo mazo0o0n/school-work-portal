@@ -271,7 +271,7 @@ button{font-family:inherit;cursor:pointer}
   box-shadow:-12px 0 32px rgba(0,0,0,.18);
   display:flex;
   flex-direction:column;
-  padding:28px 26px;
+  padding:18px 26px 28px;
   direction:rtl;
 }
 body.drawer-open .drawer-backdrop{
@@ -281,19 +281,11 @@ body.drawer-open .drawer-backdrop{
 body.drawer-open .side-drawer{
   transform:translateX(0);
 }
-.drawer-head{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:16px;
-  padding-bottom:28px;
-  border-bottom:1px solid #eef2f4;
-}
 .drawer-close{
-  width:58px;
-  height:58px;
-  border:3px solid #161616;
-  border-radius:50%;
+  width:40px;
+  height:40px;
+  border:1px solid #d6e2e5;
+  border-radius:10px;
   background:#fff;
   color:#161616;
   display:flex;
@@ -302,36 +294,16 @@ body.drawer-open .side-drawer{
   flex:0 0 auto;
 }
 .drawer-close svg{
-  width:30px;
-  height:30px;
+  width:22px;
+  height:22px;
   stroke:currentColor;
   stroke-width:2.4;
-}
-.drawer-logo{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-.drawer-logo img{
-  width:120px;
-  height:72px;
-  object-fit:contain;
-}
-.drawer-logo-title{
-  font-size:25px;
-  font-weight:900;
-  color:#161616;
-}
-.drawer-logo-subtitle{
-  margin-top:4px;
-  color:#6b7280;
-  font-size:13px;
 }
 .drawer-utilities{
   display:flex;
   align-items:center;
   gap:12px;
-  margin-top:18px;
+  margin-top:0;
   padding:12px;
   border:1px solid #e1e8eb;
   border-radius:12px;
@@ -1327,8 +1299,9 @@ body.high-contrast{
   }
   .site-nav{
     flex-wrap:wrap;
-    gap:8px;
-    padding:12px;
+    justify-content:flex-start;
+    gap:2px;
+    padding:10px;
   }
   .nav-actions{
     order:3;
@@ -1367,18 +1340,19 @@ body.high-contrast{
   }
   .site-nav{
     min-height:88px;
-    padding:12px;
+    padding:10px;
   }
   .menu-toggle{
-    width:44px;
+    width:40px;
     height:44px;
+    flex:0 0 40px;
   }
   .menu-toggle svg{
     width:34px;
     height:34px;
   }
   .site-brand-mark{
-    width:54px;
+    width:50px;
     height:40px;
   }
   .site-brand{
@@ -1389,7 +1363,7 @@ body.high-contrast{
     min-width:0;
   }
   .site-brand-title{
-    font-size:clamp(12px,3.35vw,15px);
+    font-size:clamp(13px,3.35vw,15px);
     line-height:1.25;
     white-space:nowrap;
   }
@@ -1398,7 +1372,7 @@ body.high-contrast{
   }
   .side-drawer{
     width:92vw;
-    padding:24px 22px;
+    padding:14px 18px 24px;
   }
   .drawer-link{
     font-size:25px;
