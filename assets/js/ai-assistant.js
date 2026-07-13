@@ -64,7 +64,8 @@ function persistAiConversation(){
     const messages = [...aiMessages.querySelectorAll('.ai-message')].map((message) => ({
       role: message.classList.contains('user') ? 'user' : 'assistant',
       text: message.dataset.messageText || '',
-      source: message.dataset.messageSource || ''
+      source: message.dataset.messageSource || '',
+      images: getAiMessageImages(message)
     })).filter((message) => message.text).slice(-aiMaxStoredMessages);
 
     if(messages.length){
@@ -96,7 +97,8 @@ function restoreAiConversation(){
       const text = String(message.text || '').trim();
       if(!text) return;
       const source = typeof message.source === 'string' ? message.source : '';
-      addAiMessage(text, message.role === 'user' ? 'user' : 'bot', source, false, false);
+      const images = normalizeAiImages(message.images);
+      addAiMessage(text, message.role === 'user' ? 'user' : 'bot', source, false, false, images);
     });
     return Boolean(aiMessages.querySelector('.ai-message'));
   }catch(_){
@@ -445,16 +447,79 @@ async function findAnswer(question){
   return {
     answer,
     source: data.source || 'قاعدة معرفة المنصة',
-    missed: Boolean(data.notFound) || answer === apiFallbackAnswer || answer === legacyApiFallbackAnswer
+    missed: Boolean(data.notFound) || answer === apiFallbackAnswer || answer === legacyApiFallbackAnswer,
+    images: normalizeAiImages(data.images)
   };
 }
 
-function addAiMessage(text, type = 'bot', source = '', missed = false, persist = true){
+function normalizeAiImages(value){
+  if(!Array.isArray(value)) return [];
+
+  return value.slice(0, 4).map((image) => {
+    const src = typeof image?.src === 'string' ? image.src.trim() : '';
+    if(!/^\/assets\/knowledge-images\/[A-Za-z0-9._/-]+\.(?:jpg|jpeg|png|webp)$/i.test(src) || src.includes('..')){
+      return null;
+    }
+    return {
+      src,
+      alt: String(image.alt || 'صورة من معرفة المنصة').trim().slice(0, 200),
+      caption: String(image.caption || '').trim().slice(0, 200)
+    };
+  }).filter(Boolean);
+}
+
+function getAiMessageImages(message){
+  try{
+    return normalizeAiImages(JSON.parse(message.dataset.messageImages || '[]'));
+  }catch(_){
+    return [];
+  }
+}
+
+function appendAiImages(message, images){
+  images.forEach((image) => {
+    const card = document.createElement('figure');
+    card.className = 'ai-image-card';
+
+    const link = document.createElement('a');
+    link.className = 'ai-image-link';
+    link.setAttribute('href', image.src);
+    link.setAttribute('target', '_blank');
+    link.setAttribute('rel', 'noopener');
+
+    const imageEl = document.createElement('img');
+    imageEl.setAttribute('src', image.src);
+    imageEl.setAttribute('alt', image.alt);
+    imageEl.setAttribute('loading', 'lazy');
+    link.appendChild(imageEl);
+    card.appendChild(link);
+
+    if(image.caption){
+      const caption = document.createElement('figcaption');
+      caption.textContent = image.caption;
+      card.appendChild(caption);
+    }
+
+    const openLink = document.createElement('a');
+    openLink.className = 'ai-image-open';
+    openLink.textContent = 'فتح الصورة';
+    openLink.setAttribute('href', image.src);
+    openLink.setAttribute('target', '_blank');
+    openLink.setAttribute('rel', 'noopener');
+    card.appendChild(openLink);
+    message.appendChild(card);
+  });
+}
+
+function addAiMessage(text, type = 'bot', source = '', missed = false, persist = true, images = []){
   const message = document.createElement('div');
+  const safeImages = normalizeAiImages(images);
   message.className = `ai-message ${type}${missed ? ' is-missed' : ''}`;
   message.dataset.messageText = text;
   message.dataset.messageSource = source;
+  if(safeImages.length) message.dataset.messageImages = JSON.stringify(safeImages);
   message.textContent = text;
+  appendAiImages(message, safeImages);
   if(source){
     const sourceEl = document.createElement('span');
     sourceEl.className = 'ai-source';
@@ -481,7 +546,7 @@ async function answerQuestion(question){
     const answer = await findAnswer(question);
     loadingMessage.remove();
     if(answer && !answer.missed){
-      addAiMessage(answer.answer, 'bot', answer.source);
+      addAiMessage(answer.answer, 'bot', answer.source, false, true, answer.images);
       return;
     }
     saveUnansweredQuestion(question);

@@ -2283,6 +2283,56 @@ body.dark .ai-messages::-webkit-scrollbar-thumb{
   font-size:11.5px;
   font-weight:900;
 }
+.ai-image-card{
+  margin:10px 0 2px;
+  padding:8px;
+  max-width:100%;
+  border:1px solid #cfe8e7;
+  border-radius:12px;
+  background:#f5fbfa;
+  overflow:hidden;
+  white-space:normal;
+}
+.ai-image-link{
+  display:block;
+  border-radius:9px;
+  overflow:hidden;
+}
+.ai-image-card img{
+  display:block;
+  width:100%;
+  max-width:100%;
+  height:auto;
+  border-radius:9px;
+}
+.ai-image-card figcaption{
+  margin-top:7px;
+  color:#315463;
+  font-size:11.5px;
+  line-height:1.6;
+}
+.ai-image-open{
+  display:inline-flex;
+  margin-top:7px;
+  color:#087f78;
+  font-size:12px;
+  font-weight:900;
+  text-decoration:none;
+}
+.ai-image-open:hover,
+.ai-image-open:focus-visible{
+  text-decoration:underline;
+}
+body.dark .ai-image-card{
+  border-color:#315b60;
+  background:#172b30;
+}
+body.dark .ai-image-card figcaption{
+  color:#d1e8e8;
+}
+body.dark .ai-image-open{
+  color:#76dfd2;
+}
 .ai-suggestions{
   width:100%;
   padding:4px 0 2px;

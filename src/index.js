@@ -164,6 +164,28 @@ function buildContext(matches){
     .join('\n\n---\n\n');
 }
 
+function extractKnowledgeImages(matches){
+  const imagePattern = /(?:^|\n)الصورة المرتبطة:\s*(\/assets\/knowledge-images\/[A-Za-z0-9._/-]+\.(?:jpg|jpeg|png|webp))(?=\s|$)/gi;
+  const images = [];
+  const seen = new Set();
+
+  for(const match of matches){
+    for(const imageMatch of String(match.text || '').matchAll(imagePattern)){
+      const src = imageMatch[1];
+      if(src.includes('..') || seen.has(src)) continue;
+      seen.add(src);
+      const label = String(match.section || 'صورة من معرفة المنصة').trim();
+      images.push({
+        src,
+        alt: label,
+        caption: label
+      });
+    }
+  }
+
+  return images;
+}
+
 function normalizeArabicQuestion(value){
   return String(value || '')
     .normalize('NFKD')
@@ -177,6 +199,32 @@ function normalizeArabicQuestion(value){
     .replace(/\bمنصه\b/g, 'منصة')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+const ACADEMIC_CALENDAR_IMAGE = Object.freeze({
+  src: '/assets/knowledge-images/academic-calendar-1448-1449-2026-2027.jpg',
+  alt: 'التقويم الدراسي 1448 / 1449 هـ - 2026 / 2027 م',
+  caption: 'التقويم الدراسي 1448 / 1449 هـ - 2026 / 2027 م'
+});
+
+function isAcademicCalendarQuestion(question){
+  const normalized = normalizeArabicQuestion(question)
+    .replace(/[؟?]/g, '')
+    .replace(/\s*\/\s*/g, '/')
+    .trim();
+
+  if(!normalized) return false;
+
+  return (
+    /(?:^|\s)(?:التقويم الدراسي|تقويم دراسي)(?:\s|$)/.test(normalized) ||
+    normalized === 'التقويم' ||
+    /(?:^|\s)تقويم\s+(?:1448|1449)(?:\s|$|\/)/.test(normalized) ||
+    /(?:^|\s)2026\/2027(?:\s|$)/.test(normalized) ||
+    normalized.includes('بداية الدراسة') ||
+    normalized.includes('الاجازات الدراسية') ||
+    normalized.includes('اجازة منتصف العام') ||
+    normalized.includes('بداية اجازة نهاية العام')
+  );
 }
 
 function buildSearchQueries(question){
@@ -359,6 +407,12 @@ async function handleChat(request, env){
       source: notFound ? 'قاعدة معرفة المنصة' : usableMatches[0].source,
       notFound
     };
+
+    const images = notFound ? [] : extractKnowledgeImages(usableMatches);
+    if(isAcademicCalendarQuestion(question) && !images.some((image) => image.src === ACADEMIC_CALENDAR_IMAGE.src)){
+      images.unshift({ ...ACADEMIC_CALENDAR_IMAGE });
+    }
+    if(images.length) body.images = images;
 
     return jsonResponse(withDebug(env, body, {
       type: 'strict_rag_answer',
