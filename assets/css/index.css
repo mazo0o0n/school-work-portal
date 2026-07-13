@@ -2326,7 +2326,7 @@ body.dark .ai-messages::-webkit-scrollbar-thumb{
   color:#000000;
   border-bottom-left-radius:6px;
 }
-.ai-message.bot.ai-message-nora{
+.ai-message.bot.ai-message-nora-secret{
   font-weight:700;
   color:#dc2626;
 }

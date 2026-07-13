@@ -456,7 +456,7 @@ async function findAnswer(question){
 }
 
 function normalizeAiCustomType(value){
-  return value === 'nora' ? 'nora' : '';
+  return value === 'nora-secret' ? 'nora-secret' : '';
 }
 
 function normalizeAiImages(value){
@@ -523,7 +523,7 @@ function addAiMessage(text, type = 'bot', source = '', missed = false, persist =
   const safeImages = normalizeAiImages(images);
   const safeCustomType = type === 'bot' ? normalizeAiCustomType(customType) : '';
   message.className = `ai-message ${type}${missed ? ' is-missed' : ''}`;
-  if(safeCustomType === 'nora') message.classList.add('ai-message-nora');
+  if(safeCustomType === 'nora-secret') message.classList.add('ai-message-nora-secret');
   message.dataset.messageText = text;
   message.dataset.messageSource = source;
   if(safeCustomType) message.dataset.messageCustomType = safeCustomType;

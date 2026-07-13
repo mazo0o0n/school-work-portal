@@ -201,13 +201,8 @@ function normalizeArabicQuestion(value){
     .trim();
 }
 
-function isNooraMessage(question){
-  const words = normalizeArabicQuestion(question)
-    .replace(/[^\u0600-\u06FF0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
-
-  return words.length > 0 && words.length <= 4 && words.some((word) => word === 'نورة' || word === 'نوره');
+function isNoraSecretMessage(question){
+  return String(question || '').trim().toUpperCase() === '07/07/2027MN';
 }
 
 const ACADEMIC_CALENDAR_IMAGE = Object.freeze({
@@ -304,13 +299,13 @@ async function handleChat(request, env){
     normalizedQuestion = normalizeArabicQuestion(question);
     pagePath = getPagePath(payload, request);
 
-    if(isNooraMessage(question)){
+    if(isNoraSecretMessage(question)){
       return jsonResponse(withDebug(env, {
-        answer: 'أحلى حاجة بالحياة 🖤🖤',
+        answer: 'نورة احلى حاجة بالحياة 🖤🖤',
         source: 'رد مخصص',
-        customType: 'nora',
+        customType: 'nora-secret',
         notFound: false
-      }, { type: 'custom_noora_response' }));
+      }, { type: 'custom_nora_secret_response' }));
     }
 
     if(isExternalPlatformDefinitionQuestion(question)){
