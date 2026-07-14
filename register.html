@@ -17,19 +17,45 @@
       </div>
       <h1 class="welcome">مرحبًا بك</h1>
       <form class="register-form" id="schoolRegisterForm">
-        <div class="field">
-          <label for="schoolName">اسم المدرسة</label>
-          <input id="schoolName" name="schoolName" type="text" placeholder="مثال: مازن" autocomplete="organization" inputmode="text" required>
-          <p class="field-error" id="schoolNameError" aria-live="polite"></p>
-        </div>
-        <div class="field">
-          <label for="schoolStage">المرحلة</label>
-          <select id="schoolStage" name="schoolStage" required>
-            <option value="" selected disabled>اختر المرحلة</option>
-            <option value="ابتدائية">ابتدائي</option>
-            <option value="متوسطة">متوسطة</option>
-            <option value="ثانوية">ثانوي</option>
-          </select>
+        <div class="registration-fields">
+          <div class="field">
+            <label for="schoolName">اسم المدرسة</label>
+            <input id="schoolName" name="schoolName" type="text" placeholder="مثال: مازن" autocomplete="organization" inputmode="text" required>
+            <p class="field-error" id="schoolNameError" aria-live="polite"></p>
+          </div>
+          <div class="field">
+            <label for="schoolStage">المرحلة</label>
+            <select id="schoolStage" name="schoolStage" required>
+              <option value="" selected disabled>اختر المرحلة</option>
+              <option value="ابتدائية">ابتدائي</option>
+              <option value="متوسطة">متوسطة</option>
+              <option value="ثانوية">ثانوي</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="educationDepartment">إدارة التعليم</label>
+            <input id="educationDepartment" name="educationDepartment" type="text" placeholder="مثال: إدارة تعليم الرياض">
+          </div>
+          <div class="field">
+            <label for="ministryNumber">الرقم الوزاري للمدرسة</label>
+            <input id="ministryNumber" name="ministryNumber" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="أدخل الرقم الوزاري" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="principalName">اسم مدير المدرسة</label>
+            <input id="principalName" name="principalName" type="text" placeholder="أدخل اسم مدير المدرسة">
+          </div>
+          <div class="field">
+            <label for="educationalAffairsAgent">اسم وكيل الشؤون التعليمية</label>
+            <input id="educationalAffairsAgent" name="educationalAffairsAgent" type="text" placeholder="أدخل اسم وكيل الشؤون التعليمية">
+          </div>
+          <div class="field">
+            <label for="studentAffairsAgent">اسم وكيل شؤون الطلاب</label>
+            <input id="studentAffairsAgent" name="studentAffairsAgent" type="text" placeholder="أدخل اسم وكيل شؤون الطلاب">
+          </div>
+          <div class="field">
+            <label for="schoolAffairsAgent">اسم وكيل الشؤون المدرسية</label>
+            <input id="schoolAffairsAgent" name="schoolAffairsAgent" type="text" placeholder="أدخل اسم وكيل الشؤون المدرسية">
+          </div>
         </div>
         <div class="preview" aria-label="معاينة الهيدر">
           <img src="assets/images/school-header-base.png" alt="">
