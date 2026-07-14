@@ -32,3 +32,5 @@ knowledge-files/pdfs/*.pdf
 knowledge-files/extracted/
 
 .wrangler/
+
+report-automation/
