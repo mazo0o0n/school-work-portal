@@ -2252,6 +2252,8 @@ body.dark .academy-footer{
   max-height:310px;
   overflow:auto;
   display:grid;
+  grid-auto-rows:max-content;
+  align-content:start;
   gap:10px;
   padding:16px;
   direction:ltr;
@@ -2276,6 +2278,9 @@ body.dark .ai-messages::-webkit-scrollbar-thumb{
   background:#c0c0c1;
 }
 .ai-message{
+  align-self:start;
+  height:auto;
+  min-height:0;
   padding:10px 12px;
   border-radius:14px;
   font-size:13.5px;
@@ -2638,6 +2643,43 @@ body.dark .ai-message.bot.is-missed{
   background:#242626;
   color:#FFFFFF;
 }
+@media(min-width:1024px){
+  body.academy-home{
+    transition:padding-right .22s ease;
+  }
+  body.academy-home.ai-panel-open{
+    padding-right:460px;
+  }
+  .ai-panel:not([hidden]){
+    position:fixed;
+    top:0;
+    right:0;
+    bottom:0;
+    width:min(460px,calc(100vw - 80px));
+    height:100vh;
+    height:100dvh;
+    margin:0;
+    border-radius:18px 0 0 18px;
+    display:grid;
+    grid-template-rows:auto auto minmax(0,1fr) auto auto;
+    overflow:hidden;
+  }
+  .ai-panel.ai-conversation-started{
+    grid-template-rows:auto minmax(0,1fr) auto auto;
+  }
+  .ai-messages{
+    max-height:none;
+    min-height:0;
+    overflow-y:auto;
+  }
+  .ai-form{
+    padding-top:14px;
+    border-top:1px solid #e6eef1;
+  }
+  body.dark .ai-form{
+    border-color:#243648;
+  }
+}
 @media(max-width:900px){
   .academy-hero{
     grid-template-columns:1fr;
@@ -2725,7 +2767,7 @@ body.dark .ai-message.bot.is-missed{
     border:0;
     border-radius:0;
     display:grid;
-    grid-template-rows:auto auto minmax(0,1fr) auto auto auto;
+    grid-template-rows:auto auto minmax(0,1fr) auto auto;
     background:#ffffff;
     box-shadow:none;
     overflow:hidden;
@@ -2735,7 +2777,7 @@ body.dark .ai-message.bot.is-missed{
     display:none;
   }
   .ai-panel.ai-conversation-started{
-    grid-template-rows:auto minmax(0,1fr) auto auto auto;
+    grid-template-rows:auto minmax(0,1fr) auto auto;
   }
   .ai-head{
     min-height:74px;
@@ -2805,9 +2847,14 @@ body.dark .ai-message.bot.is-missed{
     bottom:0;
     grid-template-columns:52px 1fr;
     gap:8px;
-    padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+    padding:10px 12px;
     background:#ffffff;
     border-top:1px solid #edf1f4;
+  }
+  .ai-privacy-note{
+    margin:0;
+    padding:0 16px calc(10px + env(safe-area-inset-bottom));
+    background:#ffffff;
   }
   .ai-suggestions{
     padding:6px 0 2px;
@@ -2873,6 +2920,9 @@ body.dark .ai-message.bot.is-missed{
   body.dark .ai-messages,
   body.dark .ai-form,
   body.dark .ai-actions{
+    background:#050505;
+  }
+  body.dark .ai-privacy-note{
     background:#050505;
   }
   body.dark .ai-head,

@@ -27,6 +27,7 @@ const aiGreetingText = 'مرحبًا، اسألني عن خدمات المنصة
 const aiGreetingSource = 'قاعدة معرفة المنصة';
 let aiKnowledgeItemsCount = aiKnowledgeItemsFallback;
 let aiPageScrollY = 0;
+let aiPageScrollLocked = false;
 let aiReviewHintTimeout = 0;
 let aiRequestPending = false;
 let aiHistoryEntryActive = false;
@@ -139,6 +140,7 @@ function isMobileAssistantView(){
 
 const legacyApiFallbackAnswer = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
 const apiFallbackAnswer = 'لم أجد إجابة موثقة لهذا السؤال داخل ملفات المنصة حاليًا.\nجرّب صياغة أبسط، أو اضغط "طلب إضافة السؤال" ليتم مراجعته وإضافته لاحقًا.';
+const missedQuestionDisplayAnswer = 'لم أجد إجابة موثقة لهذا السؤال داخل ملفات المنصة حاليًا.\nجرّب صياغة أبسط.';
 
 function hideAiReviewHint(){
   window.clearTimeout(aiReviewHintTimeout);
@@ -369,6 +371,7 @@ function saveUnansweredQuestion(question){
 }
 
 function updatePendingCount(){
+  if(!aiPendingCount) return;
   const count = getUnansweredQuestions().length;
   aiPendingCount.textContent = `${count} ${count === 1 ? 'سؤال' : 'أسئلة'} للمراجعة`;
 }
@@ -570,14 +573,14 @@ function addAiMessage(text, type = 'bot', source = '', missed = false, persist =
     sourceEl.textContent = `المصدر: ${source}`;
     message.appendChild(sourceEl);
   }
-  if(type === 'bot' && source) appendAiCopyButton(message, text);
+  if(type === 'bot' && source && text !== aiGreetingText) appendAiCopyButton(message, text);
   aiMessages.appendChild(message);
   aiMessages.scrollTop = aiMessages.scrollHeight;
   if(persist) persistAiConversation();
   return message;
 }
 
-function addMissedQuestionMessage(text = apiFallbackAnswer){
+function addMissedQuestionMessage(text = missedQuestionDisplayAnswer){
   addAiMessage(text, 'bot', 'سجل الأسئلة غير المجابة', true);
 }
 
@@ -641,9 +644,12 @@ function addAiMobileHistoryEntry(){
 function openAiPanel(){
   aiPanel.hidden = false;
   aiToggle.setAttribute('aria-expanded', 'true');
-  aiPageScrollY = window.scrollY || document.documentElement.scrollTop || 0;
-  document.body.style.top = `-${aiPageScrollY}px`;
   document.body.classList.add('ai-panel-open');
+  aiPageScrollLocked = isMobileAssistantView();
+  if(aiPageScrollLocked){
+    aiPageScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.top = `-${aiPageScrollY}px`;
+  }
   setAiPanelSessionState(true);
   addAiMobileHistoryEntry();
   renderAiKnowledgeCount();
@@ -663,7 +669,8 @@ function closeAiPanel(options = {}){
   document.body.classList.remove('ai-panel-open');
   setAiPanelSessionState(false);
   document.body.style.top = '';
-  window.scrollTo(0, aiPageScrollY);
+  if(aiPageScrollLocked) window.scrollTo(0, aiPageScrollY);
+  aiPageScrollLocked = false;
   if(shouldRemoveHistoryEntry){
     aiHistoryEntryActive = false;
     history.back();

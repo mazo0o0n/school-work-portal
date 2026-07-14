@@ -474,17 +474,15 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
     <div class="ai-head">
       <div>
         <h2>مساعد المنصة</h2>
-        <p>يجيب من قاعدة معرفة المنصة فقط.</p>
+        <p>يُجيب من قاعدة معرفة المنصة فقط.</p>
       </div>
       <div class="ai-head-actions">
-        <button class="ai-clear-conversation" id="aiClearConversation" type="button">مسح المحادثة</button>
         <button class="ai-close" id="aiClose" type="button" aria-label="إغلاق المساعد">
           <i class="fa-solid fa-xmark" aria-hidden="true"></i>
         </button>
       </div>
     </div>
     <div class="ai-knowledge-count" id="aiKnowledgeCount">118 سؤال/إجابة متاحة</div>
-    <p class="ai-notice">الإجابات مبنية على ملفات المنصة للمساعدة، ولا تُعد قرارًا رسميًا.</p>
     <div class="ai-messages" id="aiMessages" aria-live="polite">
       <section class="ai-suggestions" id="aiSuggestions" aria-labelledby="aiSuggestionsTitle">
         <h3 id="aiSuggestionsTitle">جرّب أن تسأل:</h3>
@@ -506,13 +504,7 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
       </button>
       <input id="aiQuestion" type="text" dir="rtl" placeholder="اكتب سؤالك هنا..." autocomplete="off" aria-label="سؤال للمساعد">
     </form>
-    <div class="ai-actions">
-      <button type="button" id="aiSendQuestions">طلب إضافة السؤال</button>
-      <span id="aiPendingCount">0 سؤال للمراجعة</span>
-    </div>
-    <p class="ai-review-hint" id="aiReviewHint" role="status" aria-live="polite" hidden>تم تسجيل السؤال للمراجعة عند عدم توفر إجابة.</p>
-    <p class="ai-privacy-note">قد تُحفظ الأسئلة غير المجابة لتحسين المعرفة دون بيانات شخصية.</p>
-    <div class="ai-review-list" id="aiReviewList" hidden></div>
+    <p class="ai-privacy-note">الإجابات مبنية على ملفات المنصة للمساعدة، ولا تُعد قرارًا رسميًا.</p>
   </div>
 </aside>
 
