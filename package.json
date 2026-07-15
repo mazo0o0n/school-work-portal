@@ -1,0 +1,20 @@
+{
+  "name": "school-work-portal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local tooling for linting and testing the school work portal",
+  "scripts": {},
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
+    "broken-link-checker": "^0.7.8",
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
+    "htmlhint": "^1.9.2",
+    "lighthouse": "^13.4.0",
+    "stylelint": "^17.14.0",
+    "stylelint-config-standard": "^40.0.0"
+  }
+}

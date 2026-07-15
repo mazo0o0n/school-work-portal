@@ -1,0 +1,28 @@
+{
+  "ignoreFiles": [
+    "node_modules/**",
+    ".wrangler/**",
+    "tmp/**",
+    "report-automation/**",
+    "knowledge-files/**"
+  ],
+  "rules": {
+    "block-no-empty": true,
+    "color-no-invalid-hex": true,
+    "custom-property-no-missing-var-function": true,
+    "declaration-block-no-duplicate-properties": true,
+    "declaration-block-no-shorthand-property-overrides": true,
+    "font-family-no-duplicate-names": true,
+    "function-calc-no-unspaced-operator": true,
+    "function-linear-gradient-no-nonstandard-direction": true,
+    "keyframe-block-no-duplicate-selectors": true,
+    "no-duplicate-at-import-rules": true,
+    "no-duplicate-selectors": true,
+    "property-no-unknown": true,
+    "selector-pseudo-class-no-unknown": true,
+    "selector-pseudo-element-no-unknown": true,
+    "selector-type-no-unknown": true,
+    "string-no-newline": true,
+    "unit-no-unknown": true
+  }
+}

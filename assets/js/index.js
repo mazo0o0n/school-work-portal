@@ -903,6 +903,237 @@ function setupSectionToggles(){
   });
 }
 
+function setupManagerReportsPreferences(){
+  const storageKey = 'reportSectionPreferences';
+  const modal = document.getElementById('managerReportsModal');
+  const dialog = modal?.querySelector('.manager-reports-dialog');
+  const closeButton = document.getElementById('managerReportsClose');
+  const cancelButton = document.getElementById('managerReportsCancel');
+  const saveButton = document.getElementById('managerReportsSave');
+  const laterButton = document.getElementById('managerReportsLater');
+  const preview = document.getElementById('managerReportsPreview');
+  const toast = document.getElementById('managerReportsToast');
+  const entries = document.querySelectorAll('[data-manager-reports-entry]');
+  if(!modal || !dialog || !closeButton || !cancelButton || !saveButton || !laterButton || !preview || !entries.length) return;
+
+  const optionalFields = [
+    {key:'principalName', label:'مدير المدرسة', defaultEnabled:true},
+    {key:'ministryNumber', label:'الرقم الوزاري', defaultEnabled:false},
+    {key:'educationalAffairsAgent', label:'وكيل الشؤون التعليمية', defaultEnabled:false},
+    {key:'studentAffairsAgent', label:'وكيل شؤون الطلاب', defaultEnabled:false},
+    {key:'schoolAffairsAgent', label:'وكيل الشؤون المدرسية', defaultEnabled:false},
+    {key:'activityCoordinatorName', label:'رائد النشاط', defaultEnabled:false}
+  ];
+  let destination = '';
+  let returnFocus = null;
+  let toastTimer = 0;
+
+  function readObject(key){
+    try{
+      const value = JSON.parse(localStorage.getItem(key) || '{}');
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    }catch(_){
+      return {};
+    }
+  }
+
+  function cleanMinistryNumber(value){
+    return String(value || '').replace(/[^0-9]/g, '');
+  }
+
+  function getProfile(){
+    return readObject('registeredSchoolProfile');
+  }
+
+  function getManagerSettings(){
+    const preferences = readObject(storageKey);
+    const managerReports = preferences.managerReports;
+    return managerReports && typeof managerReports === 'object' && !Array.isArray(managerReports)
+      ? managerReports
+      : {};
+  }
+
+  function getToggle(key){
+    return modal.querySelector(`[data-manager-field-toggle="${key}"]`);
+  }
+
+  function getValueInput(key){
+    return modal.querySelector(`[data-manager-field-value="${key}"]`);
+  }
+
+  function displayValue(value){
+    const cleaned = String(value || '').trim();
+    return cleaned || 'غير محدد';
+  }
+
+  function renderRequired(profile){
+    const department = document.getElementById('managerRequiredDepartment');
+    const stage = document.getElementById('managerRequiredStage');
+    const school = document.getElementById('managerRequiredSchool');
+    if(department) department.textContent = displayValue(profile.educationDepartment);
+    if(stage) stage.textContent = displayValue(profile.stage);
+    if(school) school.textContent = displayValue(profile.schoolName);
+  }
+
+  function renderPreview(){
+    const profile = getProfile();
+    const schoolDisplay = [profile.stage, profile.schoolName]
+      .map(value=>String(value || '').trim())
+      .filter(Boolean)
+      .join(' ');
+    const lines = [
+      ['إدارة التعليم', displayValue(profile.educationDepartment)],
+      ['المدرسة', displayValue(schoolDisplay)]
+    ];
+
+    optionalFields.forEach(field=>{
+      const toggle = getToggle(field.key);
+      const input = getValueInput(field.key);
+      if(toggle?.checked){
+        lines.push([field.label, displayValue(input?.value)]);
+      }
+    });
+
+    preview.replaceChildren();
+    lines.forEach(([label, value])=>{
+      const line = document.createElement('p');
+      const name = document.createElement('strong');
+      name.textContent = `${label}: `;
+      line.append(name, document.createTextNode(value));
+      preview.appendChild(line);
+    });
+  }
+
+  function populateModal(){
+    const profile = getProfile();
+    const settings = getManagerSettings();
+    const enabledFields = settings.enabledFields && typeof settings.enabledFields === 'object'
+      ? settings.enabledFields
+      : {};
+    const savedValues = settings.values && typeof settings.values === 'object'
+      ? settings.values
+      : {};
+
+    renderRequired(profile);
+    optionalFields.forEach(field=>{
+      const toggle = getToggle(field.key);
+      const input = getValueInput(field.key);
+      if(!toggle || !input) return;
+      toggle.checked = Object.prototype.hasOwnProperty.call(enabledFields, field.key)
+        ? enabledFields[field.key] === true
+        : field.defaultEnabled;
+      const initialValue = Object.prototype.hasOwnProperty.call(savedValues, field.key)
+        ? savedValues[field.key]
+        : profile[field.key];
+      input.value = field.key === 'ministryNumber'
+        ? cleanMinistryNumber(initialValue)
+        : String(initialValue || '');
+    });
+    renderPreview();
+  }
+
+  function openModal(entry){
+    destination = entry.getAttribute('href') || '';
+    returnFocus = entry;
+    populateModal();
+    modal.hidden = false;
+    document.body.classList.add('manager-reports-modal-open');
+    closeButton.focus();
+  }
+
+  function closeModal(){
+    if(modal.hidden) return;
+    modal.hidden = true;
+    document.body.classList.remove('manager-reports-modal-open');
+    if(returnFocus && document.contains(returnFocus)) returnFocus.focus();
+  }
+
+  function continueToDestination(){
+    if(!destination) return;
+    const link = document.createElement('a');
+    link.href = destination;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  function showSavedToast(){
+    if(!toast) return;
+    window.clearTimeout(toastTimer);
+    toast.hidden = false;
+    toastTimer = window.setTimeout(()=>{
+      toast.hidden = true;
+    }, 2400);
+  }
+
+  entries.forEach(entry=>{
+    entry.addEventListener('click', event=>{
+      event.preventDefault();
+      openModal(entry);
+    });
+  });
+
+  modal.querySelectorAll('[data-manager-field-toggle]').forEach(toggle=>{
+    toggle.addEventListener('change', renderPreview);
+  });
+  modal.querySelectorAll('[data-manager-field-value]').forEach(input=>{
+    input.addEventListener('input', ()=>{
+      if(input.dataset.managerFieldValue === 'ministryNumber'){
+        input.value = cleanMinistryNumber(input.value);
+      }
+      renderPreview();
+    });
+  });
+
+  closeButton.addEventListener('click', closeModal);
+  cancelButton.addEventListener('click', closeModal);
+  laterButton.addEventListener('click', ()=>{
+    closeModal();
+    continueToDestination();
+  });
+  saveButton.addEventListener('click', ()=>{
+    const preferences = readObject(storageKey);
+    const enabledFields = {};
+    const values = {};
+    optionalFields.forEach(field=>{
+      enabledFields[field.key] = getToggle(field.key)?.checked === true;
+      const rawValue = getValueInput(field.key)?.value || '';
+      values[field.key] = field.key === 'ministryNumber'
+        ? cleanMinistryNumber(rawValue)
+        : rawValue.trim();
+    });
+    preferences.managerReports = {enabledFields, values};
+    localStorage.setItem(storageKey, JSON.stringify(preferences));
+    showSavedToast();
+    closeModal();
+    continueToDestination();
+  });
+
+  modal.addEventListener('click', event=>{
+    if(event.target === modal) closeModal();
+  });
+  modal.addEventListener('keydown', event=>{
+    if(event.key !== 'Tab') return;
+    const focusable = Array.from(dialog.querySelectorAll('button:not([disabled]), input:not([disabled]), [href]'))
+      .filter(element=>!element.hidden);
+    if(!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if(event.shiftKey && document.activeElement === first){
+      event.preventDefault();
+      last.focus();
+    }else if(!event.shiftKey && document.activeElement === last){
+      event.preventDefault();
+      first.focus();
+    }
+  });
+  document.addEventListener('keydown', event=>{
+    if(event.key === 'Escape' && !modal.hidden) closeModal();
+  });
+}
+
 if(localStorage.getItem('preferredTheme') === 'dark'){
   document.body.classList.add('dark');
 }
@@ -913,6 +1144,7 @@ mirrorAcademyDocs();
 rebuildIndex();
 updateAcademyPlatformCount();
 renderAcademySupportCards();
+setupManagerReportsPreferences();
 renderPlatformNewBadge();
 setupSearchUI();
 setupPlatformFX();

@@ -34,3 +34,11 @@ knowledge-files/extracted/
 .wrangler/
 
 report-automation/
+
+# QA generated outputs
+reports/
+test-results/
+report-automation/
+*.backup
+*-report.txt
+semgrep-report.json
