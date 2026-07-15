@@ -916,11 +916,48 @@ function reportText(value){
   return value === null || value === undefined ? '' : String(value).trim();
 }
 
+function getEducationDepartmentMergeFields(value){
+  const educationDepartment = reportText(value).replace(/\s+/g, ' ');
+  if(!educationDepartment){
+    return {
+      educationDepartmentPrefix:'',
+      educationDepartmentName:''
+    };
+  }
+
+  const structuredMatch = educationDepartment.match(
+    /^(?:الإدارة العامة للتعليم|إدارة التعليم)\s*(بمنطقة|بمحافظة|بالمنطقة)\s+(.+)$/
+  );
+  if(structuredMatch){
+    return {
+      educationDepartmentPrefix:`الإدارة العامة للتعليم ${structuredMatch[1]}`,
+      educationDepartmentName:reportText(structuredMatch[2])
+    };
+  }
+
+  const generalMatch = educationDepartment.match(
+    /^(?:الإدارة العامة للتعليم|إدارة التعليم)\s+(.+)$/
+  );
+  if(generalMatch){
+    return {
+      educationDepartmentPrefix:'الإدارة العامة للتعليم',
+      educationDepartmentName:reportText(generalMatch[1])
+    };
+  }
+
+  return {
+    educationDepartmentPrefix:'',
+    educationDepartmentName:educationDepartment
+  };
+}
+
 function getReportMergeData(sectionId){
   const emptyData = {
     schoolName:'',
     schoolStage:'',
     educationDepartment:'',
+    educationDepartmentPrefix:'',
+    educationDepartmentName:'',
     ministryNumber:'',
     principalName:'',
     educationalAffairsAgent:'',
@@ -953,10 +990,14 @@ function getReportMergeData(sectionId){
     return reportText(value);
   }
 
+  const educationDepartment = reportText(profile.educationDepartment);
+  const educationDepartmentFields = getEducationDepartmentMergeFields(educationDepartment);
+
   return {
     schoolName:reportText(profile.schoolName),
     schoolStage:reportText(profile.schoolStage || profile.stage),
-    educationDepartment:reportText(profile.educationDepartment),
+    educationDepartment,
+    ...educationDepartmentFields,
     ministryNumber:reportText(profile.ministryNumber).replace(/[^0-9]/g, ''),
     principalName:optionalValue('principalName'),
     educationalAffairsAgent:optionalValue('educationalAffairsAgent'),
@@ -978,8 +1019,14 @@ function setupManagerReportsPreferences(){
   const laterButton = document.getElementById('managerReportsLater');
   const preview = document.getElementById('managerReportsPreview');
   const toast = document.getElementById('managerReportsToast');
+  const title = document.getElementById('managerReportsTitle');
+  const description = document.getElementById('managerReportsDescription');
+  const settingsView = document.getElementById('managerReportsSettingsView');
+  const libraryView = document.getElementById('managerReportLibrary');
+  const actions = document.getElementById('managerReportsActions');
+  const editDataButton = document.getElementById('managerReportsEditData');
   const entries = document.querySelectorAll('[data-manager-reports-entry]');
-  if(!modal || !dialog || !closeButton || !cancelButton || !saveButton || !laterButton || !preview || !entries.length) return;
+  if(!modal || !dialog || !closeButton || !cancelButton || !saveButton || !laterButton || !preview || !title || !description || !settingsView || !libraryView || !actions || !editDataButton || !entries.length) return;
 
   const optionalFields = [
     {key:'principalName', label:'مدير المدرسة', defaultEnabled:false},
@@ -988,9 +1035,13 @@ function setupManagerReportsPreferences(){
     {key:'schoolAffairsAgent', label:'وكيل الشؤون المدرسية', defaultEnabled:false},
     {key:'activityLeaderName', aliases:['activityCoordinatorName'], label:'رائد النشاط', defaultEnabled:false}
   ];
-  let destination = '';
   let returnFocus = null;
   let toastTimer = 0;
+
+  const settingsTitle = 'إعداد بيانات تقارير المدير';
+  const settingsDescription = 'يمكنك تعبئة البيانات التي تريد ظهورها في تقارير هذا القسم، وترك أي حقل فارغًا إذا لا ترغب في استخدامه.';
+  const libraryTitle = 'مكتبة تقارير المدير';
+  const libraryDescription = 'اختر التقرير المطلوب، وسيتم تنزيل نسخة Word معبأة ببيانات المدرسة والبيانات التي اخترتها لهذا القسم.';
 
   function getProfile(){
     return readLocalStorageObject('registeredSchoolProfile');
@@ -1096,10 +1147,36 @@ function setupManagerReportsPreferences(){
     renderPreview();
   }
 
+  function showSettingsView(focusFirstField = false){
+    title.textContent = settingsTitle;
+    description.textContent = settingsDescription;
+    settingsView.hidden = false;
+    libraryView.hidden = true;
+    actions.hidden = false;
+    closeButton.setAttribute('aria-label', 'إغلاق إعدادات تقارير المدير');
+    if(focusFirstField){
+      const firstInput = settingsView.querySelector('input');
+      firstInput?.focus();
+    }
+  }
+
+  function showLibraryView(){
+    title.textContent = libraryTitle;
+    description.textContent = libraryDescription;
+    settingsView.hidden = true;
+    libraryView.hidden = false;
+    actions.hidden = true;
+    closeButton.setAttribute('aria-label', 'إغلاق مكتبة تقارير المدير');
+    if(typeof window.renderManagerReportLibrary === 'function'){
+      window.renderManagerReportLibrary();
+    }
+    document.getElementById('managerReportSearch')?.focus({preventScroll:true});
+  }
+
   function openModal(entry){
-    destination = entry.getAttribute('href') || '';
     returnFocus = entry;
     populateModal();
+    showSettingsView();
     modal.hidden = false;
     document.body.classList.add('manager-reports-modal-open');
     closeButton.focus();
@@ -1110,17 +1187,6 @@ function setupManagerReportsPreferences(){
     modal.hidden = true;
     document.body.classList.remove('manager-reports-modal-open');
     if(returnFocus && document.contains(returnFocus)) returnFocus.focus();
-  }
-
-  function continueToDestination(){
-    if(!destination) return;
-    const link = document.createElement('a');
-    link.href = destination;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
   }
 
   function showSavedToast(message = 'تم حفظ إعدادات تقارير المدير'){
@@ -1153,10 +1219,8 @@ function setupManagerReportsPreferences(){
 
   closeButton.addEventListener('click', closeModal);
   cancelButton.addEventListener('click', closeModal);
-  laterButton.addEventListener('click', ()=>{
-    closeModal();
-    continueToDestination();
-  });
+  laterButton.addEventListener('click', showLibraryView);
+  editDataButton.addEventListener('click', ()=>showSettingsView(true));
 
   function collectManagerSettings(){
     const enabledFields = {};
@@ -1179,8 +1243,7 @@ function setupManagerReportsPreferences(){
   saveButton.addEventListener('click', ()=>{
     persistManagerSettings();
     showSavedToast();
-    closeModal();
-    continueToDestination();
+    showLibraryView();
   });
 
   modal.addEventListener('click', event=>{
@@ -1189,7 +1252,7 @@ function setupManagerReportsPreferences(){
   modal.addEventListener('keydown', event=>{
     if(event.key !== 'Tab') return;
     const focusable = Array.from(dialog.querySelectorAll('button:not([disabled]), input:not([disabled]), [href]'))
-      .filter(element=>!element.hidden);
+      .filter(element=>!element.hidden && !element.closest('[hidden]'));
     if(!focusable.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];

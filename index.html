@@ -200,7 +200,7 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
   <section class="academy-section" id="academy-news">
     <div class="academy-section-head"><h2>ركن الدعم المدرسي</h2><div class="academy-nav-buttons" role="group" aria-label="التنقل في ركن الدعم المدرسي"><button class="academy-nav-btn" type="button" aria-label="السابق"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><button class="academy-nav-btn" type="button" aria-label="التالي"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div></div>
     <div class="academy-card-grid">
-      <a class="academy-tile" href="https://drive.google.com/drive/folders/138uI03lwMyz0U1Lrxa5fVYl56_hcep3F?usp=sharing" target="_blank" rel="noopener" data-manager-reports-entry aria-haspopup="dialog"><span class="academy-tile-media"><i class="fa-solid fa-file-lines" style="font-size:58px;color:var(--support-purple)"></i></span><h3>ملفات وسجلات المدير</h3><p>ملفات تشغيلية حساسة بوصول محدود.</p><span class="academy-chip">محدث</span></a>
+      <a class="academy-tile" href="#manager-report-library" data-manager-reports-entry aria-haspopup="dialog"><span class="academy-tile-media"><i class="fa-solid fa-file-lines" style="font-size:58px;color:var(--support-purple)"></i></span><h3>ملفات وسجلات المدير</h3><p>مكتبة تقارير Word معبأة ببيانات المدرسة.</p><span class="academy-chip">تجريبي</span></a>
       <a class="academy-tile" href="https://drive.google.com/drive/folders/1fCM6lNV_i4l_LuCHl5BX0Vy2-H3lWx2E?usp=sharing" target="_blank" rel="noopener"><span class="academy-tile-media"><i class="fa-solid fa-folder-tree" style="font-size:58px;color:var(--brand-teal)"></i></span><h3>سجلات المدرسة</h3><p>مجلدات تتبع وتشغيل للإدارة المدرسية.</p><span class="academy-chip">محدث</span></a>
       <a class="academy-tile" href="https://moe.gov.sa/ar/mediacenter/events/Pages/default.aspx" target="_blank" rel="noopener"><span class="academy-tile-media"><i class="fa-solid fa-calendar-days" style="font-size:58px;color:var(--brand-gold)"></i></span><h3>مناسبات وفعاليات</h3><p>روزنامة الفعاليات والتنبيهات المدرسية.</p><span class="academy-chip">مباشر</span></a>
       <a class="academy-tile" href="#academy-docs"><span class="academy-tile-media"><i class="fa-solid fa-chart-line" style="font-size:58px;color:var(--brand-blue)"></i></span><h3>تحليل النتائج</h3><p>قراءة مؤشرات التحصيل والمتابعة.</p><span class="academy-chip">قريبًا</span></a>
@@ -223,6 +223,7 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
     </header>
 
     <div class="manager-reports-body">
+      <div class="manager-reports-settings-view" id="managerReportsSettingsView">
       <section class="manager-reports-section" aria-labelledby="managerRequiredTitle">
         <h3 id="managerRequiredTitle">بيانات المدرسة المحفوظة</h3>
         <div class="manager-required-grid">
@@ -277,9 +278,38 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
         <p class="manager-reports-preview-note">ستُستخدم البيانات التي أدخلتها في تقارير هذا القسم عند توفر الحقول داخل قالب التقرير.</p>
         <div id="managerReportsPreview" aria-live="polite"></div>
       </section>
+
+      </div>
+
+      <section class="manager-report-library" id="managerReportLibrary" aria-label="مكتبة تقارير المدير" hidden>
+        <div class="manager-report-library-tools">
+          <label class="manager-report-search" for="managerReportSearch">
+            <span>البحث في التقارير</span>
+            <span class="manager-report-search-field">
+              <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+              <input id="managerReportSearch" type="search" placeholder="ابحث عن تقرير..." autocomplete="off">
+            </span>
+          </label>
+          <button class="manager-report-edit-data" id="managerReportsEditData" type="button">
+            <i class="fa-solid fa-pen" aria-hidden="true"></i>
+            تعديل بيانات التقارير
+          </button>
+        </div>
+
+        <div class="manager-report-filters" role="group" aria-label="تصفية تقارير المدير حسب التصنيف">
+          <button type="button" data-report-category="الكل" aria-pressed="true">الكل</button>
+          <button type="button" data-report-category="الاجتماعات" aria-pressed="false">الاجتماعات</button>
+          <button type="button" data-report-category="السجلات" aria-pressed="false">السجلات</button>
+          <button type="button" data-report-category="الخطط" aria-pressed="false">الخطط</button>
+          <button type="button" data-report-category="النماذج" aria-pressed="false">النماذج</button>
+        </div>
+
+        <div class="manager-report-grid" id="managerReportGrid"></div>
+        <p class="manager-report-empty" id="managerReportEmpty" role="status" hidden>لا توجد تقارير مطابقة لبحثك.</p>
+      </section>
     </div>
 
-    <footer class="manager-reports-actions">
+    <footer class="manager-reports-actions" id="managerReportsActions">
       <button class="manager-reports-save" id="managerReportsSave" type="button">حفظ الإعدادات والمتابعة</button>
       <button class="manager-reports-cancel" id="managerReportsCancel" type="button">إلغاء</button>
       <button class="manager-reports-later" id="managerReportsLater" type="button">تعديل الإعدادات لاحقًا</button>
@@ -596,7 +626,10 @@ document.addEventListener('click', function(event){
   if(disabledLink) event.preventDefault();
 });
 </script>
+<script src="assets/vendor/docxtemplater-3.69.0.js"></script>
+<script src="assets/vendor/pizzip-3.2.0.min.js"></script>
 <script src="assets/js/index.js"></script>
+<script src="assets/js/report-word-generator.js"></script>
 <script src="assets/js/ai-assistant.js?v=20260712-6"></script>
 
 <script src="assets/js/visitor-counter.js?v=20260712-1"></script>
