@@ -3,11 +3,6 @@ const stageSelect = document.getElementById('schoolStage');
 const preview = document.getElementById('schoolPreview');
 const nameError = document.getElementById('schoolNameError');
 const educationDepartmentInput = document.getElementById('educationDepartment');
-const ministryNumberInput = document.getElementById('ministryNumber');
-const principalNameInput = document.getElementById('principalName');
-const educationalAffairsAgentInput = document.getElementById('educationalAffairsAgent');
-const studentAffairsAgentInput = document.getElementById('studentAffairsAgent');
-const schoolAffairsAgentInput = document.getElementById('schoolAffairsAgent');
 const englishLettersPattern = /[A-Za-z]/;
 const schoolProfileStorageKey = 'registeredSchoolProfile';
 
@@ -28,10 +23,6 @@ function setNameError(message = ''){
 
 function removeEnglishLetters(value){
   return value.replace(/[A-Za-z]/g, '');
-}
-
-function keepAsciiDigits(value){
-  return String(value || '').replace(/[^0-9]/g, '');
 }
 
 function getStoredSchoolProfile(){
@@ -56,13 +47,8 @@ function validateArabicSchoolName(){
 
 const storedSchoolProfile = getStoredSchoolProfile();
 nameInput.value = removeEnglishLetters(localStorage.getItem('registeredSchoolBaseName') || storedSchoolProfile.schoolName || '');
-stageSelect.value = localStorage.getItem('registeredSchoolStage') || storedSchoolProfile.stage || '';
+stageSelect.value = localStorage.getItem('registeredSchoolStage') || storedSchoolProfile.schoolStage || storedSchoolProfile.stage || '';
 educationDepartmentInput.value = String(storedSchoolProfile.educationDepartment || '');
-ministryNumberInput.value = keepAsciiDigits(storedSchoolProfile.ministryNumber);
-principalNameInput.value = String(storedSchoolProfile.principalName || '');
-educationalAffairsAgentInput.value = String(storedSchoolProfile.educationalAffairsAgent || '');
-studentAffairsAgentInput.value = String(storedSchoolProfile.studentAffairsAgent || '');
-schoolAffairsAgentInput.value = String(storedSchoolProfile.schoolAffairsAgent || '');
 updatePreview();
 
 nameInput.addEventListener('beforeinput', (event) => {
@@ -83,16 +69,6 @@ nameInput.addEventListener('paste', () => {
 
 stageSelect.addEventListener('change', updatePreview);
 
-ministryNumberInput.addEventListener('input', () => {
-  ministryNumberInput.value = keepAsciiDigits(ministryNumberInput.value);
-});
-
-ministryNumberInput.addEventListener('paste', () => {
-  requestAnimationFrame(() => {
-    ministryNumberInput.value = keepAsciiDigits(ministryNumberInput.value);
-  });
-});
-
 document.getElementById('guestEntry').addEventListener('click', () => {
   localStorage.removeItem('registeredSchoolBaseName');
   localStorage.removeItem('registeredSchoolStage');
@@ -106,6 +82,7 @@ document.getElementById('schoolRegisterForm').addEventListener('submit', event =
   event.preventDefault();
   const name = nameInput.value.trim();
   const stage = stageSelect.value.trim();
+  const educationDepartment = educationDepartmentInput.value.trim();
   const displayName = getDisplayName();
   if(!name){
     nameInput.focus();
@@ -119,19 +96,19 @@ document.getElementById('schoolRegisterForm').addEventListener('submit', event =
     stageSelect.focus();
     return;
   }
+  if(!educationDepartment){
+    educationDepartmentInput.focus();
+    return;
+  }
   localStorage.removeItem('schoolGuestMode');
   localStorage.setItem('registeredSchoolBaseName', name);
   localStorage.setItem('registeredSchoolStage', stage);
   localStorage.setItem('registeredSchoolName', displayName);
   localStorage.setItem(schoolProfileStorageKey, JSON.stringify({
     schoolName: name,
+    schoolStage: stage,
     stage,
-    principalName: principalNameInput.value.trim(),
-    educationalAffairsAgent: educationalAffairsAgentInput.value.trim(),
-    studentAffairsAgent: studentAffairsAgentInput.value.trim(),
-    schoolAffairsAgent: schoolAffairsAgentInput.value.trim(),
-    educationDepartment: educationDepartmentInput.value.trim(),
-    ministryNumber: keepAsciiDigits(ministryNumberInput.value)
+    educationDepartment
   }));
   window.location.href = 'index.html';
 });

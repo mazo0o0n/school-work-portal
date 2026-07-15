@@ -903,6 +903,71 @@ function setupSectionToggles(){
   });
 }
 
+function readLocalStorageObject(key){
+  try{
+    const value = JSON.parse(localStorage.getItem(key) || '{}');
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  }catch(_){
+    return {};
+  }
+}
+
+function reportText(value){
+  return value === null || value === undefined ? '' : String(value).trim();
+}
+
+function getReportMergeData(sectionId){
+  const emptyData = {
+    schoolName:'',
+    schoolStage:'',
+    educationDepartment:'',
+    ministryNumber:'',
+    principalName:'',
+    educationalAffairsAgent:'',
+    studentAffairsAgent:'',
+    schoolAffairsAgent:'',
+    activityLeaderName:''
+  };
+  if(sectionId !== 'managerReports') return emptyData;
+
+  const profile = readLocalStorageObject('registeredSchoolProfile');
+  const preferences = readLocalStorageObject('reportSectionPreferences');
+  const managerReports = preferences.managerReports && typeof preferences.managerReports === 'object'
+    ? preferences.managerReports
+    : {};
+  const enabledFields = managerReports.enabledFields && typeof managerReports.enabledFields === 'object'
+    ? managerReports.enabledFields
+    : {};
+  const values = managerReports.values && typeof managerReports.values === 'object'
+    ? managerReports.values
+    : {};
+
+  function optionalValue(key, legacyKey = ''){
+    const enabled = enabledFields[key] === true || (legacyKey && enabledFields[legacyKey] === true);
+    if(!enabled) return '';
+    const value = Object.prototype.hasOwnProperty.call(values, key)
+      ? values[key]
+      : legacyKey && Object.prototype.hasOwnProperty.call(values, legacyKey)
+        ? values[legacyKey]
+        : profile[key] ?? (legacyKey ? profile[legacyKey] : '');
+    return reportText(value);
+  }
+
+  return {
+    schoolName:reportText(profile.schoolName),
+    schoolStage:reportText(profile.schoolStage || profile.stage),
+    educationDepartment:reportText(profile.educationDepartment),
+    ministryNumber:reportText(profile.ministryNumber).replace(/[^0-9]/g, ''),
+    principalName:optionalValue('principalName'),
+    educationalAffairsAgent:optionalValue('educationalAffairsAgent'),
+    studentAffairsAgent:optionalValue('studentAffairsAgent'),
+    schoolAffairsAgent:optionalValue('schoolAffairsAgent'),
+    activityLeaderName:optionalValue('activityLeaderName', 'activityCoordinatorName')
+  };
+}
+
+window.getReportMergeData = getReportMergeData;
+
 function setupManagerReportsPreferences(){
   const storageKey = 'reportSectionPreferences';
   const modal = document.getElementById('managerReportsModal');
@@ -917,36 +982,26 @@ function setupManagerReportsPreferences(){
   if(!modal || !dialog || !closeButton || !cancelButton || !saveButton || !laterButton || !preview || !entries.length) return;
 
   const optionalFields = [
-    {key:'principalName', label:'مدير المدرسة', defaultEnabled:true},
-    {key:'ministryNumber', label:'الرقم الوزاري', defaultEnabled:false},
+    {key:'principalName', label:'مدير المدرسة', defaultEnabled:false},
     {key:'educationalAffairsAgent', label:'وكيل الشؤون التعليمية', defaultEnabled:false},
     {key:'studentAffairsAgent', label:'وكيل شؤون الطلاب', defaultEnabled:false},
     {key:'schoolAffairsAgent', label:'وكيل الشؤون المدرسية', defaultEnabled:false},
-    {key:'activityCoordinatorName', label:'رائد النشاط', defaultEnabled:false}
+    {key:'activityLeaderName', aliases:['activityCoordinatorName'], label:'رائد النشاط', defaultEnabled:false}
   ];
   let destination = '';
   let returnFocus = null;
   let toastTimer = 0;
 
-  function readObject(key){
-    try{
-      const value = JSON.parse(localStorage.getItem(key) || '{}');
-      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-    }catch(_){
-      return {};
-    }
-  }
-
-  function cleanMinistryNumber(value){
-    return String(value || '').replace(/[^0-9]/g, '');
-  }
-
   function getProfile(){
-    return readObject('registeredSchoolProfile');
+    return readLocalStorageObject('registeredSchoolProfile');
+  }
+
+  function getSchoolStage(profile){
+    return String(profile.schoolStage || profile.stage || '').trim();
   }
 
   function getManagerSettings(){
-    const preferences = readObject(storageKey);
+    const preferences = readLocalStorageObject(storageKey);
     const managerReports = preferences.managerReports;
     return managerReports && typeof managerReports === 'object' && !Array.isArray(managerReports)
       ? managerReports
@@ -966,18 +1021,28 @@ function setupManagerReportsPreferences(){
     return cleaned || 'غير محدد';
   }
 
+  function firstStoredValue(source, field){
+    const keys = [field.key, ...(field.aliases || [])];
+    for(const key of keys){
+      if(Object.prototype.hasOwnProperty.call(source, key)) return source[key];
+    }
+    return undefined;
+  }
+
   function renderRequired(profile){
     const department = document.getElementById('managerRequiredDepartment');
     const stage = document.getElementById('managerRequiredStage');
     const school = document.getElementById('managerRequiredSchool');
+    const ministry = document.getElementById('managerRequiredMinistry');
     if(department) department.textContent = displayValue(profile.educationDepartment);
-    if(stage) stage.textContent = displayValue(profile.stage);
+    if(stage) stage.textContent = displayValue(getSchoolStage(profile));
     if(school) school.textContent = displayValue(profile.schoolName);
+    if(ministry) ministry.textContent = displayValue(reportText(profile.ministryNumber).replace(/[^0-9]/g, ''));
   }
 
   function renderPreview(){
     const profile = getProfile();
-    const schoolDisplay = [profile.stage, profile.schoolName]
+    const schoolDisplay = [getSchoolStage(profile), profile.schoolName]
       .map(value=>String(value || '').trim())
       .filter(Boolean)
       .join(' ');
@@ -1019,15 +1084,14 @@ function setupManagerReportsPreferences(){
       const toggle = getToggle(field.key);
       const input = getValueInput(field.key);
       if(!toggle || !input) return;
-      toggle.checked = Object.prototype.hasOwnProperty.call(enabledFields, field.key)
-        ? enabledFields[field.key] === true
+      const savedEnabled = firstStoredValue(enabledFields, field);
+      toggle.checked = savedEnabled !== undefined
+        ? savedEnabled === true
         : field.defaultEnabled;
-      const initialValue = Object.prototype.hasOwnProperty.call(savedValues, field.key)
-        ? savedValues[field.key]
-        : profile[field.key];
-      input.value = field.key === 'ministryNumber'
-        ? cleanMinistryNumber(initialValue)
-        : String(initialValue || '');
+      const savedValue = firstStoredValue(savedValues, field);
+      const profileValue = firstStoredValue(profile, field);
+      const initialValue = savedValue !== undefined ? savedValue : profileValue;
+      input.value = String(initialValue || '');
     });
     renderPreview();
   }
@@ -1059,9 +1123,10 @@ function setupManagerReportsPreferences(){
     link.remove();
   }
 
-  function showSavedToast(){
+  function showSavedToast(message = 'تم حفظ إعدادات تقارير المدير'){
     if(!toast) return;
     window.clearTimeout(toastTimer);
+    toast.textContent = message;
     toast.hidden = false;
     toastTimer = window.setTimeout(()=>{
       toast.hidden = true;
@@ -1080,9 +1145,8 @@ function setupManagerReportsPreferences(){
   });
   modal.querySelectorAll('[data-manager-field-value]').forEach(input=>{
     input.addEventListener('input', ()=>{
-      if(input.dataset.managerFieldValue === 'ministryNumber'){
-        input.value = cleanMinistryNumber(input.value);
-      }
+      const toggle = getToggle(input.dataset.managerFieldValue || '');
+      if(toggle && input.value.trim()) toggle.checked = true;
       renderPreview();
     });
   });
@@ -1093,19 +1157,27 @@ function setupManagerReportsPreferences(){
     closeModal();
     continueToDestination();
   });
-  saveButton.addEventListener('click', ()=>{
-    const preferences = readObject(storageKey);
+
+  function collectManagerSettings(){
     const enabledFields = {};
     const values = {};
     optionalFields.forEach(field=>{
       enabledFields[field.key] = getToggle(field.key)?.checked === true;
       const rawValue = getValueInput(field.key)?.value || '';
-      values[field.key] = field.key === 'ministryNumber'
-        ? cleanMinistryNumber(rawValue)
-        : rawValue.trim();
+      values[field.key] = rawValue.trim();
     });
-    preferences.managerReports = {enabledFields, values};
+    return {enabledFields, values};
+  }
+
+  function persistManagerSettings(){
+    const preferences = readLocalStorageObject(storageKey);
+    preferences.managerReports = collectManagerSettings();
     localStorage.setItem(storageKey, JSON.stringify(preferences));
+    return preferences;
+  }
+
+  saveButton.addEventListener('click', ()=>{
+    persistManagerSettings();
     showSavedToast();
     closeModal();
     continueToDestination();

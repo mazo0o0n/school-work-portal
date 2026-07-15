@@ -215,7 +215,7 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
     <header class="manager-reports-head">
       <div>
         <h2 id="managerReportsTitle">إعداد بيانات تقارير المدير</h2>
-        <p id="managerReportsDescription">البيانات الأساسية تظهر دائمًا، ويمكنك اختيار البيانات الإضافية التي ستظهر في تقارير هذا القسم.</p>
+        <p id="managerReportsDescription">يمكنك تعبئة البيانات التي تريد ظهورها في تقارير هذا القسم، وترك أي حقل فارغًا إذا لا ترغب في استخدامه.</p>
       </div>
       <button class="manager-reports-close" id="managerReportsClose" type="button" aria-label="إغلاق إعدادات تقارير المدير">
         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -224,19 +224,19 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
 
     <div class="manager-reports-body">
       <section class="manager-reports-section" aria-labelledby="managerRequiredTitle">
-        <h3 id="managerRequiredTitle">بيانات أساسية تظهر دائمًا</h3>
+        <h3 id="managerRequiredTitle">بيانات المدرسة المحفوظة</h3>
         <div class="manager-required-grid">
           <div class="manager-required-item">
             <span><strong>إدارة التعليم</strong><span id="managerRequiredDepartment">غير محدد</span></span>
-            <span class="manager-required-badge">✓ إلزامي</span>
           </div>
           <div class="manager-required-item">
             <span><strong>المرحلة</strong><span id="managerRequiredStage">غير محدد</span></span>
-            <span class="manager-required-badge">✓ إلزامي</span>
           </div>
           <div class="manager-required-item">
             <span><strong>اسم المدرسة</strong><span id="managerRequiredSchool">غير محدد</span></span>
-            <span class="manager-required-badge">✓ إلزامي</span>
+          </div>
+          <div class="manager-required-item">
+            <span><strong>الرقم الوزاري</strong><span id="managerRequiredMinistry">غير محدد</span></span>
           </div>
         </div>
       </section>
@@ -248,11 +248,6 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
             <div class="manager-option-choice"><input id="managerTogglePrincipal" type="checkbox" data-manager-field-toggle="principalName"><label for="managerTogglePrincipal">اسم مدير المدرسة</label></div>
             <label class="manager-value-label" for="managerValuePrincipal">القيمة</label>
             <input id="managerValuePrincipal" type="text" data-manager-field-value="principalName" placeholder="اسم مدير المدرسة" autocomplete="name">
-          </div>
-          <div class="manager-option" data-manager-option="ministryNumber">
-            <div class="manager-option-choice"><input id="managerToggleMinistry" type="checkbox" data-manager-field-toggle="ministryNumber"><label for="managerToggleMinistry">الرقم الوزاري للمدرسة</label></div>
-            <label class="manager-value-label" for="managerValueMinistry">القيمة</label>
-            <input id="managerValueMinistry" type="text" inputmode="numeric" pattern="[0-9]*" data-manager-field-value="ministryNumber" placeholder="الرقم الوزاري" autocomplete="off">
           </div>
           <div class="manager-option" data-manager-option="educationalAffairsAgent">
             <div class="manager-option-choice"><input id="managerToggleEducational" type="checkbox" data-manager-field-toggle="educationalAffairsAgent"><label for="managerToggleEducational">اسم وكيل الشؤون التعليمية</label></div>
@@ -269,16 +264,17 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
             <label class="manager-value-label" for="managerValueSchool">القيمة</label>
             <input id="managerValueSchool" type="text" data-manager-field-value="schoolAffairsAgent" placeholder="اسم وكيل الشؤون المدرسية" autocomplete="name">
           </div>
-          <div class="manager-option" data-manager-option="activityCoordinatorName">
-            <div class="manager-option-choice"><input id="managerToggleActivity" type="checkbox" data-manager-field-toggle="activityCoordinatorName"><label for="managerToggleActivity">اسم رائد النشاط</label></div>
+          <div class="manager-option" data-manager-option="activityLeaderName">
+            <div class="manager-option-choice"><input id="managerToggleActivity" type="checkbox" data-manager-field-toggle="activityLeaderName"><label for="managerToggleActivity">اسم رائد النشاط</label></div>
             <label class="manager-value-label" for="managerValueActivity">القيمة</label>
-            <input id="managerValueActivity" type="text" data-manager-field-value="activityCoordinatorName" placeholder="اسم رائد النشاط" autocomplete="name">
+            <input id="managerValueActivity" type="text" data-manager-field-value="activityLeaderName" placeholder="اسم رائد النشاط" autocomplete="name">
           </div>
         </div>
       </section>
 
       <section class="manager-reports-preview" aria-labelledby="managerPreviewTitle">
-        <h3 id="managerPreviewTitle">ستظهر في تقارير هذا القسم</h3>
+        <h3 id="managerPreviewTitle">معاينة البيانات</h3>
+        <p class="manager-reports-preview-note">ستُستخدم البيانات التي أدخلتها في تقارير هذا القسم عند توفر الحقول داخل قالب التقرير.</p>
         <div id="managerReportsPreview" aria-live="polite"></div>
       </section>
     </div>

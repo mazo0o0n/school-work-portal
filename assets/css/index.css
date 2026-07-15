@@ -365,7 +365,7 @@ button{font-family:inherit;cursor:pointer}
   min-width:0;
   display:flex;
   align-items:flex-start;
-  justify-content:space-between;
+  justify-content:flex-start;
   gap:10px;
   padding:14px;
   border:1px solid #cfe5de;
@@ -386,16 +386,6 @@ button{font-family:inherit;cursor:pointer}
   color:#4d625e;
   font-size:12px;
   line-height:1.6;
-}
-.manager-required-badge{
-  flex:0 0 auto;
-  padding:4px 8px;
-  border-radius:999px;
-  background:#d9f3e9;
-  color:#0f765f;
-  font-size:11px;
-  font-weight:800;
-  white-space:nowrap;
 }
 .manager-options-grid{
   display:grid;
@@ -459,6 +449,11 @@ button{font-family:inherit;cursor:pointer}
   color:#425964;
   line-height:1.7;
   overflow-wrap:anywhere;
+}
+.manager-reports-preview .manager-reports-preview-note{
+  margin:0 0 10px;
+  color:#5d737a;
+  font-size:13px;
 }
 .manager-reports-preview strong{
   color:#173e50;
@@ -549,10 +544,6 @@ body.dark .manager-required-item strong{
 }
 body.dark .manager-required-item strong + span{
   color:#b9d1ca;
-}
-body.dark .manager-required-badge{
-  background:#174b3e;
-  color:#a8efd7;
 }
 body.dark .manager-option{
   border-color:#2b3e49;

@@ -34,27 +34,25 @@
           </div>
           <div class="field">
             <label for="educationDepartment">إدارة التعليم</label>
-            <input id="educationDepartment" name="educationDepartment" type="text" placeholder="مثال: إدارة تعليم الرياض">
-          </div>
-          <div class="field">
-            <label for="ministryNumber">الرقم الوزاري للمدرسة</label>
-            <input id="ministryNumber" name="ministryNumber" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="أدخل الرقم الوزاري" autocomplete="off">
-          </div>
-          <div class="field">
-            <label for="principalName">اسم مدير المدرسة</label>
-            <input id="principalName" name="principalName" type="text" placeholder="أدخل اسم مدير المدرسة">
-          </div>
-          <div class="field">
-            <label for="educationalAffairsAgent">اسم وكيل الشؤون التعليمية</label>
-            <input id="educationalAffairsAgent" name="educationalAffairsAgent" type="text" placeholder="أدخل اسم وكيل الشؤون التعليمية">
-          </div>
-          <div class="field">
-            <label for="studentAffairsAgent">اسم وكيل شؤون الطلاب</label>
-            <input id="studentAffairsAgent" name="studentAffairsAgent" type="text" placeholder="أدخل اسم وكيل شؤون الطلاب">
-          </div>
-          <div class="field">
-            <label for="schoolAffairsAgent">اسم وكيل الشؤون المدرسية</label>
-            <input id="schoolAffairsAgent" name="schoolAffairsAgent" type="text" placeholder="أدخل اسم وكيل الشؤون المدرسية">
+            <select id="educationDepartment" name="educationDepartment" required>
+              <option value="" selected disabled>اختر إدارة التعليم</option>
+              <option value="إدارة التعليم بمنطقة الرياض">إدارة التعليم بمنطقة الرياض</option>
+              <option value="إدارة التعليم بمنطقة مكة المكرمة">إدارة التعليم بمنطقة مكة المكرمة</option>
+              <option value="إدارة التعليم بمنطقة المدينة المنورة">إدارة التعليم بمنطقة المدينة المنورة</option>
+              <option value="إدارة التعليم بمنطقة القصيم">إدارة التعليم بمنطقة القصيم</option>
+              <option value="إدارة التعليم بالمنطقة الشرقية">إدارة التعليم بالمنطقة الشرقية</option>
+              <option value="إدارة التعليم بمنطقة عسير">إدارة التعليم بمنطقة عسير</option>
+              <option value="إدارة التعليم بمنطقة تبوك">إدارة التعليم بمنطقة تبوك</option>
+              <option value="إدارة التعليم بمنطقة حائل">إدارة التعليم بمنطقة حائل</option>
+              <option value="إدارة التعليم بمنطقة الحدود الشمالية">إدارة التعليم بمنطقة الحدود الشمالية</option>
+              <option value="إدارة التعليم بمنطقة جازان">إدارة التعليم بمنطقة جازان</option>
+              <option value="إدارة التعليم بمنطقة نجران">إدارة التعليم بمنطقة نجران</option>
+              <option value="إدارة التعليم بمنطقة الباحة">إدارة التعليم بمنطقة الباحة</option>
+              <option value="إدارة التعليم بمنطقة الجوف">إدارة التعليم بمنطقة الجوف</option>
+              <option value="إدارة التعليم بمحافظة جدة">إدارة التعليم بمحافظة جدة</option>
+              <option value="إدارة التعليم بمحافظة الطائف">إدارة التعليم بمحافظة الطائف</option>
+              <option value="إدارة التعليم بمحافظة الأحساء">إدارة التعليم بمحافظة الأحساء</option>
+            </select>
           </div>
         </div>
         <div class="preview" aria-label="معاينة الهيدر">
@@ -67,7 +65,7 @@
         </div>
       </form>
       <p class="subscription-note">تنبيه: التقارير ستكون باشتراك وليست مجانية.</p>
-      <p class="hint">سيتم حفظ البيانات محليًا على هذا المتصفح، وسيظهر الاسم في الهيدر بصيغة: المرحلة + اسم المدرسة.</p>
+      <p class="hint">سيتم استخدام هذه البيانات لتخصيص واجهة المنصة والتقارير، ويمكن تعديلها لاحقًا.</p>
     </div>
   </section>
 
