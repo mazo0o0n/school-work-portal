@@ -2886,6 +2886,7 @@ body.dark .academy-footer{
   scrollbar-color:#5a5a5a transparent;
   scrollbar-width:thin;
   overscroll-behavior:contain;
+  background:#fcfcfc;
 }
 .ai-messages::-webkit-scrollbar{
   width:8px;
@@ -2898,6 +2899,7 @@ body.dark .academy-footer{
   border-radius:999px;
 }
 body.dark .ai-messages{
+  background:#050505;
   scrollbar-color:#c0c0c1 transparent;
 }
 body.dark .ai-messages::-webkit-scrollbar-thumb{
@@ -2927,7 +2929,7 @@ body.dark .ai-messages::-webkit-scrollbar-thumb{
 .ai-message.bot{
   justify-self:start;
   max-width:92%;
-  background:#FFFFFF;
+  background:#f3f3f3;
   color:#000000;
   border-bottom-left-radius:6px;
 }
@@ -2937,7 +2939,7 @@ body.dark .ai-message.bot.ai-message-nora-secret{
   color:#dc2626;
 }
 .ai-message.bot.is-missed{
-  background:#FFFFFF;
+  background:#f3f3f3;
   color:#000000;
 }
 .ai-message.ai-loading{
@@ -3451,7 +3453,7 @@ body.dark .ai-message.bot.is-missed{
     touch-action:pan-y;
     padding:18px 14px 10px;
     align-content:start;
-    background:#ffffff;
+    background:#fcfcfc;
   }
   .ai-message{
     font-size:14px;
@@ -3465,7 +3467,7 @@ body.dark .ai-message.bot.is-missed{
   }
   .ai-message.bot{
     max-width:92%;
-    background:#FFFFFF;
+    background:#f3f3f3;
     color:#000000;
   }
   .ai-form{

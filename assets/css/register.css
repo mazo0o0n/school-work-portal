@@ -271,3 +271,69 @@ a{
     font-size:clamp(13px,4.5vw,18px);
   }
 }
+
+@media(max-width:640px){
+  .register-page{
+    min-height:100svh;
+    padding:10px 12px;
+  }
+  .form-panel{
+    padding:8px 0;
+  }
+  .brand{
+    margin-bottom:8px;
+  }
+  .brand-logo{
+    width:120px;
+    max-width:42%;
+  }
+  .welcome{
+    margin-bottom:12px;
+    font-size:23px;
+  }
+  .register-form,
+  .registration-fields{
+    gap:10px;
+  }
+  .field{
+    gap:5px;
+  }
+  .field-error:empty{
+    display:none;
+  }
+  input,
+  select{
+    min-height:48px;
+    font-size:15px;
+  }
+  .preview,
+  .preview img{
+    min-height:58px;
+  }
+  .preview-name{
+    inset-inline:54px;
+    font-size:clamp(12px,4vw,16px);
+  }
+  .actions{
+    gap:8px;
+    margin-top:0;
+  }
+  button,
+  a{
+    min-height:48px;
+    padding-inline:12px;
+    font-size:14px;
+  }
+  .subscription-note{
+    margin-top:10px;
+    font-size:12.5px;
+  }
+  .hint{
+    margin-top:8px;
+    font-size:12px;
+    line-height:1.6;
+  }
+  .visual-panel{
+    display:none;
+  }
+}

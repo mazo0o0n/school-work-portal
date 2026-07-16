@@ -567,12 +567,6 @@ function addAiMessage(text, type = 'bot', source = '', missed = false, persist =
   if(safeImages.length) message.dataset.messageImages = JSON.stringify(safeImages);
   message.textContent = text;
   appendAiImages(message, safeImages);
-  if(source){
-    const sourceEl = document.createElement('span');
-    sourceEl.className = 'ai-source';
-    sourceEl.textContent = `المصدر: ${source}`;
-    message.appendChild(sourceEl);
-  }
   if(type === 'bot' && source && text !== aiGreetingText) appendAiCopyButton(message, text);
   aiMessages.appendChild(message);
   aiMessages.scrollTop = aiMessages.scrollHeight;
