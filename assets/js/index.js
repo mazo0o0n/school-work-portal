@@ -597,7 +597,7 @@ function renderAcademySupportCards(){
   const cards=[...ACADEMY_SUPPORT_CARDS, ...CUSTOM_SUPPORT_CARDS];
   grid.innerHTML=cards.map(card=>{
     const external = /^https?:\/\//.test(card.href || '');
-    const attrs = external ? 'target="_blank" rel="noopener"' : '';
+    const attrs = external ? 'target="_blank" rel="noopener noreferrer"' : '';
     return `
       <a class="academy-tile" href="${esc(card.href || '#')}" ${attrs}>
         <span class="academy-tile-media"><i class="${esc(card.icon || 'fa-solid fa-folder-open')}" style="font-size:58px;color:${esc(card.color || 'var(--brand-teal)')}"></i></span>
@@ -1448,3 +1448,12 @@ function finishAppBoot(){
 }
 
 finishAppBoot();
+
+function secureExternalLinks(root = document){
+  root.querySelectorAll('a[href^="http://"], a[href^="https://"]').forEach((link) => {
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+  });
+}
+
+secureExternalLinks();
