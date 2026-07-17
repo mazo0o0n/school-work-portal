@@ -113,6 +113,14 @@
   if(!library || !grid || !search || !empty || !categoryButtons.length) return;
 
   let activeCategory = 'الكل';
+  let lastRenderKey = '';
+  let renderFrame = 0;
+  const reportSearchText = new Map(
+    managerReportTemplates.map(report=>[
+      report.id,
+      normalizeSearch(`${report.title} ${report.description} ${report.category}`)
+    ])
+  );
 
   function createSchoolDisplayName(stage, schoolName){
     return [stage, schoolName]
@@ -282,23 +290,35 @@
 
   function renderManagerReportLibrary(){
     const query = normalizeSearch(search.value);
+    const renderKey = `${activeCategory}\u0000${query}`;
+    if(renderKey === lastRenderKey) return;
+
     const reports = managerReportTemplates.filter(report=>{
       const matchesCategory = activeCategory === 'الكل' || report.category === activeCategory;
-      const searchable = normalizeSearch(`${report.title} ${report.description} ${report.category}`);
+      const searchable = reportSearchText.get(report.id) || '';
       return matchesCategory && (!query || searchable.includes(query));
     });
     grid.replaceChildren(...reports.map(createReportCard));
     empty.hidden = reports.length > 0;
+    lastRenderKey = renderKey;
   }
 
-  search.addEventListener('input', renderManagerReportLibrary);
+  function scheduleManagerReportLibraryRender(){
+    if(renderFrame) cancelAnimationFrame(renderFrame);
+    renderFrame = requestAnimationFrame(()=>{
+      renderFrame = 0;
+      renderManagerReportLibrary();
+    });
+  }
+
+  search.addEventListener('input', scheduleManagerReportLibraryRender);
   categoryButtons.forEach(button=>{
     button.addEventListener('click', ()=>{
       activeCategory = button.dataset.reportCategory || 'الكل';
       categoryButtons.forEach(candidate=>{
         candidate.setAttribute('aria-pressed', String(candidate === button));
       });
-      renderManagerReportLibrary();
+      scheduleManagerReportLibraryRender();
     });
   });
 
@@ -312,5 +332,4 @@
   });
 
   window.renderManagerReportLibrary = renderManagerReportLibrary;
-  renderManagerReportLibrary();
 })();

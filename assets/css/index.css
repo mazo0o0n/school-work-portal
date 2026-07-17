@@ -292,8 +292,8 @@ button{font-family:inherit;cursor:pointer}
   place-items:center;
   padding:20px;
   background:rgba(7,17,29,.66);
-  backdrop-filter:blur(5px);
-  -webkit-backdrop-filter:blur(5px);
+  backdrop-filter:blur(2px);
+  -webkit-backdrop-filter:blur(2px);
 }
 .manager-reports-dialog{
   width:min(880px,100%);
@@ -306,6 +306,7 @@ button{font-family:inherit;cursor:pointer}
   background:#fff;
   color:#17232d;
   box-shadow:0 28px 80px rgba(7,17,29,.3);
+  contain:layout paint;
 }
 .manager-reports-head{
   display:flex;
@@ -348,6 +349,7 @@ button{font-family:inherit;cursor:pointer}
   min-height:0;
   overflow-y:auto;
   overscroll-behavior:contain;
+  scrollbar-gutter:stable;
   padding:22px 24px;
 }
 .manager-reports-section + .manager-reports-section,
@@ -846,12 +848,15 @@ body.dark .manager-report-format-hint{
   .manager-reports-modal{
     align-items:end;
     padding:0;
+    backdrop-filter:none;
+    -webkit-backdrop-filter:none;
   }
   .manager-reports-dialog{
     width:100%;
     max-height:calc(100dvh - max(12px,env(safe-area-inset-top)));
     border-radius:20px 20px 0 0;
     padding-bottom:env(safe-area-inset-bottom);
+    box-shadow:0 -12px 32px rgba(7,17,29,.2);
   }
   .manager-reports-head{
     gap:12px;

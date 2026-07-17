@@ -1091,8 +1091,7 @@ function setupManagerReportsPreferences(){
     if(ministry) ministry.textContent = displayValue(reportText(profile.ministryNumber).replace(/[^0-9]/g, ''));
   }
 
-  function renderPreview(){
-    const profile = getProfile();
+  function renderPreview(profile = getProfile()){
     const schoolDisplay = [getSchoolStage(profile), profile.schoolName]
       .map(value=>String(value || '').trim())
       .filter(Boolean)
@@ -1144,7 +1143,7 @@ function setupManagerReportsPreferences(){
       const initialValue = savedValue !== undefined ? savedValue : profileValue;
       input.value = String(initialValue || '');
     });
-    renderPreview();
+    renderPreview(profile);
   }
 
   function showSettingsView(focusFirstField = false){
@@ -1167,10 +1166,12 @@ function setupManagerReportsPreferences(){
     libraryView.hidden = false;
     actions.hidden = true;
     closeButton.setAttribute('aria-label', 'إغلاق مكتبة تقارير المدير');
-    if(typeof window.renderManagerReportLibrary === 'function'){
-      window.renderManagerReportLibrary();
-    }
-    document.getElementById('managerReportSearch')?.focus({preventScroll:true});
+    requestAnimationFrame(()=>{
+      if(typeof window.renderManagerReportLibrary === 'function'){
+        window.renderManagerReportLibrary();
+      }
+      document.getElementById('managerReportSearch')?.focus({preventScroll:true});
+    });
   }
 
   function openModal(entry){
