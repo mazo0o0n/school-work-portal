@@ -3,6 +3,7 @@ functions
 src
 tmp
 *.docx
+!assets/report-templates/manager-reports/*.docx
 *.pdf
 .env
 wrangler.toml
