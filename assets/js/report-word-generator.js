@@ -91,7 +91,11 @@
     'educationalAffairsAgent',
     'studentAffairsAgent',
     'schoolAffairsAgent',
-    'activityLeaderName'
+    'activityLeaderName',
+    'signatureRightRole',
+    'signatureRightName',
+    'signatureLeftRole',
+    'signatureLeftName'
   ];
 
   const reportFieldLabels = {

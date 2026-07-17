@@ -963,7 +963,11 @@ function getReportMergeData(sectionId){
     educationalAffairsAgent:'',
     studentAffairsAgent:'',
     schoolAffairsAgent:'',
-    activityLeaderName:''
+    activityLeaderName:'',
+    signatureRightRole:'',
+    signatureRightName:'',
+    signatureLeftRole:'',
+    signatureLeftName:''
   };
   if(sectionId !== 'managerReports') return emptyData;
 
@@ -992,6 +996,17 @@ function getReportMergeData(sectionId){
 
   const educationDepartment = reportText(profile.educationDepartment);
   const educationDepartmentFields = getEducationDepartmentMergeFields(educationDepartment);
+  const principalName = optionalValue('principalName');
+  const educationalAffairsAgent = optionalValue('educationalAffairsAgent');
+  const studentAffairsAgent = optionalValue('studentAffairsAgent');
+  const schoolAffairsAgent = optionalValue('schoolAffairsAgent');
+  const activityLeaderName = optionalValue('activityLeaderName', 'activityCoordinatorName');
+  const leftSignature = [
+    {role:'رائد النشاط', name:activityLeaderName},
+    {role:'وكيل الشؤون التعليمية', name:educationalAffairsAgent},
+    {role:'وكيل شؤون الطلاب', name:studentAffairsAgent},
+    {role:'وكيل الشؤون المدرسية', name:schoolAffairsAgent}
+  ].find(signature=>signature.name);
 
   return {
     schoolName:reportText(profile.schoolName),
@@ -999,11 +1014,15 @@ function getReportMergeData(sectionId){
     educationDepartment,
     ...educationDepartmentFields,
     ministryNumber:reportText(profile.ministryNumber).replace(/[^0-9]/g, ''),
-    principalName:optionalValue('principalName'),
-    educationalAffairsAgent:optionalValue('educationalAffairsAgent'),
-    studentAffairsAgent:optionalValue('studentAffairsAgent'),
-    schoolAffairsAgent:optionalValue('schoolAffairsAgent'),
-    activityLeaderName:optionalValue('activityLeaderName', 'activityCoordinatorName')
+    principalName,
+    educationalAffairsAgent,
+    studentAffairsAgent,
+    schoolAffairsAgent,
+    activityLeaderName,
+    signatureRightRole:principalName ? 'مدير المدرسة' : '',
+    signatureRightName:principalName,
+    signatureLeftRole:leftSignature?.role || '',
+    signatureLeftName:leftSignature?.name || ''
   };
 }
 
