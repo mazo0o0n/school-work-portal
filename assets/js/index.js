@@ -1017,7 +1017,6 @@ function setupManagerReportsPreferences(){
   const cancelButton = document.getElementById('managerReportsCancel');
   const saveButton = document.getElementById('managerReportsSave');
   const laterButton = document.getElementById('managerReportsLater');
-  const preview = document.getElementById('managerReportsPreview');
   const toast = document.getElementById('managerReportsToast');
   const title = document.getElementById('managerReportsTitle');
   const description = document.getElementById('managerReportsDescription');
@@ -1026,7 +1025,7 @@ function setupManagerReportsPreferences(){
   const actions = document.getElementById('managerReportsActions');
   const editDataButton = document.getElementById('managerReportsEditData');
   const entries = document.querySelectorAll('[data-manager-reports-entry]');
-  if(!modal || !dialog || !closeButton || !cancelButton || !saveButton || !laterButton || !preview || !title || !description || !settingsView || !libraryView || !actions || !editDataButton || !entries.length) return;
+  if(!modal || !dialog || !closeButton || !cancelButton || !saveButton || !laterButton || !title || !description || !settingsView || !libraryView || !actions || !editDataButton || !entries.length) return;
 
   const optionalFields = [
     {key:'principalName', label:'مدير المدرسة', defaultEnabled:false},
@@ -1091,34 +1090,6 @@ function setupManagerReportsPreferences(){
     if(ministry) ministry.textContent = displayValue(reportText(profile.ministryNumber).replace(/[^0-9]/g, ''));
   }
 
-  function renderPreview(profile = getProfile()){
-    const schoolDisplay = [getSchoolStage(profile), profile.schoolName]
-      .map(value=>String(value || '').trim())
-      .filter(Boolean)
-      .join(' ');
-    const lines = [
-      ['إدارة التعليم', displayValue(profile.educationDepartment)],
-      ['المدرسة', displayValue(schoolDisplay)]
-    ];
-
-    optionalFields.forEach(field=>{
-      const toggle = getToggle(field.key);
-      const input = getValueInput(field.key);
-      if(toggle?.checked){
-        lines.push([field.label, displayValue(input?.value)]);
-      }
-    });
-
-    preview.replaceChildren();
-    lines.forEach(([label, value])=>{
-      const line = document.createElement('p');
-      const name = document.createElement('strong');
-      name.textContent = `${label}: `;
-      line.append(name, document.createTextNode(value));
-      preview.appendChild(line);
-    });
-  }
-
   function populateModal(){
     const profile = getProfile();
     const settings = getManagerSettings();
@@ -1143,7 +1114,6 @@ function setupManagerReportsPreferences(){
       const initialValue = savedValue !== undefined ? savedValue : profileValue;
       input.value = String(initialValue || '');
     });
-    renderPreview(profile);
   }
 
   function showSettingsView(focusFirstField = false){
@@ -1207,15 +1177,11 @@ function setupManagerReportsPreferences(){
     });
   });
 
-  modal.querySelectorAll('[data-manager-field-toggle]').forEach(toggle=>{
-    toggle.addEventListener('change', renderPreview);
-  });
-  modal.querySelectorAll('[data-manager-field-value]').forEach(input=>{
-    input.addEventListener('input', ()=>{
-      const toggle = getToggle(input.dataset.managerFieldValue || '');
-      if(toggle && input.value.trim()) toggle.checked = true;
-      renderPreview();
-    });
+  modal.addEventListener('input', event=>{
+    const input = event.target.closest('[data-manager-field-value]');
+    if(!input) return;
+    const toggle = getToggle(input.dataset.managerFieldValue || '');
+    if(toggle && input.value.trim()) toggle.checked = true;
   });
 
   closeButton.addEventListener('click', closeModal);
