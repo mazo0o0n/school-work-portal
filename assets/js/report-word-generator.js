@@ -17,6 +17,66 @@
         'educationalAffairsAgent'
       ],
       status:'تجريبي'
+    },
+    {
+      id:'academic-achievement-committee',
+      title:'تشكيل لجنة التحصيل الدراسي',
+      description:'نموذج خاص بلجنة التحصيل الدراسي ومتابعة أعمالها.',
+      category:'اللجان',
+      sectionId:'managerReports',
+      templatePath:'assets/report-templates/manager-reports/academic-achievement-committee.docx',
+      outputFileName:'تشكيل لجنة التحصيل الدراسي - {{schoolDisplayName}}.docx',
+      fields:[
+        'educationDepartment',
+        'schoolDisplayName',
+        'principalName'
+      ],
+      status:'معتمد'
+    },
+    {
+      id:'health-guide-assignment',
+      title:'تكليف الموجه الصحي',
+      description:'نموذج تكليف الموجه الصحي بمهامه ومسؤولياته داخل المدرسة.',
+      category:'النماذج',
+      sectionId:'managerReports',
+      templatePath:'assets/report-templates/manager-reports/health-guide-assignment.docx',
+      outputFileName:'تكليف الموجه الصحي - {{schoolDisplayName}}.docx',
+      fields:[
+        'educationDepartment',
+        'schoolDisplayName',
+        'principalName'
+      ],
+      status:'معتمد'
+    },
+    {
+      id:'school-guard-assignment',
+      title:'تكليف حارس المدرسة',
+      description:'نموذج تكليف حارس المدرسة بمهام محددة.',
+      category:'النماذج',
+      sectionId:'managerReports',
+      templatePath:'assets/report-templates/manager-reports/school-guard-assignment.docx',
+      outputFileName:'تكليف حارس المدرسة - {{schoolDisplayName}}.docx',
+      fields:[
+        'educationDepartment',
+        'schoolDisplayName',
+        'principalName'
+      ],
+      status:'معتمد'
+    },
+    {
+      id:'activity-leader-assignment-1448',
+      title:'تكليف رائد النشاط للعام 1448 هـ',
+      description:'نموذج تكليف رائد النشاط بمهام ومسؤوليات النشاط الطلابي.',
+      category:'النماذج',
+      sectionId:'managerReports',
+      templatePath:'assets/report-templates/manager-reports/activity-leader-assignment-1448.docx',
+      outputFileName:'تكليف رائد النشاط للعام 1448 هـ - {{schoolDisplayName}}.docx',
+      fields:[
+        'educationDepartment',
+        'schoolDisplayName',
+        'principalName'
+      ],
+      status:'معتمد'
     }
   ];
 
