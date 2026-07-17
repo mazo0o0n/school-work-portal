@@ -1053,6 +1053,13 @@ function setupManagerReportsPreferences(){
     {key:'schoolAffairsAgent', label:'وكيل الشؤون المدرسية', defaultEnabled:false},
     {key:'activityLeaderName', aliases:['activityCoordinatorName'], label:'رائد النشاط', defaultEnabled:false}
   ];
+  const leftSignatureFieldPriority = [
+    'activityLeaderName',
+    'educationalAffairsAgent',
+    'studentAffairsAgent',
+    'schoolAffairsAgent'
+  ];
+  const signatureLimitHint = document.getElementById('managerSignatureLimitHint');
   let returnFocus = null;
   let toastTimer = 0;
 
@@ -1098,6 +1105,78 @@ function setupManagerReportsPreferences(){
     return undefined;
   }
 
+  function isStoredFieldEnabled(source, field){
+    return firstStoredValue(source, field) === true;
+  }
+
+  function normalizeManagerEnabledFields(source){
+    const normalized = source && typeof source === 'object' && !Array.isArray(source)
+      ? {...source}
+      : {};
+    const selectedLeftKey = leftSignatureFieldPriority.find(key=>{
+      const field = optionalFields.find(item=>item.key === key);
+      return field ? isStoredFieldEnabled(normalized, field) : false;
+    }) || '';
+
+    optionalFields.forEach(field=>{
+      normalized[field.key] = field.key === 'principalName'
+        ? isStoredFieldEnabled(normalized, field)
+        : field.key === selectedLeftKey;
+      (field.aliases || []).forEach(alias=>{
+        normalized[alias] = false;
+      });
+    });
+
+    return normalized;
+  }
+
+  function enabledFieldsNeedNormalization(source, normalized){
+    return optionalFields.some(field=>{
+      const keys = [field.key, ...(field.aliases || [])];
+      return keys.some(key=>(source?.[key] === true) !== (normalized[key] === true));
+    });
+  }
+
+  function persistNormalizedEnabledFields(settings, normalizedEnabledFields){
+    const preferences = readLocalStorageObject(storageKey);
+    preferences.managerReports = {
+      ...settings,
+      enabledFields:normalizedEnabledFields
+    };
+    localStorage.setItem(storageKey, JSON.stringify(preferences));
+  }
+
+  function getSelectedLeftSignatureKey(){
+    return leftSignatureFieldPriority.find(key=>getToggle(key)?.checked === true) || '';
+  }
+
+  function enforceSingleLeftSignature(preferredKey = ''){
+    const selectedLeftKey = leftSignatureFieldPriority.includes(preferredKey)
+      && getToggle(preferredKey)?.checked
+      ? preferredKey
+      : getSelectedLeftSignatureKey();
+    leftSignatureFieldPriority.forEach(key=>{
+      const toggle = getToggle(key);
+      if(toggle) toggle.checked = key === selectedLeftKey;
+    });
+    return selectedLeftKey;
+  }
+
+  function syncSignatureSelectionState(preferredKey = ''){
+    const selectedLeftKey = enforceSingleLeftSignature(preferredKey);
+    leftSignatureFieldPriority.forEach(key=>{
+      const disabled = Boolean(selectedLeftKey && key !== selectedLeftKey);
+      const toggle = getToggle(key);
+      const input = getValueInput(key);
+      const option = modal.querySelector(`[data-manager-option="${key}"]`);
+      if(toggle) toggle.disabled = disabled;
+      if(input) input.disabled = disabled;
+      option?.classList.toggle('is-disabled', disabled);
+      option?.setAttribute('aria-disabled', String(disabled));
+    });
+    if(signatureLimitHint) signatureLimitHint.hidden = !selectedLeftKey;
+  }
+
   function renderRequired(profile){
     const department = document.getElementById('managerRequiredDepartment');
     const stage = document.getElementById('managerRequiredStage');
@@ -1115,6 +1194,7 @@ function setupManagerReportsPreferences(){
     const enabledFields = settings.enabledFields && typeof settings.enabledFields === 'object'
       ? settings.enabledFields
       : {};
+    const normalizedEnabledFields = normalizeManagerEnabledFields(enabledFields);
     const savedValues = settings.values && typeof settings.values === 'object'
       ? settings.values
       : {};
@@ -1124,7 +1204,7 @@ function setupManagerReportsPreferences(){
       const toggle = getToggle(field.key);
       const input = getValueInput(field.key);
       if(!toggle || !input) return;
-      const savedEnabled = firstStoredValue(enabledFields, field);
+      const savedEnabled = firstStoredValue(normalizedEnabledFields, field);
       toggle.checked = savedEnabled !== undefined
         ? savedEnabled === true
         : field.defaultEnabled;
@@ -1133,6 +1213,10 @@ function setupManagerReportsPreferences(){
       const initialValue = savedValue !== undefined ? savedValue : profileValue;
       input.value = String(initialValue || '');
     });
+    syncSignatureSelectionState();
+    if(enabledFieldsNeedNormalization(enabledFields, normalizedEnabledFields)){
+      persistNormalizedEnabledFields(settings, normalizedEnabledFields);
+    }
   }
 
   function showSettingsView(focusFirstField = false){
@@ -1200,7 +1284,17 @@ function setupManagerReportsPreferences(){
     const input = event.target.closest('[data-manager-field-value]');
     if(!input) return;
     const toggle = getToggle(input.dataset.managerFieldValue || '');
-    if(toggle && input.value.trim()) toggle.checked = true;
+    if(toggle && input.value.trim()){
+      toggle.checked = true;
+      syncSignatureSelectionState(toggle.dataset.managerFieldToggle || '');
+    }
+  });
+
+  modal.addEventListener('change', event=>{
+    const toggle = event.target.closest('[data-manager-field-toggle]');
+    if(!toggle) return;
+    const key = toggle.dataset.managerFieldToggle || '';
+    syncSignatureSelectionState(key === 'principalName' ? '' : key);
   });
 
   closeButton.addEventListener('click', closeModal);
@@ -1209,6 +1303,7 @@ function setupManagerReportsPreferences(){
   editDataButton.addEventListener('click', ()=>showSettingsView(true));
 
   function collectManagerSettings(){
+    syncSignatureSelectionState();
     const enabledFields = {};
     const values = {};
     optionalFields.forEach(field=>{

@@ -443,6 +443,28 @@ button{font-family:inherit;cursor:pointer}
   border-color:#159377;
   outline:3px solid rgba(21,147,119,.14);
 }
+.manager-option.is-disabled{
+  border-color:#dce4e7;
+  background:#f3f6f7;
+  opacity:.62;
+}
+.manager-option.is-disabled .manager-option-choice label,
+.manager-option.is-disabled input{
+  cursor:not-allowed;
+}
+.manager-option > input:disabled{
+  border-color:#d9e1e4;
+  background:#edf2f3;
+  color:#718087;
+}
+.manager-signature-limit-hint{
+  max-width:100%;
+  margin:12px 2px 0;
+  color:#526a73;
+  font-size:13px;
+  line-height:1.7;
+  overflow-wrap:anywhere;
+}
 .manager-report-library{
   min-width:0;
 }
@@ -736,6 +758,19 @@ body.dark .manager-reports-section h3{
 body.dark .manager-reports-head p,
 body.dark .manager-value-label{
   color:#b9c8ce;
+}
+body.dark .manager-option.is-disabled{
+  border-color:#2b3d47;
+  background:#101923;
+  opacity:.6;
+}
+body.dark .manager-option > input:disabled{
+  border-color:#2d414c;
+  background:#0c151e;
+  color:#87979f;
+}
+body.dark .manager-signature-limit-hint{
+  color:#abc0c8;
 }
 body.dark .manager-reports-close,
 body.dark .manager-option > input,
