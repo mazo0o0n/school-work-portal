@@ -140,7 +140,7 @@ function isMobileAssistantView(){
 
 const legacyApiFallbackAnswer = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
 const apiFallbackAnswer = 'لم أجد إجابة موثقة لهذا السؤال داخل ملفات المنصة حاليًا.\nجرّب صياغة أبسط، أو اضغط "طلب إضافة السؤال" ليتم مراجعته وإضافته لاحقًا.';
-const missedQuestionDisplayAnswer = 'لم أجد إجابة موثقة لهذا السؤال داخل ملفات المنصة حاليًا.\nجرّب صياغة أبسط.';
+const missedQuestionDisplayAnswer = 'لم أجد هذه المعلومة في قاعدة معرفة المنصة حاليًا، وتم تسجيل السؤال للمراجعة إن كان ذلك متاحًا.';
 
 function hideAiReviewHint(){
   window.clearTimeout(aiReviewHintTimeout);
