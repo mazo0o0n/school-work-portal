@@ -847,6 +847,41 @@ body.dark .manager-report-status.is-error{
 body.dark .manager-report-format-hint{
   color:#abc0c8;
 }
+.manager-reports-modal:has(.manager-report-library:not([hidden])){
+  background:rgba(7,17,29,.78);
+}
+.manager-reports-dialog:has(.manager-report-library:not([hidden])){
+  width:min(92vw,1240px);
+  height:min(92dvh,920px);
+  max-height:92dvh;
+}
+.manager-reports-body:has(.manager-report-library:not([hidden])){
+  display:flex;
+  overflow:hidden;
+  padding:18px 20px 20px;
+}
+.manager-report-library:not([hidden]){
+  width:100%;
+  min-height:0;
+  display:flex;
+  flex:1 1 auto;
+  flex-direction:column;
+}
+.manager-report-library:not([hidden]) .manager-report-library-tools,
+.manager-report-library:not([hidden]) .manager-report-filters{
+  flex:0 0 auto;
+}
+.manager-report-library:not([hidden]) .manager-report-grid{
+  min-height:0;
+  flex:1 1 auto;
+  grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  align-content:start;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+  padding:2px 4px 4px;
+}
 @media(max-width:640px){
   .manager-reports-modal{
     align-items:end;
@@ -861,9 +896,23 @@ body.dark .manager-report-format-hint{
     padding-bottom:env(safe-area-inset-bottom);
     box-shadow:0 -12px 32px rgba(7,17,29,.2);
   }
+  .manager-reports-dialog:has(.manager-report-library:not([hidden])){
+    width:100vw;
+    height:100dvh;
+    max-height:100dvh;
+    border-width:0;
+    border-radius:0;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .manager-reports-body:has(.manager-report-library:not([hidden])){
+    padding:14px 14px max(14px,env(safe-area-inset-bottom));
+  }
   .manager-reports-head{
     gap:12px;
     padding:18px 16px 14px;
+  }
+  .manager-reports-dialog:has(.manager-report-library:not([hidden])) .manager-reports-head{
+    padding-top:max(14px,env(safe-area-inset-top));
   }
   .manager-reports-head h2{
     font-size:20px;
@@ -878,6 +927,10 @@ body.dark .manager-report-format-hint{
   .manager-report-library-tools,
   .manager-report-grid{
     grid-template-columns:1fr;
+  }
+  .manager-report-library:not([hidden]) .manager-report-grid{
+    grid-template-columns:1fr;
+    padding-inline:1px;
   }
   .manager-report-edit-data{
     width:100%;
