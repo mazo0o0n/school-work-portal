@@ -141,6 +141,7 @@
   const empty = document.getElementById('managerReportEmpty');
   const categoryButtons = Array.from(document.querySelectorAll('[data-report-category]'));
   if(!library || !grid || !search || !empty || !categoryButtons.length) return;
+  const managerReportsModal = library.closest('#managerReportsModal');
 
   const customDataStorageKey = 'reportCustomData';
   let activeCategory = 'الكل';
@@ -215,13 +216,14 @@
     return element;
   }
 
-  function closeCustomizationModal(){
+  function closeCustomizationModal(restoreFocus = true){
     if(!customizationModal || customizationModal.hidden) return;
     customizationModal.hidden = true;
     activeCustomReport = null;
-    if(customizationReturnFocus && document.contains(customizationReturnFocus)){
+    if(restoreFocus && customizationReturnFocus && document.contains(customizationReturnFocus)){
       customizationReturnFocus.focus();
     }
+    customizationReturnFocus = null;
   }
 
   function setCustomizationStatus(message, isError = false){
@@ -297,7 +299,7 @@
 
     dialog.append(header, customizationFields, actions);
     customizationModal.appendChild(dialog);
-    document.body.appendChild(customizationModal);
+    (managerReportsModal || document.body).appendChild(customizationModal);
 
     closeButton.addEventListener('click', closeCustomizationModal);
     cancelButton.addEventListener('click', closeCustomizationModal);
@@ -340,6 +342,7 @@
 
     customizationModal.addEventListener('keydown', event=>{
       if(event.key === 'Escape'){
+        event.stopPropagation();
         closeCustomizationModal();
         return;
       }
@@ -371,6 +374,10 @@
     customizationModal.hidden = false;
     customizationFields.querySelector('input')?.focus();
   }
+
+  managerReportsModal?.addEventListener('manager-reports:close', ()=>{
+    closeCustomizationModal(false);
+  });
 
   function createDownloadName(report, data){
     const schoolDisplayName = data.schoolDisplayName.trim();

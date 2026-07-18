@@ -1258,6 +1258,7 @@ function setupManagerReportsPreferences(){
 
   function closeModal(){
     if(modal.hidden) return;
+    modal.dispatchEvent(new CustomEvent('manager-reports:close'));
     modal.hidden = true;
     document.body.classList.remove('manager-reports-modal-open');
     if(returnFocus && document.contains(returnFocus)) returnFocus.focus();
