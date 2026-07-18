@@ -454,12 +454,28 @@
     const top = document.createElement('div');
     top.className = 'manager-report-card-top';
 
+    const preview = document.createElement('div');
+    preview.className = 'manager-report-preview';
+    preview.setAttribute('aria-hidden', 'true');
+    const previewPage = document.createElement('div');
+    previewPage.className = 'manager-report-preview-page';
+    const previewHeader = document.createElement('span');
+    previewHeader.className = 'manager-report-preview-header';
+    const previewTitle = document.createElement('span');
+    previewTitle.className = 'manager-report-preview-title';
+    const previewLines = document.createElement('span');
+    previewLines.className = 'manager-report-preview-lines';
+    const previewTable = document.createElement('span');
+    previewTable.className = 'manager-report-preview-table';
+
     const icon = document.createElement('span');
     icon.className = 'manager-report-icon';
     icon.setAttribute('aria-hidden', 'true');
     const iconGlyph = document.createElement('i');
     iconGlyph.className = 'fa-solid fa-file-word';
     icon.appendChild(iconGlyph);
+    previewPage.append(previewHeader, previewTitle, previewLines, previewTable);
+    preview.append(previewPage, icon);
 
     const badges = document.createElement('div');
     badges.className = 'manager-report-badges';
@@ -468,8 +484,11 @@
     const statusBadge = document.createElement('span');
     statusBadge.className = 'is-status';
     statusBadge.textContent = report.status;
-    badges.append(category, statusBadge);
-    top.append(icon, badges);
+    const formatBadge = document.createElement('span');
+    formatBadge.className = 'is-word';
+    formatBadge.textContent = 'Word';
+    badges.append(category, statusBadge, formatBadge);
+    top.append(badges);
 
     const title = document.createElement('h3');
     title.textContent = report.title;
@@ -515,7 +534,7 @@
     reportStatus.setAttribute('aria-live', 'polite');
     actions.append(wordDownload, actionHint, reportStatus);
 
-    card.append(top, title, description, fieldsTitle, fields, actions);
+    card.append(preview, top, title, description, fieldsTitle, fields, actions);
     return card;
   }
 
