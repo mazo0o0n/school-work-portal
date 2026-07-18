@@ -44,3 +44,10 @@ node tools/check-links.js index.html about.html privacy.html
 - ممنوع استخدام `git add .`.
 - لا تضف `.env` أو `.wrangler` أو tokens أو ملفات أسرار.
 - لا تنفذ commit أو push أو deploy دون موافقة صريحة.
+
+## ملاحظات إغلاق 1.4
+
+- أُبقيت قوالب DOCX في `assets/report-templates/manager-reports/` ضمن Static Assets بواسطة استثناء `.assetsignore` الحالي.
+- استُبعدت مجلدات التطوير والتشخيص والتقارير المحلية من Static Assets.
+- لا تربط `10.html` بالواجهة العامة قبل مراجعة محتواها وروابطها.
+- بعد اعتماد النسخة: اختبرها مع ثلاثة مستخدمين، واعتمد وجهة البلاغات، وجهّز صور معاينة التقارير، ثم أنشئ tag منفصلًا.

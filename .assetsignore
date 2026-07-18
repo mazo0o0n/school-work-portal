@@ -9,3 +9,13 @@ tmp
 wrangler.toml
 node_modules
 knowledge.md
+.wrangler/
+.tmp/
+reports/
+test-results/
+knowledge-import/
+report-automation/
+*.log
+*.backup
+semgrep-report.json
+playwright-report/
