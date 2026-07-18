@@ -4034,3 +4034,273 @@ body.dark .ai-notice,
     border-radius:14px;
   }
 }
+
+@media(min-width:1024px) and (max-height:780px){
+  .top-header{
+    padding-block:2px;
+  }
+
+  .top-btn,
+  .beta{
+    height:30px;
+  }
+
+  .site-nav{
+    min-height:60px;
+    padding-block:6px;
+  }
+
+  .masthead{
+    height:100px;
+  }
+
+  .masthead-school-name{
+    inset-inline:140px;
+    min-height:44px;
+    font-size:clamp(22px,2.4vw,30px);
+  }
+
+  .academy-page{
+    margin-block:4px;
+  }
+
+  .academy-hero{
+    gap:8px;
+  }
+
+  .academy-main-banner{
+    min-height:132px;
+    padding:12px 18px;
+  }
+
+  .academy-main-banner::after{
+    bottom:-13px;
+    font-size:58px;
+  }
+
+  .academy-main-banner h1{
+    margin-bottom:5px;
+    font-size:24px;
+  }
+
+  .academy-main-banner p{
+    margin-bottom:6px;
+    font-size:13px;
+    line-height:1.35;
+  }
+
+  .academy-primary-btn,
+  .academy-link-btn{
+    min-height:32px;
+    padding-inline:15px;
+    font-size:13px;
+  }
+
+  .academy-side-stack{
+    gap:6px;
+  }
+
+  .academy-stat{
+    min-height:52px;
+    padding:6px 12px;
+  }
+
+  .academy-stat strong,
+  .academy-mini-ad strong{
+    font-size:20px;
+  }
+
+  .academy-mini-ad{
+    min-height:74px;
+    padding:8px 12px;
+  }
+
+  .academy-mini-ad b{
+    font-size:16px;
+  }
+
+  .academy-section{
+    margin-top:4px;
+  }
+
+  .academy-section-head{
+    min-height:30px;
+    margin-bottom:4px;
+  }
+
+  .academy-section-head h2{
+    font-size:18px;
+  }
+
+  .section-toggle-btn{
+    width:30px;
+    height:30px;
+  }
+
+  .academy-feature-grid{
+    gap:8px;
+  }
+
+  .academy-feature-card{
+    min-height:98px;
+    padding:12px;
+  }
+
+  .academy-feature-card h3{
+    margin-bottom:4px;
+    font-size:17px;
+  }
+
+  .academy-feature-card p{
+    font-size:11.5px;
+    line-height:1.35;
+  }
+
+  .academy-feature-icon{
+    inset-inline-start:12px;
+    bottom:8px;
+    width:44px;
+    height:38px;
+    border-radius:10px;
+    font-size:21px;
+  }
+
+  .academy-card-grid{
+    gap:8px;
+  }
+
+  .academy-tile{
+    min-height:170px;
+    padding:12px;
+  }
+
+  .academy-tile-media{
+    min-height:72px;
+  }
+
+  .academy-tile-media img{
+    max-height:58px;
+  }
+
+  .academy-tile h3{
+    margin:8px 0 5px;
+  }
+
+  .academy-chip{
+    margin-top:6px;
+  }
+
+  .academy-footer{
+    margin-top:6px;
+    padding:8px;
+  }
+}
+
+@media(min-width:1024px) and (min-height:781px) and (max-height:950px){
+  .site-nav{
+    min-height:64px;
+    padding-block:7px;
+  }
+
+  .masthead{
+    height:115px;
+  }
+
+  .academy-page{
+    margin-block:6px;
+  }
+
+  .academy-main-banner{
+    min-height:150px;
+    padding-block:15px;
+  }
+
+  .academy-side-stack{
+    gap:8px;
+  }
+
+  .academy-stat{
+    min-height:60px;
+    padding-block:7px;
+  }
+
+  .academy-mini-ad{
+    min-height:82px;
+    padding-block:9px;
+  }
+
+  .academy-section{
+    margin-top:5px;
+  }
+
+  .academy-feature-card{
+    min-height:110px;
+    padding-block:13px;
+  }
+
+  .academy-card-grid{
+    gap:10px;
+  }
+
+  .academy-tile{
+    min-height:180px;
+    padding:13px;
+  }
+
+  .academy-tile-media{
+    min-height:78px;
+  }
+
+  .academy-footer{
+    margin-top:8px;
+    padding:9px;
+  }
+}
+
+@media(min-width:1024px) and (max-height:720px){
+  .top-btn,
+  .beta{
+    height:28px;
+  }
+
+  .site-nav{
+    min-height:54px;
+    padding-block:4px;
+  }
+
+  .masthead{
+    height:88px;
+  }
+
+  .academy-main-banner{
+    min-height:120px;
+    padding-block:10px;
+  }
+
+  .academy-side-stack{
+    gap:5px;
+  }
+
+  .academy-stat{
+    min-height:46px;
+    padding-block:4px;
+  }
+
+  .academy-mini-ad{
+    min-height:69px;
+    padding-block:6px;
+  }
+
+  .academy-section{
+    margin-top:3px;
+  }
+
+  .academy-feature-card{
+    min-height:90px;
+    padding-block:10px;
+  }
+
+  .academy-tile{
+    min-height:160px;
+  }
+}
