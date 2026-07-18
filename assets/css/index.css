@@ -101,6 +101,32 @@ html,body{
 a{color:inherit;text-decoration:none}
 button{font-family:inherit;cursor:pointer}
 
+.academy-home :where(
+  a,
+  button,
+  [role="button"],
+  .academy-stat,
+  .academy-chip,
+  .manager-report-card,
+  .manager-required-item,
+  .manager-option-choice,
+  .manager-report-badges,
+  .manager-report-fields,
+  .report-custom-head
+){
+  -webkit-user-select:none;
+  user-select:none;
+}
+
+.academy-home ::selection{
+  background:rgba(13,169,166,.22);
+  color:inherit;
+}
+
+.academy-home.dark ::selection{
+  background:rgba(117,216,212,.3);
+}
+
 .masthead{position:relative;display:flex;justify-content:center;align-items:center;padding:0;max-width:var(--maxW);margin:0 auto;aspect-ratio:1366 / 242}
 .masthead img{display:block;width:100%;height:auto;object-fit:contain;margin-inline:auto;border-bottom:1px solid var(--line);border-radius:0}
 .masthead-school-name{
