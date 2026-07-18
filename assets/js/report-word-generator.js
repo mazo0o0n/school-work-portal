@@ -16,6 +16,32 @@
         'principalName',
         'educationalAffairsAgent'
       ],
+      customFields:[
+        {
+          key:'departmentName',
+          label:'اسم القسم',
+          type:'text',
+          placeholder:'مثال: قسم الرياضيات'
+        },
+        {
+          key:'meetingTitle',
+          label:'عنوان الاجتماع',
+          type:'text',
+          placeholder:'مثال: اجتماع قسم الرياضيات'
+        },
+        {
+          key:'meetingDate',
+          label:'تاريخ الاجتماع',
+          type:'text',
+          placeholder:'مثال: 15 / 3 / 1447 هـ'
+        },
+        {
+          key:'meetingDay',
+          label:'اليوم',
+          type:'text',
+          placeholder:'مثال: الخميس'
+        }
+      ],
       status:'تجريبي'
     },
     {
@@ -116,9 +142,16 @@
   const categoryButtons = Array.from(document.querySelectorAll('[data-report-category]'));
   if(!library || !grid || !search || !empty || !categoryButtons.length) return;
 
+  const customDataStorageKey = 'reportCustomData';
   let activeCategory = 'الكل';
   let lastRenderKey = '';
   let renderFrame = 0;
+  let customizationModal = null;
+  let customizationFields = null;
+  let customizationTitle = null;
+  let customizationStatus = null;
+  let activeCustomReport = null;
+  let customizationReturnFocus = null;
   const reportSearchText = new Map(
     managerReportTemplates.map(report=>[
       report.id,
@@ -133,9 +166,32 @@
       .join(' ');
   }
 
-  function getCleanReportData(sectionId){
+  function readReportCustomStore(){
+    try{
+      const parsed = JSON.parse(localStorage.getItem(customDataStorageKey) || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    }catch{
+      localStorage.removeItem(customDataStorageKey);
+      return {};
+    }
+  }
+
+  function getReportCustomData(report){
+    if(!Array.isArray(report.customFields) || !report.customFields.length) return {};
+    const storedReportData = readReportCustomStore()[report.id];
+    const source = storedReportData && typeof storedReportData === 'object' && !Array.isArray(storedReportData)
+      ? storedReportData
+      : {};
+    return report.customFields.reduce((result, field)=>{
+      const value = source[field.key];
+      result[field.key] = value === null || value === undefined ? '' : String(value).trim();
+      return result;
+    }, {});
+  }
+
+  function getCleanReportData(report){
     const source = typeof window.getReportMergeData === 'function'
-      ? window.getReportMergeData(sectionId)
+      ? window.getReportMergeData(report.sectionId)
       : {};
     const data = reportFields.reduce((result, key)=>{
       const value = source && source[key] !== null && source[key] !== undefined
@@ -146,7 +202,174 @@
     }, {});
     data.schoolDisplayName = createSchoolDisplayName(data.schoolStage, data.schoolName);
     data.schoolName = data.schoolDisplayName;
-    return data;
+    return {
+      ...data,
+      ...getReportCustomData(report)
+    };
+  }
+
+  function createElement(tagName, className = '', text = ''){
+    const element = document.createElement(tagName);
+    if(className) element.className = className;
+    if(text) element.textContent = text;
+    return element;
+  }
+
+  function closeCustomizationModal(){
+    if(!customizationModal || customizationModal.hidden) return;
+    customizationModal.hidden = true;
+    activeCustomReport = null;
+    if(customizationReturnFocus && document.contains(customizationReturnFocus)){
+      customizationReturnFocus.focus();
+    }
+  }
+
+  function setCustomizationStatus(message, isError = false){
+    if(!customizationStatus) return;
+    customizationStatus.textContent = message;
+    customizationStatus.classList.toggle('is-error', isError);
+  }
+
+  function populateCustomizationFields(report){
+    if(!customizationFields) return;
+    const values = getReportCustomData(report);
+    const fragment = document.createDocumentFragment();
+    report.customFields.forEach(field=>{
+      const wrapper = createElement('label', 'report-custom-field');
+      const labelText = createElement('span', '', field.label);
+      const input = document.createElement('input');
+      input.type = field.type || 'text';
+      input.value = values[field.key] || '';
+      input.placeholder = field.placeholder || '';
+      input.autocomplete = 'off';
+      input.dataset.reportCustomField = field.key;
+      wrapper.append(labelText, input);
+      fragment.appendChild(wrapper);
+    });
+    customizationFields.replaceChildren(fragment);
+  }
+
+  function ensureCustomizationModal(){
+    if(customizationModal) return;
+
+    customizationModal = createElement('div', 'report-custom-modal');
+    customizationModal.hidden = true;
+
+    const dialog = createElement('div', 'report-custom-dialog');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'reportCustomizationTitle');
+    dialog.setAttribute('aria-describedby', 'reportCustomizationDescription');
+
+    const header = createElement('header', 'report-custom-head');
+    const headingGroup = document.createElement('div');
+    customizationTitle = createElement('h2', '', 'تخصيص التقرير');
+    customizationTitle.id = 'reportCustomizationTitle';
+    const description = createElement(
+      'p',
+      '',
+      'هذه البيانات خاصة بهذا التقرير فقط، ويمكن ترك أي حقل فارغًا.'
+    );
+    description.id = 'reportCustomizationDescription';
+    headingGroup.append(customizationTitle, description);
+
+    const closeButton = createElement('button', 'report-custom-close');
+    closeButton.type = 'button';
+    closeButton.setAttribute('aria-label', 'إغلاق تخصيص التقرير');
+    const closeIcon = createElement('i', 'fa-solid fa-xmark');
+    closeIcon.setAttribute('aria-hidden', 'true');
+    closeButton.appendChild(closeIcon);
+    header.append(headingGroup, closeButton);
+
+    customizationFields = createElement('div', 'report-custom-fields');
+
+    const actions = createElement('footer', 'report-custom-actions');
+    const saveButton = createElement('button', 'report-custom-save', 'حفظ');
+    saveButton.type = 'button';
+    const cancelButton = createElement('button', 'report-custom-cancel', 'إلغاء');
+    cancelButton.type = 'button';
+    const clearButton = createElement('button', 'report-custom-clear', 'مسح تخصيص هذا التقرير');
+    clearButton.type = 'button';
+    customizationStatus = createElement('p', 'report-custom-status');
+    customizationStatus.setAttribute('role', 'status');
+    customizationStatus.setAttribute('aria-live', 'polite');
+    actions.append(saveButton, cancelButton, clearButton, customizationStatus);
+
+    dialog.append(header, customizationFields, actions);
+    customizationModal.appendChild(dialog);
+    document.body.appendChild(customizationModal);
+
+    closeButton.addEventListener('click', closeCustomizationModal);
+    cancelButton.addEventListener('click', closeCustomizationModal);
+    customizationModal.addEventListener('click', event=>{
+      if(event.target === customizationModal) closeCustomizationModal();
+    });
+
+    clearButton.addEventListener('click', ()=>{
+      if(!activeCustomReport) return;
+      try{
+        const store = readReportCustomStore();
+        delete store[activeCustomReport.id];
+        localStorage.setItem(customDataStorageKey, JSON.stringify(store));
+        populateCustomizationFields(activeCustomReport);
+        setCustomizationStatus('تم مسح تخصيص هذا التقرير.');
+      }catch{
+        setCustomizationStatus('تعذر مسح بيانات التخصيص.', true);
+      }
+    });
+
+    saveButton.addEventListener('click', ()=>{
+      if(!activeCustomReport) return;
+      const values = {};
+      activeCustomReport.customFields.forEach(field=>{
+        const input = customizationFields.querySelector(
+          `[data-report-custom-field="${field.key}"]`
+        );
+        values[field.key] = input ? input.value.trim() : '';
+      });
+      try{
+        const store = readReportCustomStore();
+        store[activeCustomReport.id] = values;
+        localStorage.setItem(customDataStorageKey, JSON.stringify(store));
+        setCustomizationStatus('تم حفظ تخصيص التقرير.');
+        window.setTimeout(closeCustomizationModal, 450);
+      }catch{
+        setCustomizationStatus('تعذر حفظ بيانات التخصيص.', true);
+      }
+    });
+
+    customizationModal.addEventListener('keydown', event=>{
+      if(event.key === 'Escape'){
+        closeCustomizationModal();
+        return;
+      }
+      if(event.key !== 'Tab') return;
+      const focusable = Array.from(
+        dialog.querySelectorAll('button:not([disabled]), input:not([disabled])')
+      ).filter(element=>!element.hidden);
+      if(!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if(event.shiftKey && document.activeElement === first){
+        event.preventDefault();
+        last.focus();
+      }else if(!event.shiftKey && document.activeElement === last){
+        event.preventDefault();
+        first.focus();
+      }
+    });
+  }
+
+  function openCustomizationModal(report, trigger){
+    if(!Array.isArray(report.customFields) || !report.customFields.length) return;
+    ensureCustomizationModal();
+    activeCustomReport = report;
+    customizationReturnFocus = trigger;
+    customizationTitle.textContent = `تخصيص التقرير: ${report.title}`;
+    setCustomizationStatus('');
+    populateCustomizationFields(report);
+    customizationModal.hidden = false;
+    customizationFields.querySelector('input')?.focus();
   }
 
   function createDownloadName(report, data){
@@ -208,7 +431,7 @@
           return '';
         }
       });
-      const reportData = getCleanReportData(report.sectionId);
+      const reportData = getCleanReportData(report);
       documentTemplate.render(reportData);
       downloadBlob(documentTemplate.toBlob(), createDownloadName(report, reportData));
       setStatus(status, 'تم تجهيز التقرير وتنزيله بنجاح.');
@@ -277,6 +500,14 @@
     wordDownload.type = 'button';
     wordDownload.dataset.reportWord = report.id;
     wordDownload.textContent = 'تنزيل Word معبأ';
+    if(Array.isArray(report.customFields) && report.customFields.length){
+      const customizeButton = document.createElement('button');
+      customizeButton.className = 'manager-report-customize';
+      customizeButton.type = 'button';
+      customizeButton.dataset.reportCustomize = report.id;
+      customizeButton.textContent = 'تخصيص التقرير';
+      actions.appendChild(customizeButton);
+    }
     const reportStatus = document.createElement('p');
     reportStatus.className = 'manager-report-status';
     reportStatus.dataset.reportStatus = report.id;
@@ -327,6 +558,14 @@
   });
 
   grid.addEventListener('click', event=>{
+    const customizeButton = event.target.closest('[data-report-customize]');
+    if(customizeButton){
+      const report = managerReportTemplates.find(
+        item=>item.id === customizeButton.dataset.reportCustomize
+      );
+      if(report) openCustomizationModal(report, customizeButton);
+      return;
+    }
     const button = event.target.closest('[data-report-word]');
     if(!button) return;
     const report = managerReportTemplates.find(item=>item.id === button.dataset.reportWord);
