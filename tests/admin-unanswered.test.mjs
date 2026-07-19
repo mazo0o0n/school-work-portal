@@ -69,6 +69,18 @@ async function fetchAdmin(request, database){
   return { response, body: await response.json() };
 }
 
+test('rejects invalid admin tokens without querying D1', async () => {
+  const database = createAdminDb();
+  const request = new globalThis.Request(ADMIN_URL, {
+    headers: { 'X-Admin-Token': 'invalid-admin-token' }
+  });
+  const { response, body } = await fetchAdmin(request, database);
+
+  assert.equal(response.status, 403);
+  assert.equal(body.error, 'Forbidden');
+  assert.equal(database.statements.length, 0);
+});
+
 test('paginates unanswered questions with a stable keyset cursor', async () => {
   const database = createAdminDb({
     count: 3,

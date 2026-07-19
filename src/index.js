@@ -16,6 +16,7 @@ const TOP_K = 4;
 const UNANSWERED_STATUSES = new Set(['new', 'reviewed', 'added_to_knowledge', 'ignored']);
 const UNANSWERED_DEFAULT_PAGE_SIZE = 50;
 const UNANSWERED_MAX_PAGE_SIZE = 50;
+const SECRET_TOKEN_ENCODER = new TextEncoder();
 
 function jsonResponse(body, status = 200){
   return new Response(JSON.stringify(body), {
@@ -510,13 +511,9 @@ async function getAdminUnansweredSummary(env){
 }
 
 async function handleAdminUnanswered(request, env){
-  if(!env.ADMIN_API_TOKEN || !env.UNANSWERED_DB){
-    return jsonResponse({ error: 'Not found' }, 404);
-  }
-
-  const adminToken = request.headers.get('X-Admin-Token') || '';
-  if(adminToken !== env.ADMIN_API_TOKEN){
-    return jsonResponse({ error: 'Forbidden' }, 403);
+  const auth = await isAdminRequestAllowed(request, env);
+  if(!auth.ok){
+    return auth.response;
   }
 
   const url = new URL(request.url);
@@ -567,6 +564,31 @@ async function handleAdminUnanswered(request, env){
       next_cursor: nextCursor
     }
   });
+}
+
+async function timingSafeTokenEqual(providedToken, expectedToken){
+  const [providedHash, expectedHash] = await Promise.all([
+    crypto.subtle.digest(
+      'SHA-256',
+      SECRET_TOKEN_ENCODER.encode(String(providedToken || ''))
+    ),
+    crypto.subtle.digest(
+      'SHA-256',
+      SECRET_TOKEN_ENCODER.encode(String(expectedToken || ''))
+    )
+  ]);
+  const providedBytes = new Uint8Array(providedHash);
+  const expectedBytes = new Uint8Array(expectedHash);
+
+  if(typeof crypto.subtle.timingSafeEqual === 'function'){
+    return crypto.subtle.timingSafeEqual(providedBytes, expectedBytes);
+  }
+
+  let mismatch = 0;
+  for(let index = 0; index < providedBytes.length; index += 1){
+    mismatch |= providedBytes[index] ^ expectedBytes[index];
+  }
+  return mismatch === 0;
 }
 
 function encodeUnansweredCursor(item, sort){
@@ -702,13 +724,13 @@ function getAdminQuestionId(pathname){
   return match ? Number(match[1]) : 0;
 }
 
-function isAdminRequestAllowed(request, env){
+async function isAdminRequestAllowed(request, env){
   if(!env.ADMIN_API_TOKEN || !env.UNANSWERED_DB){
     return { ok: false, response: jsonResponse({ error: 'Not found' }, 404) };
   }
 
   const adminToken = request.headers.get('X-Admin-Token') || '';
-  if(adminToken !== env.ADMIN_API_TOKEN){
+  if(!await timingSafeTokenEqual(adminToken, env.ADMIN_API_TOKEN)){
     return { ok: false, response: jsonResponse({ error: 'Forbidden' }, 403) };
   }
 
@@ -716,7 +738,7 @@ function isAdminRequestAllowed(request, env){
 }
 
 async function handleAdminUnansweredItem(request, env, id){
-  const auth = isAdminRequestAllowed(request, env);
+  const auth = await isAdminRequestAllowed(request, env);
   if(!auth.ok){
     return auth.response;
   }
