@@ -1200,6 +1200,12 @@ function setupManagerReportsPreferences(){
   });
 }
 
+const currentDateElements = document.querySelectorAll("[data-current-date]");
+const currentTimeElements = document.querySelectorAll("[data-current-time]");
+const themeToggleElements = document.querySelectorAll("[data-theme-toggle]");
+const themeLogoElements = document.querySelectorAll("[data-theme-logo]");
+const sideDrawerElement = document.getElementById("sideDrawer");
+
 if(localStorage.getItem('preferredTheme') === 'dark'){
   document.body.classList.add('dark');
 }
@@ -1302,10 +1308,10 @@ function updateDateTime(){
     minute:"2-digit"
   });
 
-  document.querySelectorAll("[data-current-date]").forEach((element) => {
+  currentDateElements.forEach((element) => {
     element.textContent = dateText;
   });
-  document.querySelectorAll("[data-current-time]").forEach((element) => {
+  currentTimeElements.forEach((element) => {
     element.textContent = timeText;
   });
 }
@@ -1319,14 +1325,14 @@ function toggleDark(){
 
 function updateThemeToggleState(){
   const isDark = document.body.classList.contains("dark");
-  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+  themeToggleElements.forEach((button) => {
     button.setAttribute("aria-pressed", String(isDark));
   });
 }
 
 function updateThemeLogos(){
   const isDark = document.body.classList.contains("dark");
-  document.querySelectorAll("[data-theme-logo]").forEach((logo) => {
+  themeLogoElements.forEach((logo) => {
     const nextSrc = isDark ? logo.dataset.darkSrc : logo.dataset.lightSrc;
     if(nextSrc && logo.getAttribute("src") !== nextSrc){
       logo.setAttribute("src", nextSrc);
@@ -1340,12 +1346,12 @@ function toggleContrast(){
 
 function openSideDrawer(){
   document.body.classList.add("drawer-open");
-  document.getElementById("sideDrawer")?.setAttribute("aria-hidden", "false");
+  sideDrawerElement?.setAttribute("aria-hidden", "false");
 }
 
 function closeSideDrawer(){
   document.body.classList.remove("drawer-open");
-  document.getElementById("sideDrawer")?.setAttribute("aria-hidden", "true");
+  sideDrawerElement?.setAttribute("aria-hidden", "true");
 }
 
 document.addEventListener("keydown", (event) => {

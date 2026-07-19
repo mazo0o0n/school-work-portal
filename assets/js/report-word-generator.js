@@ -153,6 +153,17 @@
   let customizationStatus = null;
   let activeCustomReport = null;
   let customizationReturnFocus = null;
+  let reportDependenciesPromise = null;
+  const reportDependencySources = [
+    {
+      src:'assets/vendor/docxtemplater-3.69.0.js',
+      isReady:()=>typeof window.docxtemplater === 'function'
+    },
+    {
+      src:'assets/vendor/pizzip-3.2.0.min.js',
+      isReady:()=>typeof window.PizZip === 'function'
+    }
+  ];
   const reportSearchText = new Map(
     managerReportTemplates.map(report=>[
       report.id,
@@ -165,6 +176,49 @@
       .map(value=>String(value || '').trim())
       .filter(Boolean)
       .join(' ');
+  }
+
+  function loadReportDependency(dependency){
+    if(dependency.isReady()) return Promise.resolve();
+
+    return new Promise((resolve, reject)=>{
+      const existing = document.querySelector(`script[data-report-dependency="${dependency.src}"]`);
+      const script = existing || document.createElement('script');
+      const onLoad = ()=>{
+        if(dependency.isReady()){
+          resolve();
+        }else{
+          reject(new Error('تعذر تحميل مكونات إنشاء ملف Word.'));
+        }
+      };
+      const onError = ()=>reject(new Error('تعذر تحميل مكونات إنشاء ملف Word.'));
+
+      script.addEventListener('load', onLoad, {once:true});
+      script.addEventListener('error', onError, {once:true});
+      if(existing) return;
+
+      script.src = dependency.src;
+      script.dataset.reportDependency = dependency.src;
+      document.head.appendChild(script);
+    });
+  }
+
+  function loadReportDependencies(){
+    if(reportDependencySources.every(dependency=>dependency.isReady())){
+      return Promise.resolve();
+    }
+    if(reportDependenciesPromise) return reportDependenciesPromise;
+
+    reportDependenciesPromise = reportDependencySources
+      .reduce(
+        (chain, dependency)=>chain.then(()=>loadReportDependency(dependency)),
+        Promise.resolve()
+      )
+      .catch(error=>{
+        reportDependenciesPromise = null;
+        throw error;
+      });
+    return reportDependenciesPromise;
   }
 
   function readReportCustomStore(){
@@ -419,6 +473,7 @@
     setStatus(status, 'جاري تجهيز ملف Word...');
 
     try{
+      await loadReportDependencies();
       if(typeof window.PizZip !== 'function' || typeof window.docxtemplater !== 'function'){
         throw new Error('تعذر تحميل مكونات إنشاء ملف Word.');
       }
