@@ -133,6 +133,16 @@ input:focus,select:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(13,1
   font-weight:900;
 }
 .questions-list{display:grid;gap:12px}
+.pagination{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+  padding:12px 16px;
+}
+.pagination[hidden]{display:none}
+.pagination button{min-width:130px}
+.pagination span{min-width:90px;text-align:center;font-weight:900}
 .empty{
   padding:28px;
   text-align:center;
@@ -192,4 +202,6 @@ dd{margin:5px 0 0;font-weight:800;overflow-wrap:anywhere}
   .status-stats{grid-template-columns:repeat(2,1fr)}
   .statistics-head{align-items:flex-start;flex-direction:column}
   .summary{display:grid}
+  .pagination{display:grid;grid-template-columns:1fr auto 1fr}
+  .pagination button{min-width:0}
 }

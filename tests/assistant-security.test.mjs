@@ -190,6 +190,11 @@ test('uses the original question for search and only the redacted copy for D1', 
   assert.equal(embeddingInputs[0], originalQuestion);
   assert.equal(body.answer, CHAT_FALLBACK_ANSWER);
   assert.ok(insert);
+  assert.match(insert.sql, /ON CONFLICT\(normalized_question\)/);
+  assert.match(insert.sql, /repeat_count = unanswered_questions\.repeat_count \+ 1/);
+  assert.equal(database.statements.some((statement) =>
+    statement.sql.includes('SELECT id FROM unanswered_questions')
+  ), false);
   assert.match(insert.values[0], /\[EMAIL_REDACTED\].*\[PHONE_REDACTED\].*\[NUMBER_REDACTED\].*\[SECRET_REDACTED\]/);
   assert.doesNotMatch(insert.values.slice(0, 2).join(' '), /qa\.user@example\.com|0551234567|123456789012|sample-token-value-123/);
 });

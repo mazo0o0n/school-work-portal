@@ -17,13 +17,24 @@ const topQuestion = document.getElementById('topQuestion');
 const topRepeatedList = document.getElementById('topRepeatedList');
 const reasonDistribution = document.getElementById('reasonDistribution');
 const visibleQuestionsCount = document.getElementById('visibleQuestionsCount');
+const paginationControls = document.getElementById('paginationControls');
+const previousPageBtn = document.getElementById('previousPageBtn');
+const nextPageBtn = document.getElementById('nextPageBtn');
+const pageIndicator = document.getElementById('pageIndicator');
 const tabs = [...document.querySelectorAll('.tab')];
 const adminContent = [...document.querySelectorAll('.admin-content')];
 
 let adminToken = '';
 let currentItems = [];
+let currentTotal = 0;
 let activeStatus = 'new';
 let busy = false;
+let currentCursor = '';
+let nextCursor = '';
+let cursorHistory = [];
+let currentPage = 1;
+let searchTimer = 0;
+const pageSize = 25;
 
 const statusLabels = {
   new: 'جديد',
@@ -37,6 +48,7 @@ const reasonLabels = {
   no_matches: 'لا توجد نتيجة مناسبة',
   low_score: 'نتيجة ضعيفة',
   external_guard: 'خارج نطاق معرفة المنصة',
+  strict_rag_failed: 'خطأ مؤقت في البحث',
   unknown: 'غير معروف'
 };
 
@@ -58,6 +70,7 @@ function setBusy(value){
   document.querySelectorAll('button').forEach((button) => {
     button.disabled = value;
   });
+  updatePagination();
 }
 
 function setAdminVisible(value){
@@ -77,6 +90,11 @@ function resetSession(message = 'تم تسجيل الخروج ومسح الرم�
   adminToken = '';
   adminTokenInput.value = '';
   currentItems = [];
+  currentTotal = 0;
+  currentCursor = '';
+  nextCursor = '';
+  cursorHistory = [];
+  currentPage = 1;
   setAdminVisible(false);
   renderItems();
   setStatus(message, type);
@@ -169,8 +187,10 @@ function renderUnavailableList(element){
   element.appendChild(item);
 }
 
-function renderAggregateInsights(items){
-  if(!items.length){
+function renderAggregateInsights(data){
+  const repeatedItems = Array.isArray(data?.top_questions) ? data.top_questions : [];
+  const reasons = Array.isArray(data?.reason_distribution) ? data.reason_distribution : [];
+  if(!repeatedItems.length && !reasons.length){
     topReason.textContent = 'لا توجد بيانات كافية';
     topQuestion.textContent = 'لا توجد بيانات كافية';
     renderUnavailableList(topRepeatedList);
@@ -178,40 +198,39 @@ function renderAggregateInsights(items){
     return;
   }
 
-  const reasonCounts = items.reduce((counts, item) => {
-    const reason = String(item.reason || 'unknown').trim() || 'unknown';
-    counts.set(reason, (counts.get(reason) || 0) + 1);
-    return counts;
-  }, new Map());
-  const [mostCommonReason, reasonCount] = [...reasonCounts.entries()]
-    .sort((a, b) => b[1] - a[1])[0];
-  topReason.textContent = `${displayReason(mostCommonReason)} (${reasonCount.toLocaleString('ar-SA')})`;
+  const topReasonItem = data?.top_reason;
+  topReason.textContent = topReasonItem
+    ? `${displayReason(topReasonItem.reason)} (${Number(topReasonItem.count || 0).toLocaleString('ar-SA')})`
+    : 'لا توجد بيانات كافية';
 
-  const mostRepeated = items.reduce((topItem, item) => {
-    return Number(item.repeat_count || 0) > Number(topItem.repeat_count || 0) ? item : topItem;
-  }, items[0]);
-  const repeatCount = Number(mostRepeated.repeat_count || 0);
-  topQuestion.textContent = `${cleanMarkdownQuestion(mostRepeated.question)} (${repeatCount.toLocaleString('ar-SA')})`;
+  const mostRepeated = repeatedItems[0];
+  const repeatCount = Number(mostRepeated?.repeat_count || 0);
+  topQuestion.textContent = mostRepeated
+    ? `${cleanMarkdownQuestion(mostRepeated.question)} (${repeatCount.toLocaleString('ar-SA')})`
+    : 'لا توجد بيانات كافية';
 
   topRepeatedList.replaceChildren();
-  [...items]
-    .sort((a, b) => Number(b.repeat_count || 0) - Number(a.repeat_count || 0))
-    .slice(0, 5)
-    .forEach((item) => {
+  if(repeatedItems.length){
+    repeatedItems.forEach((item) => {
       const listItem = document.createElement('li');
       const count = Number(item.repeat_count || 0).toLocaleString('ar-SA');
       listItem.textContent = `${cleanMarkdownQuestion(item.question)} — ${count} تكرار`;
       topRepeatedList.appendChild(listItem);
     });
+  }else{
+    renderUnavailableList(topRepeatedList);
+  }
 
   reasonDistribution.replaceChildren();
-  [...reasonCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .forEach(([reason, count]) => {
+  if(reasons.length){
+    reasons.forEach((item) => {
       const listItem = document.createElement('li');
-      listItem.textContent = `${displayReason(reason)}: ${count.toLocaleString('ar-SA')}`;
+      listItem.textContent = `${displayReason(item.reason)}: ${Number(item.count || 0).toLocaleString('ar-SA')}`;
       reasonDistribution.appendChild(listItem);
     });
+  }else{
+    renderUnavailableList(reasonDistribution);
+  }
 }
 
 async function loadStatistics(){
@@ -226,19 +245,13 @@ async function loadStatistics(){
   allStatsCount.textContent = '—';
 
   try{
-    const statuses = Object.keys(statisticsCountElements);
-    const responses = await Promise.all(statuses.map((status) => {
-      return apiRequest(`/api/admin/unanswered?status=${encodeURIComponent(status)}`, {}, false);
-    }));
-
-    const allItems = [];
-    responses.forEach((data, index) => {
-      if(!Array.isArray(data.items)) throw new Error('Invalid statistics response');
-      statisticsCountElements[statuses[index]].textContent = data.items.length.toLocaleString('ar-SA');
-      allItems.push(...data.items);
+    const data = await apiRequest('/api/admin/unanswered?summary=1', {}, false);
+    Object.entries(statisticsCountElements).forEach(([status, element]) => {
+      element.textContent = Number(data?.counts?.[status] || 0).toLocaleString('ar-SA');
     });
-    allStatsCount.textContent = allItems.length.toLocaleString('ar-SA');
-    renderAggregateInsights(allItems);
+    allStatsCount.textContent = Number(data?.counts?.all || 0).toLocaleString('ar-SA');
+    renderAggregateInsights(data);
+    updateReasonFilter((data?.reason_distribution || []).map((item) => item.reason));
   }catch(_){
     Object.values(statisticsCountElements).forEach((element) => {
       element.textContent = '—';
@@ -252,9 +265,9 @@ async function loadStatistics(){
   }
 }
 
-function updateReasonFilter(){
+function updateReasonFilter(availableReasons = []){
   const selectedReason = reasonFilter.value;
-  const reasons = [...new Set(currentItems.map((item) => String(item.reason || 'unknown').trim() || 'unknown'))]
+  const reasons = [...new Set(availableReasons.map((reason) => String(reason || 'unknown').trim() || 'unknown'))]
     .sort((a, b) => displayReason(a).localeCompare(displayReason(b), 'ar'));
 
   reasonFilter.replaceChildren();
@@ -302,48 +315,51 @@ async function copyText(text){
 }
 
 function getSortedFilteredItems(){
-  const query = searchInput.value.trim().toLowerCase();
+  return [...currentItems];
+}
+
+function resetPagination(){
+  currentCursor = '';
+  nextCursor = '';
+  cursorHistory = [];
+  currentPage = 1;
+}
+
+function updatePagination(){
+  paginationControls.hidden = currentTotal === 0 && currentPage === 1;
+  previousPageBtn.disabled = busy || cursorHistory.length === 0;
+  nextPageBtn.disabled = busy || !nextCursor;
+  pageIndicator.textContent = `الصفحة ${currentPage.toLocaleString('ar-SA')}`;
+}
+
+function buildQuestionsUrl(){
+  const params = new URLSearchParams({
+    status: activeStatus,
+    limit: String(pageSize),
+    sort: sortSelect.value
+  });
+  const query = searchInput.value.trim();
   const selectedReason = reasonFilter.value;
-  const filtered = currentItems.filter((item) => {
-    const itemReason = String(item.reason || 'unknown').trim() || 'unknown';
-    if(selectedReason && itemReason !== selectedReason) return false;
-    if(!query) return true;
-    return [
-      item.question,
-      item.reason,
-      item.status,
-      item.page_path,
-      item.source
-    ].some((value) => String(value || '').toLowerCase().includes(query));
-  });
 
-  return filtered.sort((a, b) => {
-    const aDate = new Date(a.updated_at || a.created_at || 0);
-    const bDate = new Date(b.updated_at || b.created_at || 0);
-    const aTime = Number.isNaN(aDate.getTime()) ? 0 : aDate.getTime();
-    const bTime = Number.isNaN(bDate.getTime()) ? 0 : bDate.getTime();
+  if(query) params.set('q', query);
+  if(selectedReason) params.set('reason', selectedReason);
+  if(currentCursor) params.set('cursor', currentCursor);
 
-    if(sortSelect.value === 'oldest'){
-      return aTime - bTime;
-    }
-    if(sortSelect.value === 'repeat'){
-      return Number(b.repeat_count || 0) - Number(a.repeat_count || 0);
-    }
-    return bTime - aTime;
-  });
+  return `/api/admin/unanswered?${params.toString()}`;
 }
 
 function renderItems(){
   clearChildren(questionsList);
   const items = getSortedFilteredItems();
-  totalCount.textContent = `${items.length} سؤال`;
+  totalCount.textContent = `${currentTotal.toLocaleString('ar-SA')} سؤال`;
   currentStatus.textContent = `الحالة: ${statusLabels[activeStatus] || activeStatus}`;
   renderVisibleCount(items);
+  updatePagination();
 
   if(!items.length){
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = currentItems.length ? 'لا توجد نتائج مطابقة للفلتر.' : 'لا توجد أسئلة غير مجابة حاليًا.';
+    empty.textContent = currentTotal ? 'لا توجد نتائج في هذه الصفحة.' : 'لا توجد أسئلة غير مجابة حاليًا.';
     questionsList.appendChild(empty);
     return;
   }
@@ -371,22 +387,26 @@ function renderItems(){
   });
 }
 
-async function loadQuestions(){
+async function loadQuestions({ reset = false, refreshStatistics = true } = {}){
   if(!requireToken() || busy) return;
+  if(reset) resetPagination();
   setBusy(true);
   setStatus('جاري تحميل الأسئلة...');
 
   try{
-    const data = await apiRequest(`/api/admin/unanswered?status=${encodeURIComponent(activeStatus)}`);
+    const data = await apiRequest(buildQuestionsUrl());
     currentItems = Array.isArray(data.items) ? data.items : [];
-    updateReasonFilter();
+    currentTotal = Number(data.total ?? data.total_new ?? currentItems.length);
+    nextCursor = String(data?.pagination?.next_cursor || '');
     setAdminVisible(true);
     renderItems();
     adminTokenInput.value = '';
     setStatus('متصل. تم تحديث البيانات بنجاح.', 'success');
-    await loadStatistics();
+    if(refreshStatistics) await loadStatistics();
   }catch(error){
     currentItems = [];
+    currentTotal = 0;
+    nextCursor = '';
     renderItems();
     setStatus(error.message || 'فشل الاتصال.', 'error');
   }finally{
@@ -443,7 +463,7 @@ connectBtn.addEventListener('click', () => {
     setStatus('أدخل رمز الإدارة أولًا.', 'error');
     return;
   }
-  loadQuestions();
+  loadQuestions({ reset: true });
 });
 
 adminTokenInput.addEventListener('keydown', (event) => {
@@ -457,7 +477,7 @@ logoutBtn.addEventListener('click', () => {
   resetSession();
 });
 
-refreshBtn.addEventListener('click', loadQuestions);
+refreshBtn.addEventListener('click', () => loadQuestions());
 bulkCopyBtn.addEventListener('click', async () => {
   const items = getSortedFilteredItems();
   if(!items.length){
@@ -476,17 +496,42 @@ bulkCopyBtn.addEventListener('click', async () => {
     setStatus('تعذر نسخ القوالب الظاهرة من المتصفح.', 'error');
   }
 });
-searchInput.addEventListener('input', renderItems);
-reasonFilter.addEventListener('change', renderItems);
-sortSelect.addEventListener('change', renderItems);
+searchInput.addEventListener('input', () => {
+  window.clearTimeout(searchTimer);
+  searchTimer = window.setTimeout(() => {
+    loadQuestions({ reset: true, refreshStatistics: false });
+  }, 250);
+});
+reasonFilter.addEventListener('change', () => {
+  loadQuestions({ reset: true, refreshStatistics: false });
+});
+sortSelect.addEventListener('change', () => {
+  loadQuestions({ reset: true, refreshStatistics: false });
+});
+
+previousPageBtn.addEventListener('click', () => {
+  if(!cursorHistory.length || busy) return;
+  currentCursor = cursorHistory.pop() || '';
+  currentPage = Math.max(1, currentPage - 1);
+  loadQuestions({ refreshStatistics: false });
+});
+
+nextPageBtn.addEventListener('click', () => {
+  if(!nextCursor || busy) return;
+  cursorHistory.push(currentCursor);
+  currentCursor = nextCursor;
+  currentPage += 1;
+  loadQuestions({ refreshStatistics: false });
+});
 
 tabs.forEach((tab) => {
   tab.addEventListener('click', () => {
     activeStatus = tab.dataset.status;
     tabs.forEach((item) => item.classList.toggle('active', item === tab));
     if(adminToken){
-      loadQuestions();
+      loadQuestions({ reset: true, refreshStatistics: false });
     }else{
+      resetPagination();
       renderItems();
     }
   });

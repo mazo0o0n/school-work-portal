@@ -13,6 +13,9 @@ const EMBEDDING_MODEL = '@cf/qwen/qwen3-embedding-0.6b';
 const CHAT_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
 const MIN_SCORE = 0.55;
 const TOP_K = 4;
+const UNANSWERED_STATUSES = new Set(['new', 'reviewed', 'added_to_knowledge', 'ignored']);
+const UNANSWERED_DEFAULT_PAGE_SIZE = 50;
+const UNANSWERED_MAX_PAGE_SIZE = 50;
 
 function jsonResponse(body, status = 200){
   return new Response(JSON.stringify(body), {
@@ -95,31 +98,18 @@ async function saveUnansweredQuestion(env, details){
     const pagePath = sanitizeQuestionForStorage(details.pagePath).trim().slice(0, 300);
     const now = new Date().toISOString();
 
-    if(normalizedQuestion){
-      const existing = await env.UNANSWERED_DB.prepare(
-        'SELECT id FROM unanswered_questions WHERE normalized_question = ?1 LIMIT 1'
-      ).bind(normalizedQuestion).first();
-
-      if(existing?.id){
-        await env.UNANSWERED_DB.prepare(
-          [
-            'UPDATE unanswered_questions',
-            'SET repeat_count = repeat_count + 1,',
-            'reason = ?1,',
-            'page_path = COALESCE(NULLIF(?2, \'\'), page_path),',
-            'updated_at = ?3',
-            'WHERE id = ?4'
-          ].join(' ')
-        ).bind(reason, pagePath, now, existing.id).run();
-        return;
-      }
-    }
-
     await env.UNANSWERED_DB.prepare(
       [
         'INSERT INTO unanswered_questions',
         '(question, normalized_question, reason, page_path, source, status, repeat_count, created_at, updated_at)',
-        'VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?7)'
+        'VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?7)',
+        'ON CONFLICT(normalized_question)',
+        'WHERE normalized_question IS NOT NULL AND normalized_question != \'\'',
+        'DO UPDATE SET',
+        'repeat_count = unanswered_questions.repeat_count + 1,',
+        'reason = excluded.reason,',
+        'page_path = COALESCE(NULLIF(excluded.page_path, \'\'), unanswered_questions.page_path),',
+        'updated_at = excluded.updated_at'
       ].join(' ')
     ).bind(
       question,
@@ -464,6 +454,61 @@ async function handleChat(request, env){
   }
 }
 
+async function getAdminUnansweredSummary(env){
+  const statements = [
+    env.UNANSWERED_DB.prepare(
+      'SELECT status, COUNT(*) AS count FROM unanswered_questions GROUP BY status'
+    ),
+    env.UNANSWERED_DB.prepare(
+      [
+        'SELECT reason, COUNT(*) AS count',
+        'FROM unanswered_questions',
+        'GROUP BY reason',
+        'ORDER BY count DESC, reason ASC'
+      ].join(' ')
+    ),
+    env.UNANSWERED_DB.prepare(
+      [
+        'SELECT id, question, reason, status, repeat_count, updated_at',
+        'FROM unanswered_questions',
+        'ORDER BY repeat_count DESC, updated_at DESC, id DESC',
+        'LIMIT 5'
+      ].join(' ')
+    )
+  ];
+  const results = typeof env.UNANSWERED_DB.batch === 'function'
+    ? await env.UNANSWERED_DB.batch(statements)
+    : await Promise.all(statements.map((statement) => statement.all()));
+  const counts = {
+    all: 0,
+    new: 0,
+    reviewed: 0,
+    added_to_knowledge: 0,
+    ignored: 0
+  };
+
+  for(const item of results[0]?.results || []){
+    const status = String(item.status || '');
+    const count = Number(item.count || 0);
+    counts.all += count;
+    if(Object.hasOwn(counts, status)){
+      counts[status] = count;
+    }
+  }
+
+  const reasonDistribution = (results[1]?.results || []).map((item) => ({
+    reason: String(item.reason || 'unknown'),
+    count: Number(item.count || 0)
+  }));
+
+  return {
+    counts,
+    top_reason: reasonDistribution[0] || null,
+    reason_distribution: reasonDistribution,
+    top_questions: results[2]?.results || []
+  };
+}
+
 async function handleAdminUnanswered(request, env){
   if(!env.ADMIN_API_TOKEN || !env.UNANSWERED_DB){
     return jsonResponse({ error: 'Not found' }, 404);
@@ -475,26 +520,181 @@ async function handleAdminUnanswered(request, env){
   }
 
   const url = new URL(request.url);
-  const status = String(url.searchParams.get('status') || 'new').trim().slice(0, 40) || 'new';
+  if(url.searchParams.get('summary') === '1'){
+    return jsonResponse(await getAdminUnansweredSummary(env));
+  }
+
+  let query;
+  try{
+    query = buildUnansweredListQuery(url);
+  }catch(error){
+    if(error?.message === 'INVALID_UNANSWERED_CURSOR'){
+      return jsonResponse({ error: 'Invalid cursor' }, 400);
+    }
+    if(error?.message === 'INVALID_UNANSWERED_STATUS'){
+      return jsonResponse({ error: 'Invalid status' }, 400);
+    }
+    throw error;
+  }
 
   const totalResult = await env.UNANSWERED_DB.prepare(
-    'SELECT COUNT(*) AS count FROM unanswered_questions WHERE status = ?1'
-  ).bind(status).first();
-
+    `SELECT COUNT(*) AS count FROM unanswered_questions WHERE ${query.countWhere}`
+  ).bind(...query.countBindings).first();
   const itemsResult = await env.UNANSWERED_DB.prepare(
     [
-      'SELECT id, question, reason, status, repeat_count, created_at, updated_at',
+      'SELECT id, question, reason, page_path, source, status, repeat_count, created_at, updated_at',
       'FROM unanswered_questions',
-      'WHERE status = ?1',
-      'ORDER BY updated_at DESC',
-      'LIMIT 50'
+      `WHERE ${query.listWhere}`,
+      `ORDER BY ${query.orderBy}`,
+      `LIMIT ${query.limitBinding}`
     ].join(' ')
-  ).bind(status).all();
+  ).bind(...query.listBindings).all();
+  const fetchedItems = itemsResult?.results || [];
+  const hasMore = fetchedItems.length > query.limit;
+  const items = hasMore ? fetchedItems.slice(0, query.limit) : fetchedItems;
+  const nextCursor = hasMore && items.length
+    ? encodeUnansweredCursor(items[items.length - 1], query.sort)
+    : null;
+  const total = Number(totalResult?.count || 0);
 
   return jsonResponse({
-    total_new: Number(totalResult?.count || 0),
-    items: itemsResult?.results || []
+    total_new: total,
+    total,
+    items,
+    pagination: {
+      limit: query.limit,
+      has_more: hasMore,
+      next_cursor: nextCursor
+    }
   });
+}
+
+function encodeUnansweredCursor(item, sort){
+  const payload = {
+    id: Number(item.id),
+    updatedAt: String(item.updated_at || '')
+  };
+
+  if(sort === 'repeat'){
+    payload.repeatCount = Number(item.repeat_count || 0);
+  }
+
+  return btoa(JSON.stringify(payload))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function decodeUnansweredCursor(cursor, sort){
+  if(!cursor){
+    return null;
+  }
+
+  try{
+    const normalized = cursor.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const parsed = JSON.parse(atob(padded));
+    const id = Number(parsed?.id);
+    const updatedAt = String(parsed?.updatedAt || '');
+    const repeatCount = Number(parsed?.repeatCount);
+
+    if(!Number.isInteger(id) || id < 1 || !updatedAt){
+      throw new Error('Invalid cursor');
+    }
+    if(sort === 'repeat' && (!Number.isFinite(repeatCount) || repeatCount < 0)){
+      throw new Error('Invalid repeat cursor');
+    }
+
+    return { id, updatedAt, repeatCount };
+  }catch(error){
+    throw new Error('INVALID_UNANSWERED_CURSOR', { cause: error });
+  }
+}
+
+function buildUnansweredListQuery(url){
+  const status = String(url.searchParams.get('status') || 'new').trim();
+  if(!UNANSWERED_STATUSES.has(status)){
+    throw new Error('INVALID_UNANSWERED_STATUS');
+  }
+
+  const requestedLimit = Number.parseInt(url.searchParams.get('limit') || '', 10);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(requestedLimit, 1), UNANSWERED_MAX_PAGE_SIZE)
+    : UNANSWERED_DEFAULT_PAGE_SIZE;
+  const requestedSort = url.searchParams.get('sort');
+  const sort = ['newest', 'oldest', 'repeat'].includes(requestedSort) ? requestedSort : 'newest';
+  const search = String(url.searchParams.get('q') || '').trim().slice(0, 120);
+  const reason = String(url.searchParams.get('reason') || '').trim().slice(0, 80);
+  const cursor = decodeUnansweredCursor(url.searchParams.get('cursor'), sort);
+  const bindings = [status];
+  const bind = (value) => {
+    bindings.push(value);
+    return `?${bindings.length}`;
+  };
+  const filters = ['status = ?1'];
+
+  if(search){
+    const searchBinding = bind(search);
+    filters.push(`(
+      instr(lower(COALESCE(question, '')), lower(${searchBinding})) > 0 OR
+      instr(lower(COALESCE(reason, '')), lower(${searchBinding})) > 0 OR
+      instr(lower(COALESCE(page_path, '')), lower(${searchBinding})) > 0 OR
+      instr(lower(COALESCE(source, '')), lower(${searchBinding})) > 0
+    )`);
+  }
+
+  if(reason){
+    filters.push(`reason = ${bind(reason)}`);
+  }
+
+  const countBindings = [...bindings];
+  const countWhere = filters.join(' AND ');
+  let orderBy = 'updated_at DESC, id DESC';
+
+  if(sort === 'oldest'){
+    orderBy = 'updated_at ASC, id ASC';
+  }else if(sort === 'repeat'){
+    orderBy = 'repeat_count DESC, updated_at DESC, id DESC';
+  }
+
+  if(cursor){
+    const idBinding = bind(cursor.id);
+    const updatedBinding = bind(cursor.updatedAt);
+
+    if(sort === 'oldest'){
+      filters.push(`(
+        updated_at > ${updatedBinding} OR
+        (updated_at = ${updatedBinding} AND id > ${idBinding})
+      )`);
+    }else if(sort === 'repeat'){
+      const repeatBinding = bind(cursor.repeatCount);
+      filters.push(`(
+        repeat_count < ${repeatBinding} OR
+        (repeat_count = ${repeatBinding} AND (
+          updated_at < ${updatedBinding} OR
+          (updated_at = ${updatedBinding} AND id < ${idBinding})
+        ))
+      )`);
+    }else{
+      filters.push(`(
+        updated_at < ${updatedBinding} OR
+        (updated_at = ${updatedBinding} AND id < ${idBinding})
+      )`);
+    }
+  }
+
+  bindings.push(limit + 1);
+  return {
+    status,
+    sort,
+    limit,
+    countWhere,
+    countBindings,
+    listWhere: filters.join(' AND '),
+    listBindings: bindings,
+    limitBinding: `?${bindings.length}`,
+    orderBy
+  };
 }
 
 function getAdminQuestionId(pathname){
@@ -533,9 +733,8 @@ async function handleAdminUnansweredItem(request, env, id){
       return jsonResponse({ error: 'Invalid JSON' }, 400);
     }
 
-    const allowedStatuses = new Set(['new', 'reviewed', 'added_to_knowledge', 'ignored']);
     const status = String(payload?.status || '').trim();
-    if(!allowedStatuses.has(status)){
+    if(!UNANSWERED_STATUSES.has(status)){
       return jsonResponse({ error: 'Invalid status' }, 400);
     }
 
