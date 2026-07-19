@@ -39,7 +39,7 @@ function localTargetExists(file, href) {
   let decodedHref;
   try {
     decodedHref = decodeURIComponent(cleanHref);
-  } catch (_) {
+  } catch {
     return false;
   }
 

@@ -35,7 +35,7 @@ async function loadKnowledgeStats(){
     updatedAt.textContent = formatArabicDate(stats.updated_at);
     loadStatus.className = 'load-status success';
     loadStatus.textContent = 'تم تحميل إحصائيات المعرفة بنجاح.';
-  }catch(_){
+  }catch{
     qaCount.textContent = '—';
     sourcesCount.textContent = '—';
     updatedAt.textContent = '—';
@@ -55,7 +55,7 @@ document.querySelectorAll('.copy-command').forEach((button) => {
     try{
       await navigator.clipboard.writeText(command);
       button.textContent = 'تم النسخ';
-    }catch(_){
+    }catch{
       button.textContent = 'تعذر النسخ';
     }
 

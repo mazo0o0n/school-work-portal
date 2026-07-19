@@ -62,7 +62,7 @@
 
 ## الاختبارات
 
-- `tests/chat-smoke-tests.json`: حالات أساسية لاختبار المعرفة، fallback، الصور، والرد السري.
+- `tests/chat-smoke-tests.json`: حالات أساسية لاختبار المعرفة وfallback والصور.
 
 ## docs
 

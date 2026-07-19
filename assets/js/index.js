@@ -62,7 +62,7 @@ function isValidUrl(u){
   try{
     const url = new URL(String(u||"").trim());
     return url.protocol === "https:";
-  }catch(_){
+  }catch{
     return false;
   }
 }
@@ -756,7 +756,7 @@ function readLocalStorageObject(key){
   try{
     const value = JSON.parse(localStorage.getItem(key) || '{}');
     return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-  }catch(_){
+  }catch{
     return {};
   }
 }
@@ -1205,6 +1205,7 @@ const currentTimeElements = document.querySelectorAll("[data-current-time]");
 const themeToggleElements = document.querySelectorAll("[data-theme-toggle]");
 const themeLogoElements = document.querySelectorAll("[data-theme-logo]");
 const sideDrawerElement = document.getElementById("sideDrawer");
+let sideDrawerReturnFocus = null;
 
 if(localStorage.getItem('preferredTheme') === 'dark'){
   document.body.classList.add('dark');
@@ -1340,22 +1341,48 @@ function updateThemeLogos(){
   });
 }
 
-function toggleContrast(){
-  document.body.classList.toggle("high-contrast");
-}
-
 function openSideDrawer(){
+  sideDrawerReturnFocus = document.activeElement;
   document.body.classList.add("drawer-open");
   sideDrawerElement?.setAttribute("aria-hidden", "false");
+  sideDrawerElement?.removeAttribute("inert");
+  requestAnimationFrame(() => {
+    sideDrawerElement?.querySelector(".drawer-close")?.focus();
+  });
 }
 
 function closeSideDrawer(){
+  if(!document.body.classList.contains("drawer-open")) return;
   document.body.classList.remove("drawer-open");
   sideDrawerElement?.setAttribute("aria-hidden", "true");
+  sideDrawerElement?.setAttribute("inert", "");
+  if(sideDrawerReturnFocus?.isConnected){
+    sideDrawerReturnFocus.focus({ preventScroll: true });
+  }
+  sideDrawerReturnFocus = null;
 }
 
 document.addEventListener("keydown", (event) => {
-  if(event.key === "Escape") closeSideDrawer();
+  if(!document.body.classList.contains("drawer-open")) return;
+  if(event.key === "Escape"){
+    event.preventDefault();
+    closeSideDrawer();
+    return;
+  }
+  if(event.key !== "Tab" || !sideDrawerElement) return;
+  const focusable = Array.from(
+    sideDrawerElement.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')
+  ).filter((element) => element.getClientRects().length);
+  if(!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if(event.shiftKey && document.activeElement === first){
+    event.preventDefault();
+    last.focus();
+  }else if(!event.shiftKey && document.activeElement === last){
+    event.preventDefault();
+    first.focus();
+  }
 });
 
 updateDateTime();

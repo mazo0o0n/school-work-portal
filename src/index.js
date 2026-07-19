@@ -16,15 +16,172 @@ const TOP_K = 4;
 const UNANSWERED_STATUSES = new Set(['new', 'reviewed', 'added_to_knowledge', 'ignored']);
 const UNANSWERED_DEFAULT_PAGE_SIZE = 50;
 const UNANSWERED_MAX_PAGE_SIZE = 50;
+const ADMIN_PATCH_MAX_REQUEST_BYTES = 4 * 1024;
 const SECRET_TOKEN_ENCODER = new TextEncoder();
+const RATE_LIMIT_WINDOW_SECONDS = 60;
+const INTERNAL_PAGE_PATHS = new Set([
+  '/admin-unanswered.html',
+  '/assistant-status.html',
+  '/knowledge-status.html',
+  '/assistant-test.html'
+]);
 
-function jsonResponse(body, status = 200){
+function jsonResponse(body, status = 200, extraHeaders = {}){
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store'
+      'Cache-Control': 'no-store',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-Content-Type-Options': 'nosniff',
+      ...extraHeaders
     }
+  });
+}
+
+class AdminPatchRequestError extends Error{
+  constructor(code, status, publicMessage){
+    super(code);
+    this.name = 'AdminPatchRequestError';
+    this.status = status;
+    this.publicMessage = publicMessage;
+  }
+}
+
+function isApplicationJsonRequest(request){
+  const contentType = String(request.headers.get('content-type') || '')
+    .split(';', 1)[0]
+    .trim()
+    .toLowerCase();
+  return contentType === 'application/json';
+}
+
+async function readAdminPatchBody(request){
+  const contentLengthHeader = request.headers.get('content-length');
+  if(contentLengthHeader !== null){
+    const contentLength = Number(contentLengthHeader);
+    if(Number.isFinite(contentLength) && contentLength > ADMIN_PATCH_MAX_REQUEST_BYTES){
+      throw new AdminPatchRequestError('request_too_large', 413, 'Request too large');
+    }
+  }
+
+  if(!request.body) return '';
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let text = '';
+
+  while(true){
+    const { done, value } = await reader.read();
+    if(done) break;
+
+    bytesRead += value.byteLength;
+    if(bytesRead > ADMIN_PATCH_MAX_REQUEST_BYTES){
+      await reader.cancel();
+      throw new AdminPatchRequestError('request_too_large', 413, 'Request too large');
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+
+  return text + decoder.decode();
+}
+
+async function parseAdminPatchRequest(request){
+  if(!isApplicationJsonRequest(request)){
+    throw new AdminPatchRequestError(
+      'unsupported_content_type',
+      415,
+      'Unsupported content type'
+    );
+  }
+
+  const rawBody = await readAdminPatchBody(request);
+  try{
+    return JSON.parse(rawBody);
+  }catch{
+    throw new AdminPatchRequestError('invalid_json', 400, 'Invalid JSON');
+  }
+}
+
+function rateLimitResponse(scope){
+  const isChat = scope === 'chat';
+  const message = isChat
+    ? 'تم تجاوز الحد المسموح مؤقتًا. انتظر دقيقة ثم حاول مرة أخرى.'
+    : 'تم تجاوز عدد محاولات الدخول. انتظر دقيقة ثم حاول مرة أخرى.';
+
+  return jsonResponse(
+    isChat
+      ? {
+          answer: message,
+          source: 'مساعد المنصة',
+          notFound: true,
+          error: 'rate_limited'
+        }
+      : {
+          error: message,
+          code: 'rate_limited'
+        },
+    429,
+    { 'Retry-After': String(RATE_LIMIT_WINDOW_SECONDS) }
+  );
+}
+
+async function getRateLimitClientKey(request, env, scope){
+  const clientAddress = String(request.headers.get('CF-Connecting-IP') || '').trim();
+  const secretSalt = String(env.RATE_LIMIT_SALT || '').trim();
+  if(!clientAddress || !secretSalt){
+    return '';
+  }
+
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    SECRET_TOKEN_ENCODER.encode(`${secretSalt}:${scope}:${clientAddress}`)
+  );
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function isRateLimitAllowed(request, env, scope, limiter){
+  if(!limiter || typeof limiter.limit !== 'function'){
+    return true;
+  }
+
+  const key = await getRateLimitClientKey(request, env, scope);
+  if(!key){
+    return true;
+  }
+
+  try{
+    const result = await limiter.limit({ key });
+    return result?.success !== false;
+  }catch{
+    console.error('Rate limiting binding unavailable.');
+    return true;
+  }
+}
+
+async function fetchInternalAsset(request, env, pathname){
+  const response = await env.ASSETS.fetch(request);
+  if(!INTERNAL_PAGE_PATHS.has(pathname)){
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'no-store');
+  headers.set('Pragma', 'no-cache');
+  headers.set('Expires', '0');
+  headers.set('X-Robots-Tag', 'noindex, nofollow');
+  headers.set('Referrer-Policy', 'no-referrer');
+  headers.set('X-Content-Type-Options', 'nosniff');
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
   });
 }
 
@@ -730,7 +887,17 @@ async function isAdminRequestAllowed(request, env){
   }
 
   const adminToken = request.headers.get('X-Admin-Token') || '';
-  if(!await timingSafeTokenEqual(adminToken, env.ADMIN_API_TOKEN)){
+  const tokenMatches = await timingSafeTokenEqual(adminToken, env.ADMIN_API_TOKEN);
+  if(!tokenMatches){
+    const allowed = await isRateLimitAllowed(
+      request,
+      env,
+      'admin-auth',
+      env.ADMIN_AUTH_RATE_LIMITER
+    );
+    if(!allowed){
+      return { ok: false, response: rateLimitResponse('admin') };
+    }
     return { ok: false, response: jsonResponse({ error: 'Forbidden' }, 403) };
   }
 
@@ -750,9 +917,12 @@ async function handleAdminUnansweredItem(request, env, id){
   if(request.method === 'PATCH'){
     let payload;
     try{
-      payload = await request.json();
-    }catch(_){
-      return jsonResponse({ error: 'Invalid JSON' }, 400);
+      payload = await parseAdminPatchRequest(request);
+    }catch(error){
+      if(error instanceof AdminPatchRequestError){
+        return jsonResponse({ error: error.publicMessage }, error.status);
+      }
+      throw error;
     }
 
     const status = String(payload?.status || '').trim();
@@ -808,6 +978,16 @@ export default {
         return jsonResponse({ error: 'Method not allowed' }, 405);
       }
 
+      const allowed = await isRateLimitAllowed(
+        request,
+        env,
+        'chat',
+        env.CHAT_RATE_LIMITER
+      );
+      if(!allowed){
+        return rateLimitResponse('chat');
+      }
+
       return handleChat(request, env);
     }
 
@@ -815,6 +995,6 @@ export default {
       return jsonResponse({ error: 'Not found' }, 404);
     }
 
-    return env.ASSETS.fetch(request);
+    return fetchInternalAsset(request, env, url.pathname);
   }
 };

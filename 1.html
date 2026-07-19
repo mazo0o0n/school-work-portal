@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <meta name="description" content="أداة لإنشاء تقارير تشغيلية وتربوية جاهزة للطباعة ضمن منصة التنظيم المدرسي.">
 <title>صانع التقارير | منصة التنظيم المدرسي</title>
+<link rel="canonical" href="https://mazen.zb-store.com/1.html">
 
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -28,8 +29,14 @@ html,body{
 }
 
 /* ورقة */
+.sheet-viewport{
+  width:210mm;
+  min-height:297mm;
+  margin:12px auto;
+  position:relative;
+}
 .sheet{
-  width:210mm; height:297mm; margin:12px auto; background:var(--paper);
+  width:210mm; height:297mm; margin:0; background:var(--paper);
   border:1px solid #e5e7eb; box-shadow:0 10px 28px rgba(0,0,0,.08);
   display:grid; grid-template-rows:30mm auto 6mm; overflow:hidden; position:relative;
 }
@@ -214,19 +221,21 @@ html,body{
 
 /* توافق الشاشات الصغيرة: تصغير الورقة مع الحفاظ على A4 للطباعة */
 @media screen and (max-width:900px){
-  body{overflow-x:auto;}
-  .sheet{
-    transform:scale(.8);
-    transform-origin:top center;
+  body{overflow-x:hidden;}
+  .sheet-viewport{
+    width:100%;
+    min-height:0;
     margin:8px auto 16px;
+  }
+  .sheet{
+    position:absolute;
+    top:0;
+    left:50%;
+    transform:translateX(-50%) scale(var(--sheet-scale,.8));
+    transform-origin:top center;
   }
 }
 @media screen and (max-width:600px){
-  .sheet{
-    transform:scale(.7);
-    transform-origin:top center;
-  }
-
   .photo .hint{
     inset:6px;
     padding:10px 10px;
@@ -242,6 +251,11 @@ html,body{
   }
 }
 @media print{
+  .sheet-viewport{
+    width:210mm;
+    min-height:297mm;
+    margin:0;
+  }
   .sheet{
     transform:none !important;
     width:210mm;
@@ -256,7 +270,8 @@ html,body{
 </head>
 <body>
 
-<div class="sheet" id="sheet">
+<div class="sheet-viewport" id="sheetViewport">
+<div class="sheet" id="sheet" role="main" aria-label="نموذج التقرير المدرسي">
   <!-- الهيدر -->
   <div class="header-img">
     <img id="headerPic" src="assets/images/header.jpg" alt="هيدر وزارة التعليم" crossorigin="anonymous">
@@ -287,7 +302,7 @@ html,body{
     <table class="table" id="infoTable" role="table" aria-label="بيانات البرنامج">
       <tr class="title-row">
         <th colspan="4">
-          <div id="reportTitle" contenteditable="true">تقرير تنفيذ برنامج (قابل للتعديل)</div>
+          <div id="reportTitle" contenteditable="true" role="heading" aria-level="1">تقرير تنفيذ برنامج (قابل للتعديل)</div>
         </th>
       </tr>
       <tr>
@@ -316,9 +331,9 @@ html,body{
         <div class="head">الأهداف</div>
         <div class="body">
           <div class="tools" data-nopdf="true">
-            <button class="toolbtn" onclick="adjText('goals',+1)">+A</button>
-            <button class="toolbtn" onclick="adjText('goals',-1)">−A</button>
-            <button class="toolbtn" onclick="toggleBold('goals')">B</button>
+            <button class="toolbtn" type="button" aria-label="تكبير نص الأهداف" onclick="adjText('goals',+1)">+A</button>
+            <button class="toolbtn" type="button" aria-label="تصغير نص الأهداف" onclick="adjText('goals',-1)">−A</button>
+            <button class="toolbtn" type="button" aria-label="تبديل الخط العريض لنص الأهداف" onclick="toggleBold('goals')">B</button>
           </div>
           <div id="goals" class="fittext" contenteditable="true">اكتب الأهداف هنا…</div>
         </div>
@@ -327,9 +342,9 @@ html,body{
         <div class="head">نبذة عن البرنامج</div>
         <div class="body">
           <div class="tools" data-nopdf="true">
-            <button class="toolbtn" onclick="adjText('about',+1)">+A</button>
-            <button class="toolbtn" onclick="adjText('about',-1)">−A</button>
-            <button class="toolbtn" onclick="toggleBold('about')">B</button>
+            <button class="toolbtn" type="button" aria-label="تكبير نص نبذة البرنامج" onclick="adjText('about',+1)">+A</button>
+            <button class="toolbtn" type="button" aria-label="تصغير نص نبذة البرنامج" onclick="adjText('about',-1)">−A</button>
+            <button class="toolbtn" type="button" aria-label="تبديل الخط العريض لنبذة البرنامج" onclick="toggleBold('about')">B</button>
           </div>
           <div id="about" class="fittext" contenteditable="true">اكتب النبذة هنا…</div>
         </div>
@@ -340,42 +355,42 @@ html,body{
 <div class="gallery" id="gallery">
 
   <div class="photo">
-    <input type="file" accept="image/*,.heic,.heif">
+    <input type="file" accept="image/*,.heic,.heif" aria-label="رفع صورة الشاهد الأولى">
     <div class="hint" data-nopdf="true">
       <div>تنبيه مهم: لظهور الشاهد بصورة أجمل داخل التقرير يُفضّل استخدام صيغة</div>
       <div class="type">JPG / JPEG</div>
       <div>ويُفضّل أن تكون الصورة <strong>بالعرض (أفقية)</strong> لتناسب مساحة الشاهد بشكل أفضل.</div>
-      <div>كما يُفضّل ألا يتجاوز حجم الصورة <strong>500MB</strong> لتسريع المعالجة والتصدير إلى PDF.</div>
+      <div>كما يجب ألا يتجاوز حجم الصورة <strong>10MB</strong> لتسريع المعالجة والتصدير إلى PDF.</div>
     </div>
   </div>
 
   <div class="photo">
-    <input type="file" accept="image/*,.heic,.heif">
+    <input type="file" accept="image/*,.heic,.heif" aria-label="رفع صورة الشاهد الثانية">
     <div class="hint" data-nopdf="true">
       <div>تنبيه مهم: لظهور الشاهد بصورة أجمل داخل التقرير يُفضّل استخدام صيغة</div>
       <div class="type">JPG / JPEG</div>
       <div>ويُفضّل أن تكون الصورة <strong>بالعرض (أفقية)</strong> لتناسب مساحة الشاهد بشكل أفضل.</div>
-      <div>كما يُفضّل ألا يتجاوز حجم الصورة <strong>500MB</strong> لتسريع المعالجة والتصدير إلى PDF.</div>
+      <div>كما يجب ألا يتجاوز حجم الصورة <strong>10MB</strong> لتسريع المعالجة والتصدير إلى PDF.</div>
     </div>
   </div>
 
   <div class="photo">
-    <input type="file" accept="image/*,.heic,.heif">
+    <input type="file" accept="image/*,.heic,.heif" aria-label="رفع صورة الشاهد الثالثة">
     <div class="hint" data-nopdf="true">
       <div>تنبيه مهم: لظهور الشاهد بصورة أجمل داخل التقرير يُفضّل استخدام صيغة</div>
       <div class="type">JPG / JPEG</div>
       <div>ويُفضّل أن تكون الصورة <strong>بالعرض (أفقية)</strong> لتناسب مساحة الشاهد بشكل أفضل.</div>
-      <div>كما يُفضّل ألا يتجاوز حجم الصورة <strong>500MB</strong> لتسريع المعالجة والتصدير إلى PDF.</div>
+      <div>كما يجب ألا يتجاوز حجم الصورة <strong>10MB</strong> لتسريع المعالجة والتصدير إلى PDF.</div>
     </div>
   </div>
 
   <div class="photo">
-    <input type="file" accept="image/*,.heic,.heif">
+    <input type="file" accept="image/*,.heic,.heif" aria-label="رفع صورة الشاهد الرابعة">
     <div class="hint" data-nopdf="true">
       <div>تنبيه مهم: لظهور الشاهد بصورة أجمل داخل التقرير يُفضّل استخدام صيغة</div>
       <div class="type">JPG / JPEG</div>
       <div>ويُفضّل أن تكون الصورة <strong>بالعرض (أفقية)</strong> لتناسب مساحة الشاهد بشكل أفضل.</div>
-      <div>كما يُفضّل ألا يتجاوز حجم الصورة <strong>500MB</strong> لتسريع المعالجة والتصدير إلى PDF.</div>
+      <div>كما يجب ألا يتجاوز حجم الصورة <strong>10MB</strong> لتسريع المعالجة والتصدير إلى PDF.</div>
     </div>
   </div>
 
@@ -395,10 +410,12 @@ html,body{
 
   <div class="footer-bar" aria-hidden="true"></div>
 </div>
+</div>
 
 <script>
 const STORAGE_KEY='report_v15_headerPDF_chip';
-const MAX_IMAGE_SIZE_MB = 500;
+const REPORT_STORAGE_VERSION = 2;
+const MAX_IMAGE_SIZE_MB = 10;
 const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
 function checkImageSizeLimit(file){
@@ -424,6 +441,32 @@ function fitBox(id){
 }
 function adjText(id,dir){const el=document.getElementById(id); if(!el) return; const cur=parseFloat(getComputedStyle(el).fontSize)||15; const next=Math.max(12,Math.min(20,cur+(dir>0?1:-1))); el.style.fontSize=next+'px'; fitBox(id);}
 function toggleBold(id){const el=document.getElementById(id); if(!el) return; el.style.fontWeight=(getComputedStyle(el).fontWeight>='600')?'400':'700'; fitBox(id);}
+
+function fitReportSheetToViewport(){
+  const viewport=document.getElementById('sheetViewport');
+  const sheet=document.getElementById('sheet');
+  if(!viewport || !sheet) return;
+  if(window.innerWidth>900 || window.matchMedia('print').matches){
+    document.documentElement.style.removeProperty('--sheet-scale');
+    viewport.style.height='';
+    return;
+  }
+  const availableWidth=Math.max(280,window.innerWidth-16);
+  const scale=Math.min(.8,availableWidth/sheet.offsetWidth);
+  document.documentElement.style.setProperty('--sheet-scale',String(scale));
+  viewport.style.height=`${Math.ceil(sheet.offsetHeight*scale)}px`;
+}
+
+let sheetResizeFrame=0;
+window.addEventListener('resize',()=>{
+  cancelAnimationFrame(sheetResizeFrame);
+  sheetResizeFrame=requestAnimationFrame(fitReportSheetToViewport);
+});
+window.addEventListener('beforeprint',()=>{
+  const viewport=document.getElementById('sheetViewport');
+  if(viewport) viewport.style.height='';
+});
+window.addEventListener('afterprint',fitReportSheetToViewport);
 
 async function toDataURL(img,{maxSide=2400,q=0.95}={}){
   await (img.decode?.().catch(()=>{}) || new Promise(r=>{if(img.complete&&img.naturalWidth)r();else{img.addEventListener('load',r,{once:true});img.addEventListener('error',r,{once:true});}}));
@@ -733,14 +776,31 @@ const dataUrl = await renderFillNoDistortion(file, box);
 (function(){try{const h=document.getElementById('hijriDate'); if(h && !h.textContent.trim()){ h.textContent=new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura',{day:'2-digit',month:'long',year:'numeric'}).format(new Date()); }}catch{}})();
 
 /* حفظ/استرجاع */
+function editableText(element){
+  return typeof element?.innerText === 'string'
+    ? element.innerText
+    : String(element?.textContent || '');
+}
+function storedText(value){
+  return typeof value === 'string' ? value : '';
+}
+function isSafeStoredPhotoSource(value){
+  return typeof value === 'string'
+    && /^data:image\/(?:jpeg|png|webp);base64,/i.test(value);
+}
+function editableInfoCells(){
+  return [...document.querySelectorAll('#infoTable th,#infoTable td')]
+    .filter(cell=>!cell.closest('.title-row'));
+}
 function snap(){
-  const cells=[...document.querySelectorAll('#infoTable th,#infoTable td')].map(c=>c.innerHTML);
+  const cells=editableInfoCells().map(editableText);
   const photos=[...document.querySelectorAll('.gallery .photo img')].map(i=>i?.src||'');
   return {
-    title:document.getElementById('reportTitle').innerHTML,
-    h:document.getElementById('hijriDate').innerHTML,
-    g:document.getElementById('goals').innerHTML,
-    a:document.getElementById('about').innerHTML,
+    version:REPORT_STORAGE_VERSION,
+    title:editableText(document.getElementById('reportTitle')),
+    h:editableText(document.getElementById('hijriDate')),
+    g:editableText(document.getElementById('goals')),
+    a:editableText(document.getElementById('about')),
     cells, photos
   };
 }
@@ -748,14 +808,27 @@ function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(snap()));}
 (function restore(){
   try{
     const s=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'); if(!s) return;
-    document.getElementById('reportTitle').innerHTML=s.title;
-    document.getElementById('hijriDate').innerHTML=s.h;
-    document.getElementById('goals').innerHTML=s.g;
-    document.getElementById('about').innerHTML=s.a;
-    const cells=[...document.querySelectorAll('#infoTable th,#infoTable td')];
-    s.cells?.forEach((v,i)=>{ if(cells[i]) cells[i].innerHTML=v; });
+    document.getElementById('reportTitle').textContent=storedText(s.title);
+    document.getElementById('hijriDate').textContent=storedText(s.h);
+    document.getElementById('goals').textContent=storedText(s.g);
+    document.getElementById('about').textContent=storedText(s.a);
+    const cells=editableInfoCells();
+    if(Array.isArray(s.cells)){
+      const storedCells = s.version === REPORT_STORAGE_VERSION
+        ? s.cells
+        : s.cells.slice(Math.max(0, s.cells.length - cells.length));
+      storedCells.forEach((v,i)=>{ if(cells[i]) cells[i].textContent=storedText(v); });
+    }
     const boxes=[...document.querySelectorAll('.gallery .photo')];
-    s.photos?.forEach((src,i)=>{ if(!src||!boxes[i]) return; let img=boxes[i].querySelector('img'); if(!img){img=document.createElement('img');boxes[i].appendChild(img);} img.src=src; boxes[i].querySelector('.hint')?.remove(); });
+    if(Array.isArray(s.photos)){
+      s.photos.forEach((src,i)=>{
+        if(!isSafeStoredPhotoSource(src)||!boxes[i]) return;
+        let img=boxes[i].querySelector('img');
+        if(!img){img=document.createElement('img');boxes[i].appendChild(img);}
+        img.src=src;
+        boxes[i].querySelector('.hint')?.remove();
+      });
+    }
     ['goals','about'].forEach(fitBox);
   }catch{}
 })();
@@ -781,6 +854,7 @@ async function makePdf(){
 
 /* تشغيل */
 document.addEventListener('DOMContentLoaded', ()=>{
+  fitReportSheetToViewport();
   ['goals','about'].forEach(id=>{
     const el=document.getElementById(id);
     ['input','keyup','blur'].forEach(evt=> el.addEventListener(evt, ()=>{fitBox(id); save();}));

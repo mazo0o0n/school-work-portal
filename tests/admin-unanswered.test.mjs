@@ -11,13 +11,45 @@ const loadableWorkerSource = workerSource.replace(
 );
 const workerModuleUrl = `data:text/javascript;base64,${Buffer.from(loadableWorkerSource).toString('base64')}`;
 const { default: worker } = await import(workerModuleUrl);
+const wranglerSource = await readFile(
+  new globalThis.URL('../wrangler.toml', import.meta.url),
+  'utf8'
+);
 
 const ADMIN_URL = 'https://example.test/api/admin/unanswered';
 const ADMIN_TOKEN = 'test-admin-token';
+const ADMIN_PATCH_MAX_REQUEST_BYTES = 4 * 1024;
+
+function getAdminRateLimitConfig(){
+  const block = wranglerSource
+    .split('[[ratelimits]]')
+    .slice(1)
+    .find((candidate) =>
+      /^\s*name\s*=\s*"ADMIN_AUTH_RATE_LIMITER"\s*$/m.test(candidate)
+    );
+
+  assert.ok(block, 'Missing ADMIN_AUTH_RATE_LIMITER binding');
+
+  return {
+    limit: Number(block.match(/^\s*limit\s*=\s*(\d+)\s*$/m)?.[1]),
+    period: Number(block.match(/^\s*period\s*=\s*(\d+)\s*$/m)?.[1])
+  };
+}
 
 function createAdminRequest(query = ''){
   return new globalThis.Request(`${ADMIN_URL}${query}`, {
     headers: { 'X-Admin-Token': ADMIN_TOKEN }
+  });
+}
+
+function createAdminPatchRequest(body, contentType = 'application/json'){
+  return new globalThis.Request(`${ADMIN_URL}/7`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': contentType,
+      'X-Admin-Token': ADMIN_TOKEN
+    },
+    body: typeof body === 'string' ? body : JSON.stringify(body)
   });
 }
 
@@ -38,10 +70,26 @@ function createAdminDb({ count = 3, items = [] } = {}){
               },
               async all(){
                 return { results: items };
+              },
+              async run(){
+                return { meta: { changes: 1 } };
               }
             };
           }
         };
+      }
+    }
+  };
+}
+
+function createRateLimiter(allowedRequests){
+  const keys = [];
+  return {
+    keys,
+    binding: {
+      async limit({ key }){
+        keys.push(key);
+        return { success: keys.length <= allowedRequests };
       }
     }
   };
@@ -61,10 +109,11 @@ function createItem(id, updatedAt, repeatCount = 1){
   };
 }
 
-async function fetchAdmin(request, database){
+async function fetchAdmin(request, database, extraEnv = {}){
   const response = await worker.fetch(request, {
     ADMIN_API_TOKEN: ADMIN_TOKEN,
-    UNANSWERED_DB: database.binding
+    UNANSWERED_DB: database.binding,
+    ...extraEnv
   });
   return { response, body: await response.json() };
 }
@@ -79,6 +128,59 @@ test('rejects invalid admin tokens without querying D1', async () => {
   assert.equal(response.status, 403);
   assert.equal(body.error, 'Forbidden');
   assert.equal(database.statements.length, 0);
+});
+
+test('rate limits invalid admin tokens after 5 attempts without exposing identifiers', async () => {
+  const adminConfig = getAdminRateLimitConfig();
+  assert.deepEqual(adminConfig, { limit: 5, period: 60 });
+
+  const database = createAdminDb();
+  const limiter = createRateLimiter(adminConfig.limit);
+  const extraEnv = {
+    ADMIN_AUTH_RATE_LIMITER: limiter.binding,
+    RATE_LIMIT_SALT: 'test-only-rate-limit-salt'
+  };
+  const requestOptions = {
+    headers: {
+      'X-Admin-Token': 'invalid-admin-token',
+      'CF-Connecting-IP': '203.0.113.20'
+    }
+  };
+
+  for(let attempt = 0; attempt < adminConfig.limit; attempt += 1){
+    const allowed = await fetchAdmin(
+      new globalThis.Request(ADMIN_URL, requestOptions),
+      database,
+      extraEnv
+    );
+    assert.equal(allowed.response.status, 403);
+  }
+
+  const blocked = await fetchAdmin(
+    new globalThis.Request(ADMIN_URL, requestOptions),
+    database,
+    extraEnv
+  );
+
+  assert.equal(blocked.response.status, 429);
+  assert.equal(blocked.response.headers.get('Retry-After'), String(adminConfig.period));
+  assert.equal(blocked.response.headers.get('Cache-Control'), 'no-store');
+  assert.equal(blocked.body.code, 'rate_limited');
+  assert.doesNotMatch(JSON.stringify(blocked.body), /203\.0\.113\.20|invalid-admin-token|test-only-rate-limit-salt/);
+  assert.equal(database.statements.length, 0);
+  assert.equal(limiter.keys.length, adminConfig.limit + 1);
+  assert.ok(limiter.keys.every((key) => /^[a-f0-9]{64}$/.test(key)));
+  assert.ok(limiter.keys.every((key) => !key.includes('203.0.113.20')));
+
+  const validRequest = new globalThis.Request(ADMIN_URL, {
+    headers: {
+      'X-Admin-Token': ADMIN_TOKEN,
+      'CF-Connecting-IP': '203.0.113.20'
+    }
+  });
+  const valid = await fetchAdmin(validRequest, createAdminDb(), extraEnv);
+  assert.equal(valid.response.status, 200);
+  assert.equal(limiter.keys.length, adminConfig.limit + 1);
 });
 
 test('paginates unanswered questions with a stable keyset cursor', async () => {
@@ -152,6 +254,146 @@ test('keeps the existing unanswered list response fields', async () => {
   assert.equal(body.total_new, 1);
   assert.equal(body.items.length, 1);
   assert.ok(body.pagination);
+});
+
+test('prevents caching of successful and rejected admin responses', async () => {
+  const successful = await fetchAdmin(createAdminRequest(), createAdminDb());
+  const rejected = await fetchAdmin(
+    new globalThis.Request(ADMIN_URL, {
+      headers: { 'X-Admin-Token': 'invalid-admin-token' }
+    }),
+    createAdminDb()
+  );
+
+  for(const result of [successful, rejected]){
+    assert.equal(result.response.headers.get('Cache-Control'), 'no-store');
+    assert.equal(result.response.headers.get('Pragma'), 'no-cache');
+    assert.equal(result.response.headers.get('X-Content-Type-Options'), 'nosniff');
+    assert.match(result.response.headers.get('Content-Type'), /^application\/json/);
+  }
+});
+
+test('rejects admin PATCH requests with an unsupported content type', async () => {
+  const database = createAdminDb();
+  const { response, body } = await fetchAdmin(
+    createAdminPatchRequest({ status: 'reviewed' }, 'text/plain'),
+    database
+  );
+
+  assert.equal(response.status, 415);
+  assert.equal(body.error, 'Unsupported content type');
+  assert.equal(database.statements.length, 0);
+});
+
+test('returns the unified 400 response for invalid admin PATCH JSON', async () => {
+  const database = createAdminDb();
+  const { response, body } = await fetchAdmin(
+    createAdminPatchRequest('{'),
+    database
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(body, { error: 'Invalid JSON' });
+  assert.equal(database.statements.length, 0);
+});
+
+test('rejects admin PATCH bodies larger than the limit', async () => {
+  const database = createAdminDb();
+  const oversizedBody = JSON.stringify({
+    status: 'reviewed',
+    padding: 'x'.repeat(ADMIN_PATCH_MAX_REQUEST_BYTES)
+  });
+  const { response, body } = await fetchAdmin(
+    createAdminPatchRequest(oversizedBody),
+    database
+  );
+
+  assert.equal(response.status, 413);
+  assert.equal(body.error, 'Request too large');
+  assert.equal(database.statements.length, 0);
+});
+
+test('keeps valid JSON PATCH and DELETE admin requests working', async () => {
+  const patchDatabase = createAdminDb();
+  const patchResponse = await worker.fetch(
+    createAdminPatchRequest({ status: 'reviewed' }),
+    {
+      ADMIN_API_TOKEN: ADMIN_TOKEN,
+      UNANSWERED_DB: patchDatabase.binding
+    }
+  );
+  const patchBody = await patchResponse.json();
+
+  assert.equal(patchResponse.status, 200);
+  assert.equal(patchBody.ok, true);
+  assert.equal(patchBody.changed, 1);
+  assert.match(patchDatabase.statements[0].sql, /^UPDATE unanswered_questions/);
+
+  const deleteDatabase = createAdminDb();
+  const deleteResponse = await worker.fetch(
+    new globalThis.Request(`${ADMIN_URL}/7`, {
+      method: 'DELETE',
+      headers: { 'X-Admin-Token': ADMIN_TOKEN }
+    }),
+    {
+      ADMIN_API_TOKEN: ADMIN_TOKEN,
+      UNANSWERED_DB: deleteDatabase.binding
+    }
+  );
+  const deleteBody = await deleteResponse.json();
+
+  assert.equal(deleteResponse.status, 200);
+  assert.equal(deleteBody.ok, true);
+  assert.equal(deleteBody.deleted, 1);
+  assert.match(deleteDatabase.statements[0].sql, /^DELETE FROM unanswered_questions/);
+});
+
+test('adds no-cache and no-index headers to internal admin pages', async () => {
+  const response = await worker.fetch(
+    new globalThis.Request('https://example.test/admin-unanswered.html'),
+    {
+      ASSETS: {
+        async fetch(){
+          return new globalThis.Response('<!doctype html>', {
+            headers: { 'Content-Type': 'text/html; charset=utf-8' }
+          });
+        }
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  assert.equal(response.headers.get('X-Robots-Tag'), 'noindex, nofollow');
+  assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer');
+  assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
+
+  const staticHeaders = await readFile(
+    new globalThis.URL('../_headers', import.meta.url),
+    'utf8'
+  );
+  const pageNames = [
+    'admin-unanswered.html',
+    'assistant-status.html',
+    'knowledge-status.html',
+    'assistant-test.html'
+  ];
+
+  for(const pageName of pageNames){
+    const pageBlock = staticHeaders
+      .split(`/${pageName}`)[1]
+      ?.split(/\r?\n(?=\/)/, 1)[0] || '';
+    assert.match(pageBlock, /Cache-Control: no-store/);
+    assert.match(pageBlock, /Pragma: no-cache/);
+    assert.match(pageBlock, /X-Robots-Tag: noindex, nofollow/);
+
+    const html = await readFile(
+      new globalThis.URL(`../${pageName}`, import.meta.url),
+      'utf8'
+    );
+    assert.match(html, /<meta name="robots" content="noindex, nofollow">/);
+    assert.match(html, /<meta name="referrer" content="no-referrer">/);
+  }
 });
 
 test('prepares archive support without applying or deleting data', async () => {

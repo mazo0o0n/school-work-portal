@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="description" content="أداة محلية لتحليل نتائج المواد ومؤشرات التحصيل الدراسي.">
 <title>تحليل نتائج مادة</title>
+<link rel="canonical" href="https://mazen.zb-store.com/3.html">
 
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -500,46 +501,46 @@ body{
 </div>
 
 <!-- Modal -->
-<div class="overlay" id="ov">
+<div class="overlay" id="ov" role="dialog" aria-modal="true" aria-labelledby="dataModalTitle" aria-hidden="true" inert>
   <div class="modal">
     <div class="modalHead">
-      <div class="t">إدخال البيانات واستيراد الدرجات</div>
-      <button class="x" id="closeOv" title="إغلاق">✕</button>
+      <div class="t" id="dataModalTitle">إدخال البيانات واستيراد الدرجات</div>
+      <button class="x" id="closeOv" type="button" aria-label="إغلاق نافذة إدخال البيانات" title="إغلاق">✕</button>
     </div>
     <div class="modalBody">
 
       <div class="formGrid">
         <div class="field">
-          <label>إدارة التعليم <span class="req">*</span></label>
+          <label for="inEdu">إدارة التعليم <span class="req">*</span></label>
           <input id="inEdu" class="invalid" placeholder="اكتب هنا إدارة التعليم" value="" />
         </div>
         <div class="field">
-          <label>اسم المدرسة <span class="req">*</span></label>
+          <label for="inSchool">اسم المدرسة <span class="req">*</span></label>
           <input id="inSchool" class="invalid" placeholder="اكتب هنا اسم المدرسة" value="" />
         </div>
         <div class="field">
-          <label>اسم مدير المدرسة <span class="req">*</span></label>
+          <label for="inPrincipal">اسم مدير المدرسة <span class="req">*</span></label>
           <input id="inPrincipal" class="invalid" placeholder="اكتب هنا اسم مدير المدرسة" value="" />
         </div>
         <div class="field">
-          <label>معلم المادة <span class="req">*</span></label>
+          <label for="inTeacher">معلم المادة <span class="req">*</span></label>
           <input id="inTeacher" class="invalid" placeholder="اكتب هنا اسم معلم المادة" value="" />
         </div>
 
         <div class="field">
-          <label>المادة <span class="req">*</span></label>
+          <label for="inSubject">المادة <span class="req">*</span></label>
           <input id="inSubject" class="invalid" placeholder="اكتب هنا اسم المادة" value="" />
         </div>
         <div class="field">
-          <label>المرحلة / الصف <span class="req">*</span></label>
+          <label for="inStage">المرحلة / الصف <span class="req">*</span></label>
           <input id="inStage" class="invalid" placeholder="اكتب هنا المرحلة/الصف" value="" />
         </div>
         <div class="field">
-          <label>السنة / الفصل الدراسي (اختياري)</label>
+          <label for="inTerm">السنة / الفصل الدراسي (اختياري)</label>
           <input id="inTerm" placeholder="اكتب هنا السنة/الفصل (اختياري)" value="" style="border-color:#cfd8dc;background:#fff;" />
         </div>
         <div class="field">
-          <label>درجة الاختبار (اختياري)</label>
+          <label for="inFullMode">درجة الاختبار (اختياري)</label>
           <select id="inFullMode">
             <option value="auto">آلي (ذكي)</option>
             <option value="40">40</option>
@@ -549,11 +550,11 @@ body{
         </div>
 
         <div class="field">
-          <label>رفع ملف الدرجات (Excel/CSV) <span class="req">*</span></label>
+          <label for="file">رفع ملف الدرجات (Excel/CSV) <span class="req">*</span></label>
           <input type="file" id="file" class="invalid" accept=".xlsx,.xls,.csv" />
         </div>
         <div class="field">
-          <label>تصفية الشُعب (اختياري)</label>
+          <label for="inSections">تصفية الشُعب (اختياري)</label>
           <input id="inSections" placeholder="اكتب الشُعب إن رغبت (مثال: 1,2,3)" value="" style="border-color:#cfd8dc;background:#fff;" />
         </div>
       </div>
@@ -613,12 +614,107 @@ const toNumber = (v)=>{
   return Number.isFinite(n) ? n : NaN;
 };
 const pct = (a,b)=> b ? (a/b)*100 : 0;
+const MAX_DATA_FILE_SIZE_MB = 5;
+const MAX_DATA_FILE_SIZE_BYTES = MAX_DATA_FILE_SIZE_MB * 1024 * 1024;
+const MAX_DATA_ROWS = 5000;
+const MAX_DATA_COLUMNS = 100;
+
+class DataFileLimitError extends Error{
+  constructor(userMessage){
+    super("Data file limit exceeded");
+    this.name = "DataFileLimitError";
+    this.userMessage = userMessage;
+  }
+}
+
+function assertDataFileSize(file){
+  if(!file) return;
+  if(file.size <= MAX_DATA_FILE_SIZE_BYTES) return;
+  throw new DataFileLimitError(
+    `حجم ملف الدرجات أكبر من الحد المسموح (${MAX_DATA_FILE_SIZE_MB} MB). ` +
+    "يُرجى تقليل حجم الملف أو تصدير الصفوف المطلوبة فقط ثم إعادة المحاولة."
+  );
+}
+
+function assertDataDimensions(rowCount, columnCount){
+  if(rowCount > MAX_DATA_ROWS){
+    throw new DataFileLimitError(
+      `يتجاوز ملف الدرجات الحد المسموح لعدد الصفوف (${MAX_DATA_ROWS} صف). ` +
+      "يُرجى تقسيم الملف أو الإبقاء على بيانات الصفوف المطلوبة فقط."
+    );
+  }
+  if(columnCount > MAX_DATA_COLUMNS){
+    throw new DataFileLimitError(
+      `يتجاوز ملف الدرجات الحد المسموح لعدد الأعمدة (${MAX_DATA_COLUMNS} عمود). ` +
+      "يُرجى حذف الأعمدة غير اللازمة ثم إعادة المحاولة."
+    );
+  }
+}
+
+function getRowsDimensions(rows){
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const columnCount = safeRows.reduce(
+    (largest, row)=>Math.max(largest, Array.isArray(row) ? row.length : 0),
+    0
+  );
+  return { rowCount:safeRows.length, columnCount };
+}
+
+function getWorksheetDimensions(worksheet){
+  const reference = worksheet?.["!ref"];
+  if(!reference) return { rowCount:0, columnCount:0 };
+  const range = XLSX.utils.decode_range(reference);
+  return {
+    rowCount:Math.max(0, range.e.r - range.s.r + 1),
+    columnCount:Math.max(0, range.e.c - range.s.c + 1)
+  };
+}
 
 /* Modal */
 const ov = $("ov");
-$("openModal").onclick = ()=> ov.classList.add("open");
-$("closeOv").onclick = ()=> ov.classList.remove("open");
-ov.addEventListener("click",(e)=>{ if(e.target===ov) ov.classList.remove("open"); });
+const openModalButton = $("openModal");
+const closeModalButton = $("closeOv");
+let dataModalReturnFocus = null;
+function openDataModal(){
+  dataModalReturnFocus = document.activeElement;
+  ov.removeAttribute("inert");
+  ov.classList.add("open");
+  ov.setAttribute("aria-hidden","false");
+  requestAnimationFrame(()=>$("inEdu").focus());
+}
+function closeDataModal(){
+  if(!ov.classList.contains("open")) return;
+  ov.classList.remove("open");
+  ov.setAttribute("aria-hidden","true");
+  ov.setAttribute("inert","");
+  if(dataModalReturnFocus?.isConnected) dataModalReturnFocus.focus();
+  dataModalReturnFocus = null;
+}
+openModalButton.onclick = openDataModal;
+closeModalButton.onclick = closeDataModal;
+ov.addEventListener("click",(e)=>{ if(e.target===ov) closeDataModal(); });
+document.addEventListener("keydown",(event)=>{
+  if(!ov.classList.contains("open")) return;
+  if(event.key === "Escape"){
+    event.preventDefault();
+    closeDataModal();
+    return;
+  }
+  if(event.key !== "Tab") return;
+  const focusable = Array.from(
+    ov.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')
+  ).filter(element=>element.getClientRects().length);
+  if(!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if(event.shiftKey && document.activeElement === first){
+    event.preventDefault();
+    last.focus();
+  }else if(!event.shiftKey && document.activeElement === last){
+    event.preventDefault();
+    first.focus();
+  }
+});
 
 /* Inputs */
 const inEdu = $("inEdu");
@@ -635,7 +731,25 @@ const statusPill = $("statusPill");
 const analyzeBtn = $("doAnalyze");
 
 let selectedFile = null;
-fileEl.addEventListener("change",(e)=>{ selectedFile = e.target.files?.[0] || null; validateInputs(); });
+let fileValidationMessage = "";
+fileEl.addEventListener("change",(e)=>{
+  const candidate = e.target.files?.[0] || null;
+  selectedFile = null;
+  fileValidationMessage = "";
+  try{
+    assertDataFileSize(candidate);
+    selectedFile = candidate;
+  }catch(error){
+    if(error instanceof DataFileLimitError){
+      fileValidationMessage = error.userMessage;
+      fileEl.value = "";
+      alert(error.userMessage);
+    }else{
+      throw error;
+    }
+  }
+  validateInputs();
+});
 
 const required = [inEdu,inSchool,inPrincipal,inTeacher,inSubject,inStage];
 
@@ -661,7 +775,10 @@ function validateInputs(){
   markField(fileEl, fileOk);
   if(!fileOk) ok=false;
 
-  setStatus(ok ? "جاهز للتحليل" : "أكمل الحقول الإلزامية", ok);
+  setStatus(
+    fileValidationMessage || (ok ? "جاهز للتحليل" : "أكمل الحقول الإلزامية"),
+    ok && !fileValidationMessage
+  );
   analyzeBtn.disabled = !ok;
   analyzeBtn.style.opacity = ok ? "1" : ".55";
   analyzeBtn.style.cursor = ok ? "pointer" : "not-allowed";
@@ -1024,15 +1141,28 @@ const barChart = new Chart($("bar").getContext("2d"),{
 
 /* Read files */
 function readWorkbook(file){
+  assertDataFileSize(file);
   return new Promise((resolve,reject)=>{
     const fr=new FileReader();
     fr.onload=(e)=>{
       try{
         const data=new Uint8Array(e.target.result);
         const wb=XLSX.read(data,{type:"array"});
+        let estimatedRows = 0;
+        wb.SheetNames.forEach(name=>{
+          const dimensions = getWorksheetDimensions(wb.Sheets[name]);
+          assertDataDimensions(dimensions.rowCount, dimensions.columnCount);
+          estimatedRows += dimensions.rowCount;
+          assertDataDimensions(estimatedRows, dimensions.columnCount);
+        });
+
+        let parsedRows = 0;
         const sheets = wb.SheetNames.map(name=>{
           const ws=wb.Sheets[name];
           const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+          const dimensions = getRowsDimensions(rows);
+          parsedRows += dimensions.rowCount;
+          assertDataDimensions(parsedRows, dimensions.columnCount);
           return {name, rows};
         });
         resolve({sheets});
@@ -1043,12 +1173,21 @@ function readWorkbook(file){
   });
 }
 function readCSV(file){
+  assertDataFileSize(file);
   return new Promise((resolve,reject)=>{
     const fr=new FileReader();
     fr.onload=()=>{
-      const text = String(fr.result||"");
-      const rows = text.split(/\r?\n/).filter(Boolean).map(line=> line.split(/[,;\t]/).map(x=>x.trim()));
-      resolve({sheets:[{name:"CSV", rows}]});
+      try{
+        const text = String(fr.result||"");
+        const lines = text.split(/\r?\n/).filter(Boolean);
+        assertDataDimensions(lines.length, 0);
+        const rows = lines.map(line=> line.split(/[,;\t]/).map(x=>x.trim()));
+        const dimensions = getRowsDimensions(rows);
+        assertDataDimensions(dimensions.rowCount, dimensions.columnCount);
+        resolve({sheets:[{name:"CSV", rows}]});
+      }catch(error){
+        reject(error);
+      }
     };
     fr.onerror=reject;
     fr.readAsText(file,"utf-8");
@@ -1066,29 +1205,48 @@ const page2 = $("page2");
 function renderWeak(list, full){
   const cutoff = weakCutoff(full);
   const weak = list.filter(r=> r.grade <= cutoff).sort((a,b)=> a.grade-b.grade);
+  weakBody.replaceChildren();
   if(!weak.length){
     page2.classList.add("hidden");
-    weakBody.innerHTML = `<tr><td colspan="6" style="text-align:center;font-weight:900;color:#6b7280;">لا يوجد طلاب ضمن فئة الضعفاء.</td></tr>`;
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 6;
+    cell.style.textAlign = "center";
+    cell.style.fontWeight = "900";
+    cell.style.color = "#6b7280";
+    cell.textContent = "لا يوجد طلاب ضمن فئة الضعفاء.";
+    row.appendChild(cell);
+    weakBody.appendChild(row);
     return;
   }
   page2.classList.remove("hidden");
   weakRuleEl.textContent = `قاعدة الضعفاء: من 0 إلى ${cutoff} (من أصل ${full})`;
   weakCountEl.textContent = `عدد الضعفاء: ${weak.length}`;
-  weakBody.innerHTML = weak.map(r=>{
+  const fragment = document.createDocumentFragment();
+  weak.forEach(r=>{
     const per = pct(r.grade,full);
     const gap = Math.max(0, full - r.grade);
     const plan = pickPlanByGap(gap, full);
-    return `
-      <tr>
-        <td class="nameCell">${clean(r.student)||"—"}</td>
-        <td class="center">${clean(r.section)||"—"}</td>
-        <td class="center">${Number(r.grade).toFixed(0)}</td>
-        <td class="center">${per.toFixed(1)}%</td>
-        <td class="center" style="color:#991b1b;">${gap.toFixed(0)}</td>
-        <td class="plan">${plan}</td>
-      </tr>
-    `;
-  }).join("");
+    const row = document.createElement("tr");
+    const values = [
+      { text:clean(r.student)||"—", className:"nameCell" },
+      { text:clean(r.section)||"—", className:"center" },
+      { text:Number(r.grade).toFixed(0), className:"center" },
+      { text:`${per.toFixed(1)}%`, className:"center" },
+      { text:gap.toFixed(0), className:"center", color:"#991b1b" },
+      { text:plan, className:"plan" }
+    ];
+
+    values.forEach(value=>{
+      const cell = document.createElement("td");
+      cell.className = value.className;
+      cell.textContent = value.text;
+      if(value.color) cell.style.color = value.color;
+      row.appendChild(cell);
+    });
+    fragment.appendChild(row);
+  });
+  weakBody.appendChild(fragment);
 }
 
 /* Template download */
@@ -1169,13 +1327,15 @@ $("doAnalyze").addEventListener("click", async ()=>{
 
     syncHeader();
     fitAllHeaderText();
-    ov.classList.remove("open");
+    closeDataModal();
 
     setStatus("تم التحليل بنجاح", true);
   }catch(err){
-    console.error(err);
-    setStatus("حدث خطأ", false);
-    alert("حدث خطأ أثناء التحليل. تأكد من الملف ثم أعد المحاولة.");
+    const userMessage = err instanceof DataFileLimitError
+      ? err.userMessage
+      : "حدث خطأ أثناء التحليل. تأكد من الملف ثم أعد المحاولة.";
+    setStatus(userMessage, false);
+    alert(userMessage);
   }
 });
 

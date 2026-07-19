@@ -29,7 +29,7 @@ function getStoredSchoolProfile(){
   try{
     const profile = JSON.parse(localStorage.getItem(schoolProfileStorageKey) || '{}');
     return profile && typeof profile === 'object' && !Array.isArray(profile) ? profile : {};
-  }catch(_){
+  }catch{
     return {};
   }
 }

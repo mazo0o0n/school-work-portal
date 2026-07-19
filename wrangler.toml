@@ -16,6 +16,26 @@ binding = "AI"
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "school_knowledge_index"
+
+[[ratelimits]]
+name = "CHAT_RATE_LIMITER"
+namespace_id = "151001"
+
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+[[ratelimits]]
+name = "ADMIN_AUTH_RATE_LIMITER"
+namespace_id = "151002"
+
+  [ratelimits.simple]
+  limit = 5
+  period = 60
+
+[secrets]
+required = [ "RATE_LIMIT_SALT" ]
+
 [[d1_databases]]
 binding = "UNANSWERED_DB"
 database_name = "school-unanswered-questions"

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -18,8 +19,32 @@ const loadableWorkerSource = workerSource.replace(
 );
 const workerModuleUrl = `data:text/javascript;base64,${Buffer.from(loadableWorkerSource).toString('base64')}`;
 const { default: worker } = await import(workerModuleUrl);
+const wranglerSource = await readFile(
+  new globalThis.URL('../wrangler.toml', import.meta.url),
+  'utf8'
+);
 
 const CHAT_URL = 'https://example.test/api/chat';
+
+function getRateLimitConfig(name) {
+  const block = wranglerSource
+    .split('[[ratelimits]]')
+    .slice(1)
+    .find((candidate) => new RegExp(`^\\s*name\\s*=\\s*"${name}"\\s*$`, 'm').test(candidate));
+
+  assert.ok(block, `Missing ${name} rate limiting binding`);
+
+  const namespaceId = block.match(/^\s*namespace_id\s*=\s*"(\d+)"\s*$/m)?.[1];
+  const limit = Number(block.match(/^\s*limit\s*=\s*(\d+)\s*$/m)?.[1]);
+  const period = Number(block.match(/^\s*period\s*=\s*(\d+)\s*$/m)?.[1]);
+
+  assert.match(namespaceId || '', /^\d+$/);
+  assert.ok(Number(namespaceId) > 0);
+  assert.ok(Number.isInteger(limit) && limit > 0);
+  assert.ok([10, 60].includes(period));
+
+  return { namespaceId, limit, period };
+}
 
 function jsonRequest(payload, headers = {}) {
   return new globalThis.Request(CHAT_URL, {
@@ -91,6 +116,19 @@ function createDbRecorder() {
   };
 }
 
+function createRateLimiter(allowedRequests) {
+  const keys = [];
+  return {
+    keys,
+    binding: {
+      async limit({ key }) {
+        keys.push(key);
+        return { success: keys.length <= allowedRequests };
+      }
+    }
+  };
+}
+
 async function responseJson(request, env = {}) {
   const response = await worker.fetch(request, env);
   return {
@@ -99,7 +137,7 @@ async function responseJson(request, env = {}) {
   };
 }
 
-test('accepts a valid known RAG question', async () => {
+test('fails open locally without rate limiting bindings or salt', async () => {
   const { env } = createRagEnv();
   const { response, body } = await responseJson(
     jsonRequest({ question: 'ما برنامج فرص؟' }),
@@ -109,6 +147,130 @@ test('accepts a valid known RAG question', async () => {
   assert.equal(response.status, 200);
   assert.equal(body.notFound, false);
   assert.equal(body.answer, 'إجابة موثوقة من معرفة المنصة.');
+});
+
+test('configures separate chat and admin rate limiting bindings without a public salt', async () => {
+  const chatConfig = getRateLimitConfig('CHAT_RATE_LIMITER');
+  const adminConfig = getRateLimitConfig('ADMIN_AUTH_RATE_LIMITER');
+
+  assert.deepEqual(
+    { limit: chatConfig.limit, period: chatConfig.period },
+    { limit: 20, period: 60 }
+  );
+  assert.deepEqual(
+    { limit: adminConfig.limit, period: adminConfig.period },
+    { limit: 5, period: 60 }
+  );
+  assert.notEqual(chatConfig.namespaceId, adminConfig.namespaceId);
+  assert.match(wranglerSource, /^\s*\[secrets\]\s*$/m);
+  assert.match(wranglerSource, /^\s*required\s*=\s*\[\s*"RATE_LIMIT_SALT"\s*\]\s*$/m);
+
+  const varsBlock = wranglerSource.match(/^\s*\[vars\]\s*$([\s\S]*?)(?=^\s*\[|\s*$)/m)?.[1] || '';
+  assert.doesNotMatch(varsBlock, /RATE_LIMIT_SALT/);
+
+  const publicPaths = execFileSync(
+    'git',
+    ['ls-files', '-z', '--', '*.html', 'assets/**'],
+    { encoding: 'utf8' }
+  )
+    .split('\0')
+    .filter(Boolean);
+
+  for(const publicPath of publicPaths) {
+    const publicSource = await readFile(
+      new globalThis.URL(`../${publicPath.replaceAll('\\', '/')}`, import.meta.url),
+      'utf8'
+    );
+    assert.doesNotMatch(publicSource, /RATE_LIMIT_SALT/, publicPath);
+  }
+});
+
+test('allows normal chat use with a privacy-preserving client key', async () => {
+  const { env } = createRagEnv();
+  const limiter = createRateLimiter(20);
+  env.CHAT_RATE_LIMITER = limiter.binding;
+  env.RATE_LIMIT_SALT = 'test-only-rate-limit-salt';
+
+  const { response, body } = await responseJson(
+    jsonRequest(
+      { question: 'ما برنامج فرص؟' },
+      { 'CF-Connecting-IP': '203.0.113.10' }
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(body.notFound, false);
+  assert.equal(limiter.keys.length, 1);
+  assert.match(limiter.keys[0], /^[a-f0-9]{64}$/);
+  assert.doesNotMatch(limiter.keys[0], /203\.0\.113\.10/);
+});
+
+test('returns a private 429 chat response after 20 requests per minute', async () => {
+  const chatConfig = getRateLimitConfig('CHAT_RATE_LIMITER');
+  const { env } = createRagEnv();
+  const limiter = createRateLimiter(chatConfig.limit);
+  env.CHAT_RATE_LIMITER = limiter.binding;
+  env.RATE_LIMIT_SALT = 'test-only-rate-limit-salt';
+  const headers = { 'CF-Connecting-IP': '203.0.113.11' };
+
+  for(let attempt = 0; attempt < chatConfig.limit; attempt += 1) {
+    const allowed = await responseJson(
+      jsonRequest({ question: 'ما برنامج فرص؟' }, headers),
+      env
+    );
+    assert.equal(allowed.response.status, 200);
+  }
+
+  const blocked = await responseJson(
+    jsonRequest({ question: 'ما برنامج فرص؟' }, headers),
+    env
+  );
+
+  assert.equal(blocked.response.status, 429);
+  assert.equal(blocked.response.headers.get('Retry-After'), String(chatConfig.period));
+  assert.equal(blocked.response.headers.get('Cache-Control'), 'no-store');
+  assert.equal(blocked.body.error, 'rate_limited');
+  assert.equal(blocked.body.debug, undefined);
+  assert.doesNotMatch(JSON.stringify(blocked.body), /203\.0\.113\.11|test-only-rate-limit-salt/);
+});
+
+test('fails open without logging the derived key, salt, address, or question', async () => {
+  const { env } = createRagEnv();
+  const sensitiveSalt = 'test-only-log-salt';
+  const sensitiveAddress = '203.0.113.12';
+  const sensitiveQuestion = 'private-test-question';
+  const logs = [];
+  const originalConsoleError = globalThis.console.error;
+
+  env.RATE_LIMIT_SALT = sensitiveSalt;
+  env.CHAT_RATE_LIMITER = {
+    async limit() {
+      throw new Error('test limiter failure');
+    }
+  };
+  globalThis.console.error = (...values) => {
+    logs.push(values.join(' '));
+  };
+
+  try {
+    const { response } = await responseJson(
+      jsonRequest(
+        { question: sensitiveQuestion },
+        { 'CF-Connecting-IP': sensitiveAddress }
+      ),
+      env
+    );
+    assert.equal(response.status, 200);
+  } finally {
+    globalThis.console.error = originalConsoleError;
+  }
+
+  assert.deepEqual(logs, ['Rate limiting binding unavailable.']);
+  assert.doesNotMatch(
+    logs.join(' '),
+    new RegExp(`${sensitiveSalt}|${sensitiveAddress}|${sensitiveQuestion}`)
+  );
 });
 
 test('rejects invalid question shapes and lengths', async (t) => {

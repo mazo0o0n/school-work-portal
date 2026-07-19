@@ -26,7 +26,7 @@
     try{
       if(sessionStorage.getItem(SESSION_KEY) === '1') return false;
       sessionStorage.setItem(SESSION_KEY, '1');
-    }catch(_){
+    }catch{
       // يكفي المتغير المحلي لمنع التكرار داخل تحميل الصفحة الحالي.
     }
     return true;
@@ -76,10 +76,10 @@
         const current = snap.exists() ? (snap.data().visits ?? FALLBACK_VISITS) : FALLBACK_VISITS;
         tx.set(counterRef, { visits: current + 1 }, { merge: true });
       });
-    }catch(_){
+    }catch{
       // Best-effort: تبقى القيمة المعروضة هادئة ولا تتكرر محاولة الكتابة في الجلسة.
     }
-  }catch(_){
+  }catch{
     // فشل تحميل Firebase لا يؤثر في بقية الصفحة أو المساعد.
   }
 })();

@@ -117,6 +117,11 @@ async function apiRequest(url, options = {}, resetOnForbidden = true){
     }
   });
 
+  if(response.status === 429){
+    resetSession('تم تجاوز عدد محاولات الدخول. انتظر دقيقة ثم حاول مرة أخرى.', 'error');
+    throw new Error('تم تجاوز عدد محاولات الدخول. انتظر دقيقة ثم حاول مرة أخرى.');
+  }
+
   if(response.status === 403){
     if(resetOnForbidden){
       resetSession('رمز الإدارة غير صحيح أو انتهت صلاحية الجلسة.', 'error');
@@ -252,7 +257,7 @@ async function loadStatistics(){
     allStatsCount.textContent = Number(data?.counts?.all || 0).toLocaleString('ar-SA');
     renderAggregateInsights(data);
     updateReasonFilter((data?.reason_distribution || []).map((item) => item.reason));
-  }catch(_){
+  }catch{
     Object.values(statisticsCountElements).forEach((element) => {
       element.textContent = '—';
     });
@@ -492,7 +497,7 @@ bulkCopyBtn.addEventListener('click', async () => {
   try{
     await copyText(markdown);
     setStatus('تم نسخ القوالب الظاهرة.', 'success');
-  }catch(_){
+  }catch{
     setStatus('تعذر نسخ القوالب الظاهرة من المتصفح.', 'error');
   }
 });
@@ -549,7 +554,7 @@ questionsList.addEventListener('click', async (event) => {
     try{
       await copyText(cleanMarkdownQuestion(item?.question));
       setStatus('تم نسخ السؤال.', 'success');
-    }catch(_){
+    }catch{
       setStatus('تعذر نسخ السؤال من المتصفح.', 'error');
     }
     return;
@@ -559,7 +564,7 @@ questionsList.addEventListener('click', async (event) => {
     try{
       await copyText(buildKnowledgeTemplate(item));
       setStatus('تم نسخ قالب المعرفة.', 'success');
-    }catch(_){
+    }catch{
       setStatus('تعذر نسخ قالب المعرفة من المتصفح.', 'error');
     }
     return;

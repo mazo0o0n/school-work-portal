@@ -58,7 +58,10 @@ node tools/check-links.js index.html about.html privacy.html
 - لا تضف `.env` أو `.wrangler` أو tokens أو ملفات أسرار.
 - لا تنفذ commit أو push أو deploy دون موافقة صريحة.
 
-## ملاحظات النسخة v1.4-beta.2
+## ملاحظات الإصدار المحلي v1.5.1
+
+- الإصدار `v1.5.1` قيد التجهيز محليًا وغير منشور، والمنشور الحالي هو `v1.5.0`.
+- البنود التالية توثق قرارات تقنية مستمرة من النسخة السابقة.
 
 - أُبقيت قوالب DOCX في `assets/report-templates/manager-reports/` ضمن Static Assets بواسطة استثناء `.assetsignore` الحالي.
 - استُبعدت مجلدات التطوير والتشخيص والتقارير المحلية من Static Assets.

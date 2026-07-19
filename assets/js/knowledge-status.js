@@ -40,7 +40,7 @@ async function loadKnowledgeStats(){
     updatedAt.textContent = formatUpdatedAt(data.updated_at);
     statsState.textContent = 'موجود';
     setMessage(statsMessage, 'تم تحميل إحصاءات المعرفة بنجاح.', 'success');
-  }catch(_){
+  }catch{
     qaCount.textContent = '—';
     sourcesCount.textContent = '—';
     updatedAt.textContent = 'غير متوفر';
@@ -49,15 +49,19 @@ async function loadKnowledgeStats(){
   }
 }
 
-async function requestStatusCount(status){
-  const response = await fetch(`/api/admin/unanswered?status=${encodeURIComponent(status)}`, {
+async function requestUnansweredSummary(){
+  const response = await fetch('/api/admin/unanswered?summary=1', {
     headers:{ 'X-Admin-Token':adminToken }
   });
+  if(response.status === 429) throw new Error('تم تجاوز عدد محاولات الدخول. انتظر دقيقة ثم حاول مرة أخرى.');
   if(response.status === 403) throw new Error('رمز الإدارة غير صحيح أو غير مخول.');
   if(!response.ok) throw new Error('خدمة الإدارة غير متاحة حاليًا.');
   const data = await response.json();
-  if(!Array.isArray(data.items)) throw new Error('استجابة الإدارة غير صالحة.');
-  return data.items.length;
+  const total = Number(data?.counts?.all);
+  if(!Number.isSafeInteger(total) || total < 0){
+    throw new Error('استجابة الإدارة غير صالحة.');
+  }
+  return total;
 }
 
 async function loadUnansweredCount(){
@@ -69,9 +73,8 @@ async function loadUnansweredCount(){
   loadUnanswered.disabled = true;
   setMessage(adminMessage, 'جاري تحميل العدد…');
   try{
-    const statuses = ['new','reviewed','added_to_knowledge','ignored'];
-    const counts = await Promise.all(statuses.map(requestStatusCount));
-    unansweredCount.textContent = counts.reduce((sum, count) => sum + count, 0).toLocaleString('ar-SA');
+    const total = await requestUnansweredSummary();
+    unansweredCount.textContent = total.toLocaleString('ar-SA');
     adminTokenInput.value = '';
     setMessage(adminMessage, 'تم تحميل العدد. الرمز محفوظ في ذاكرة الصفحة فقط.', 'success');
   }catch(error){

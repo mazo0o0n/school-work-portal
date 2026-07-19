@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="بوابة لتنظيم أعمال الاختبارات المدرسية قبلها وأثناءها وبعدها.">
 <title>بوابة أعمال الاختبارات – 1447هـ / 2025م</title>
+<link rel="canonical" href="https://mazen.zb-store.com/2.html">
 
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
 
@@ -1279,7 +1280,7 @@ input:focus-visible{
       <div class="search-wrapper">
         <div class="search-label">بحث سريع عن نموذج أو محضر أو كشف:</div>
         <div class="search-input">
-          <input id="globalSearch" type="text" placeholder="اكتب كلمة مثل: لجنة، غياب، غش، رصد، تحليل…">
+          <input id="globalSearch" type="text" placeholder="اكتب كلمة مثل: لجنة، غياب، غش، رصد، تحليل…" aria-label="البحث في أعمال الاختبارات">
         </div>
         <div class="search-hint">يتم فلترة البنود مباشرة حسب النص.</div>
       </div>
@@ -1984,9 +1985,9 @@ input:focus-visible{
 </footer>
 
 <!-- نافذة منبثقة لفتح / تحميل الملفات -->
-<div class="modal-backdrop" id="modalBackdrop" aria-hidden="true">
+<div class="modal-backdrop" id="modalBackdrop" aria-hidden="true" inert>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <button class="modal-close" type="button" onclick="closeModal()">&times;</button>
+    <button class="modal-close" type="button" aria-label="إغلاق نافذة تفاصيل الملف" onclick="closeModal()">&times;</button>
     <div class="modal-label">عنصر من حقيبة أعمال الاختبارات</div>
     <h3 id="modalTitle">—</h3>
     <p id="modalDesc">—</p>
@@ -2034,6 +2035,8 @@ input:focus-visible{
   const noteEl     = document.getElementById('modalNote');
   const sourceBox  = document.getElementById('modalSourceBox');
   const noteBox    = document.getElementById('modalNoteBox');
+  const closeButton = backdrop.querySelector('.modal-close');
+  let returnFocus = null;
 
   function setStatus(status){
   const text = status || 'متاح';
@@ -2118,13 +2121,20 @@ if (isExplanationOnly) {
 
   setStatus(status);
 }
+    returnFocus = document.activeElement;
+    backdrop.removeAttribute('inert');
     backdrop.classList.add('show');
     backdrop.setAttribute('aria-hidden','false');
+    requestAnimationFrame(() => closeButton.focus());
   }
 
   window.closeModal = function(){
+    if (!backdrop.classList.contains('show')) return;
     backdrop.classList.remove('show');
     backdrop.setAttribute('aria-hidden','true');
+    backdrop.setAttribute('inert','');
+    if (returnFocus?.isConnected) returnFocus.focus();
+    returnFocus = null;
   };
 
   backdrop.addEventListener('click', function(e){
@@ -2132,7 +2142,26 @@ if (isExplanationOnly) {
   });
 
   document.addEventListener('keydown', function(e){
-    if (e.key === 'Escape'){ closeModal(); }
+    if (!backdrop.classList.contains('show')) return;
+    if (e.key === 'Escape'){
+      e.preventDefault();
+      closeModal();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const focusable = Array.from(
+      backdrop.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')
+    ).filter(element => element.getClientRects().length);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first){
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last){
+      e.preventDefault();
+      first.focus();
+    }
   });
 
   // ربط الأزرار بكل بند + تحديد حالة الملف تلقائيًا
