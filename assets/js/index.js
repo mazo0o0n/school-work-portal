@@ -422,7 +422,7 @@ function updateAcademyPlatformCount(){
 const ACADEMY_SUPPORT_CARDS = [
   {title:"ملفات وسجلات المدير",desc:"ملفات تشغيلية حساسة بوصول محدود.",href:"https://drive.google.com/drive/folders/138uI03lwMyz0U1Lrxa5fVYl56_hcep3F?usp=sharing",icon:"fa-solid fa-file-lines",color:"var(--support-purple)",chip:"محدث"},
   {title:"سجلات المدرسة",desc:"مجلدات تتبع وتشغيل للإدارة المدرسية.",href:"https://drive.google.com/drive/folders/1fCM6lNV_i4l_LuCHl5BX0Vy2-H3lWx2E?usp=sharing",icon:"fa-solid fa-folder-tree",color:"var(--brand-teal)",chip:"محدث"},
-  {title:"مناسبات وفعاليات",desc:"روزنامة الفعاليات والتنبيهات المدرسية.",href:"https://moe.gov.sa/ar/mediacenter/events/Pages/default.aspx",icon:"fa-solid fa-calendar-days",color:"var(--brand-gold)",chip:"مباشر"},
+  {title:"مناسبات وفعاليات",desc:"روزنامة الفعاليات والتنبيهات المدرسية.",href:"https://www.moe.gov.sa/ar/mediacenter/events/Pages/default.aspx",icon:"fa-solid fa-calendar-days",color:"var(--brand-gold)",chip:"مباشر"},
   {title:"تحليل النتائج",desc:"قراءة مؤشرات التحصيل والمتابعة.",href:"#academy-docs",icon:"fa-solid fa-chart-line",color:"var(--brand-blue)",chip:"قريبًا"}
 ];
 
