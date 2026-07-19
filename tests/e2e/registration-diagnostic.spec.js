@@ -19,13 +19,15 @@ test("تسجيل المدرسة وحفظ البيانات", async ({ page }) => 
 
   expect(formValidity).toBe(true);
 
-  await page.locator("#schoolRegisterForm").evaluate(form => {
-    form.requestSubmit();
-  });
-
-  await page.waitForURL("**/index.html", {
-    timeout: 5000
-  });
+  await Promise.all([
+    page.waitForURL("**/index.html", {
+      timeout: 5000,
+      waitUntil: "domcontentloaded"
+    }),
+    page.locator("#schoolRegisterForm").evaluate(form => {
+      form.requestSubmit();
+    })
+  ]);
 
   const storedProfile = await page.evaluate(() => {
     const value = localStorage.getItem("registeredSchoolProfile");

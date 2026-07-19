@@ -1,4 +1,14 @@
-const FALLBACK_ANSWER = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
+import {
+  CHAT_FALLBACK_ANSWER,
+  CHAT_INVALID_REQUEST_ANSWER,
+  CHAT_TEMPORARY_ERROR_ANSWER,
+  ChatRequestError,
+  isChatDebugEnabled,
+  parseChatRequest,
+  sanitizeQuestionForStorage
+} from './chat-security.mjs';
+
+const FALLBACK_ANSWER = CHAT_FALLBACK_ANSWER;
 const EMBEDDING_MODEL = '@cf/qwen/qwen3-embedding-0.6b';
 const CHAT_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
 const MIN_SCORE = 0.55;
@@ -15,7 +25,7 @@ function jsonResponse(body, status = 200){
 }
 
 function withDebug(env, body, debug){
-  if(env.DEBUG_CHAT === 'true'){
+  if(isChatDebugEnabled(env)){
     return {
       ...body,
       debug
@@ -30,6 +40,24 @@ function fallbackBody(source = 'قاعدة معرفة المنصة'){
     answer: FALLBACK_ANSWER,
     source,
     notFound: true
+  };
+}
+
+function invalidRequestBody(error){
+  return {
+    answer: error.publicMessage || CHAT_INVALID_REQUEST_ANSWER,
+    source: 'مساعد المنصة',
+    notFound: true,
+    error: error.code || 'invalid_request'
+  };
+}
+
+function temporaryErrorBody(){
+  return {
+    answer: CHAT_TEMPORARY_ERROR_ANSWER,
+    source: 'مساعد المنصة',
+    notFound: true,
+    error: 'temporary_error'
   };
 }
 
@@ -57,14 +85,14 @@ async function saveUnansweredQuestion(env, details){
   }
 
   try{
-    const question = String(details.question || '').trim().slice(0, 1000);
+    const question = sanitizeQuestionForStorage(details.question).trim().slice(0, 1000);
     if(!question){
       return;
     }
 
-    const normalizedQuestion = String(details.normalizedQuestion || normalizeArabicQuestion(question)).trim().slice(0, 1000);
+    const normalizedQuestion = normalizeArabicQuestion(question).slice(0, 1000);
     const reason = String(details.reason || 'unknown').trim().slice(0, 80);
-    const pagePath = String(details.pagePath || '').trim().slice(0, 300);
+    const pagePath = sanitizeQuestionForStorage(details.pagePath).trim().slice(0, 300);
     const now = new Date().toISOString();
 
     if(normalizedQuestion){
@@ -201,10 +229,6 @@ function normalizeArabicQuestion(value){
     .trim();
 }
 
-function isNoraSecretMessage(question){
-  return String(question || '').trim().toUpperCase() === '07/07/2027MN';
-}
-
 const ACADEMIC_CALENDAR_IMAGE = Object.freeze({
   src: '/assets/knowledge-images/academic-calendar-1448-1449-2026-2027.jpg',
   alt: 'التقويم الدراسي 1448 / 1449 هـ - 2026 / 2027 م',
@@ -280,38 +304,24 @@ function mergeMatches(matchGroups){
 
 async function handleChat(request, env){
   let question = '';
-  let normalizedQuestion = '';
   let pagePath = '';
 
   try{
     let payload;
     try{
-      payload = await request.json();
-    }catch(_){
-      return jsonResponse(fallbackBody(), 400);
+      ({ payload, question } = await parseChatRequest(request));
+    }catch(error){
+      if(error instanceof ChatRequestError){
+        return jsonResponse(invalidRequestBody(error), error.status);
+      }
+      throw error;
     }
 
-    question = String(payload?.message || payload?.question || '').trim();
-    if(!question){
-      return jsonResponse(fallbackBody(), 400);
-    }
-
-    normalizedQuestion = normalizeArabicQuestion(question);
     pagePath = getPagePath(payload, request);
-
-    if(isNoraSecretMessage(question)){
-      return jsonResponse(withDebug(env, {
-        answer: 'نورة احلى حاجة بالحياة 🖤🖤',
-        source: 'رد مخصص',
-        customType: 'nora-secret',
-        notFound: false
-      }, { type: 'custom_nora_secret_response' }));
-    }
 
     if(isExternalPlatformDefinitionQuestion(question)){
       await saveUnansweredQuestion(env, {
         question,
-        normalizedQuestion,
         pagePath,
         reason: 'external_guard'
       });
@@ -323,13 +333,12 @@ async function handleChat(request, env){
     if(!env.AI || !env.VECTORIZE){
       await saveUnansweredQuestion(env, {
         question,
-        normalizedQuestion,
         pagePath,
         reason: 'missing_bindings'
       });
       return jsonResponse(
-        withDebug(env, fallbackBody(), { type: 'missing_bindings' }),
-        500
+        withDebug(env, temporaryErrorBody(), { type: 'missing_bindings' }),
+        503
       );
     }
 
@@ -357,7 +366,6 @@ async function handleChat(request, env){
     if(!usableMatches.length || topScore < MIN_SCORE){
       await saveUnansweredQuestion(env, {
         question,
-        normalizedQuestion,
         pagePath,
         reason: usableMatches.length ? 'low_score' : 'no_matches'
       });
@@ -409,7 +417,6 @@ async function handleChat(request, env){
     if(notFound){
       await saveUnansweredQuestion(env, {
         question,
-        normalizedQuestion,
         pagePath,
         reason: 'generated_fallback'
       });
@@ -444,12 +451,11 @@ async function handleChat(request, env){
     console.error('Strict RAG chat failed:', error?.message || error);
     await saveUnansweredQuestion(env, {
       question,
-      normalizedQuestion,
       pagePath,
       reason: 'strict_rag_failed'
     });
     return jsonResponse(
-      withDebug(env, fallbackBody(), {
+      withDebug(env, temporaryErrorBody(), {
         type: 'strict_rag_failed',
         message: String(error?.message || error).slice(0, 1000)
       }),

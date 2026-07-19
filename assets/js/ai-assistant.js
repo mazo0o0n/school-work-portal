@@ -22,6 +22,7 @@ const aiPanelOpenSessionKey = 'platformAiPanelOpenSession';
 const aiReviewWhatsappNumber = '966558834103';
 const aiKnowledgeItemsFallback = 118;
 const aiMaxStoredMessages = 50;
+const aiMaxQuestionLength = 1000;
 const maxLocalReviewQuestionLength = 500;
 const aiGreetingText = 'مرحبًا، اسألني عن خدمات المنصة، الأدلة، الأنظمة، أدوات الدعم، أو الأسئلة الشائعة.';
 const aiGreetingSource = 'قاعدة معرفة المنصة';
@@ -138,9 +139,10 @@ function isMobileAssistantView(){
   return window.matchMedia('(max-width: 900px)').matches;
 }
 
-const legacyApiFallbackAnswer = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
-const apiFallbackAnswer = 'لم أجد إجابة موثقة لهذا السؤال داخل ملفات المنصة حاليًا.\nجرّب صياغة أبسط، أو اضغط "طلب إضافة السؤال" ليتم مراجعته وإضافته لاحقًا.';
-const missedQuestionDisplayAnswer = 'لم أجد هذه المعلومة في قاعدة معرفة المنصة حاليًا، وتم تسجيل السؤال للمراجعة إن كان ذلك متاحًا.';
+const apiFallbackAnswer = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
+const missedQuestionDisplayAnswer = apiFallbackAnswer;
+const invalidRequestDisplayAnswer = 'تعذر معالجة الطلب. تأكد من إرسال سؤال نصي صالح.';
+const temporaryErrorDisplayAnswer = 'تعذر الوصول إلى مساعد المنصة مؤقتًا. حاول مرة أخرى لاحقًا.';
 
 function hideAiReviewHint(){
   window.clearTimeout(aiReviewHintTimeout);
@@ -441,25 +443,29 @@ async function findAnswer(question){
     body: JSON.stringify({ question })
   });
 
+  const data = await response.json().catch(() => ({}));
   if(!response.ok){
-    throw new Error('AI chat request failed');
+    const requestError = new Error('AI chat request failed');
+    requestError.userMessage = response.status >= 400 && response.status < 500
+      ? String(data.answer || invalidRequestDisplayAnswer).trim().slice(0, 300)
+      : temporaryErrorDisplayAnswer;
+    throw requestError;
   }
 
-  const data = await response.json();
   const answer = String(data.answer || '').trim();
   if(!answer) return null;
 
   return {
     answer,
     source: data.source || 'قاعدة معرفة المنصة',
-    missed: Boolean(data.notFound) || answer === apiFallbackAnswer || answer === legacyApiFallbackAnswer,
+    missed: Boolean(data.notFound) || answer === apiFallbackAnswer,
     images: normalizeAiImages(data.images),
     customType: normalizeAiCustomType(data.customType)
   };
 }
 
-function normalizeAiCustomType(value){
-  return value === 'nora-secret' ? 'nora-secret' : '';
+function normalizeAiCustomType(){
+  return '';
 }
 
 function normalizeAiImages(value){
@@ -560,7 +566,6 @@ function addAiMessage(text, type = 'bot', source = '', missed = false, persist =
   const safeImages = normalizeAiImages(images);
   const safeCustomType = type === 'bot' ? normalizeAiCustomType(customType) : '';
   message.className = `ai-message ${type}${missed ? ' is-missed' : ''}`;
-  if(safeCustomType === 'nora-secret') message.classList.add('ai-message-nora-secret');
   message.dataset.messageText = text;
   message.dataset.messageSource = source;
   if(safeCustomType) message.dataset.messageCustomType = safeCustomType;
@@ -594,9 +599,9 @@ async function answerQuestion(question){
     saveUnansweredQuestion(question);
     addMissedQuestionMessage();
     showAiReviewHint();
-  }catch(_){
+  }catch(error){
     loadingMessage.remove();
-    addAiMessage('تعذر الاتصال بالمساعد الآن. تحقق من الشبكة ثم حاول مرة أخرى.', 'bot', 'حالة الاتصال', false, false);
+    addAiMessage(error?.userMessage || temporaryErrorDisplayAnswer, 'bot', 'حالة الاتصال', false, false);
   }finally{
     loadingMessage.remove();
     aiMessages.removeAttribute('aria-busy');
@@ -606,6 +611,10 @@ async function answerQuestion(question){
 async function submitAiQuestion(question){
   const normalizedQuestion = String(question || '').trim();
   if(!normalizedQuestion || aiRequestPending) return;
+  if(Array.from(normalizedQuestion).length > aiMaxQuestionLength){
+    addAiMessage(invalidRequestDisplayAnswer, 'bot', 'حالة الطلب', false, false);
+    return;
+  }
 
   aiRequestPending = true;
   aiSubmit.disabled = true;

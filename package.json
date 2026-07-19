@@ -4,7 +4,7 @@
   "private": true,
   "description": "Local tooling for linting and testing the school work portal",
   "scripts": {
-    "check:syntax": "node --check assets/js/index.js && node --check assets/js/report-word-generator.js && node --check assets/js/ai-assistant.js && node --check assets/js/register.js && node --check assets/js/visitor-counter.js && node --check src/index.js && node --check tools/check-links.js && node --check tools/check-knowledge.js && node --check tools/ingest-knowledge.js && node --check tools/update-knowledge-stats.js && node --check local-server.cjs",
+    "check:syntax": "node --check assets/js/index.js && node --check assets/js/report-word-generator.js && node --check assets/js/ai-assistant.js && node --check assets/js/register.js && node --check assets/js/visitor-counter.js && node --check src/chat-security.mjs && node --check src/index.js && node --check tests/assistant-security.test.mjs && node --check tools/check-links.js && node --check tools/check-knowledge.js && node --check tools/ingest-knowledge.js && node --check tools/update-knowledge-stats.js && node --check local-server.cjs",
     "lint:js": "eslint assets/js src tools tests local-server.cjs playwright.config.cjs eslint.config.cjs",
     "lint:css": "stylelint \"assets/css/**/*.css\"",
     "lint:html": "htmlhint \"*.html\"",
@@ -12,8 +12,9 @@
     "check:knowledge": "node tools/ingest-knowledge.js --preview",
     "test:e2e": "playwright test --project=chromium --grep-invert \"الصورة المرجعية\" --output \"%TEMP%\\school-work-portal-playwright-e2e\"",
     "test:a11y": "playwright test tests/e2e/accessibility.spec.js --project=chromium --output \"%TEMP%\\school-work-portal-playwright-a11y\"",
+    "test:assistant-security": "node --test tests/assistant-security.test.mjs",
     "test:visual": "playwright test tests/e2e/visual-regression.spec.js --project=chromium --output \"%TEMP%\\school-work-portal-playwright-visual\"",
-    "qa": "npm run check:syntax && npm run lint:js && npm run lint:css && npm run lint:html && npm run check:links && npm run check:knowledge && npm run test:e2e && npm run test:visual"
+    "qa": "npm run check:syntax && npm run lint:js && npm run lint:css && npm run lint:html && npm run check:links && npm run check:knowledge && npm run test:assistant-security && npm run test:e2e && npm run test:visual"
   },
   "license": "UNLICENSED",
   "devDependencies": {

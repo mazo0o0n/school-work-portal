@@ -5,11 +5,13 @@ test("الدخول كضيف والانتقال للصفحة الرئيسية", a
 
   await page.goto("http://127.0.0.1:4173/register.html");
 
-  await page.locator("#guestEntry").click();
-
-  await page.waitForURL("**/index.html", {
-    timeout: 5000
-  });
+  await Promise.all([
+    page.waitForURL("**/index.html", {
+      timeout: 5000,
+      waitUntil: "domcontentloaded"
+    }),
+    page.locator("#guestEntry").click()
+  ]);
 
   const values = await page.evaluate(() => ({
     guestMode: localStorage.getItem("schoolGuestMode"),
