@@ -38,19 +38,6 @@
   --support-indigo:#7a80ff;
   --maxW:1200px;
 }
-/* بنر منتظم العرضي داخل الصفحة */
-.muntzm-inline-banner{
-  display:block;
-  width:100%;
-  max-width:var(--maxW);
-  margin:0 auto 14px;
-  border-radius:16px;
-  overflow:hidden;
-  background:#fff;
-  border:2px solid #222;
-  box-shadow:0 0 0 1px #000;
-}
-
 .muntzm-inline-banner{
   display:block;
   width:100%;
@@ -1958,6 +1945,8 @@ body.drawer-open .side-drawer{
   min-height:124px;
   display:block;
   background:#fff;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
 }
 .bannerCard .banner{
   position:absolute; inset:0;
@@ -2059,8 +2048,6 @@ filter:none;
   .bannerCard .veil{opacity:.58}
   .bannerCard .banner{background-size:contain}
 }
-/* ✅ تسريع النقر وتقليل الحمل على بنرات المنصات */
-.bannerCard{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
 .bannerCard .banner,
 .bannerCard .veil{ pointer-events:none; }  /* يضمن أن النقر يذهب للرابط مباشرة */
 
@@ -2315,6 +2302,7 @@ body.high-contrast{
     justify-content:flex-start;
     gap:2px;
     padding:10px;
+    min-height:88px;
   }
   .nav-actions{
     order:3;
@@ -2350,10 +2338,6 @@ body.high-contrast{
     gap:4px;
     font-size:12px;
     white-space:nowrap;
-  }
-  .site-nav{
-    min-height:88px;
-    padding:10px;
   }
   .menu-toggle{
     width:40px;
@@ -2479,14 +2463,8 @@ body.high-contrast{
   .hero-intro p{font-size:16px;line-height:1.8;margin-bottom:20px;}
 }
 
-body.dark .hero-intro h1{
-  color:#ffffff;
-}
-body.dark .hero-intro p{
-  color:#e5e7eb;
-}
-
 /* ===== Dark mode background matching EduGate reference ===== */
+/* stylelint-disable-next-line no-duplicate-selectors -- طبقة الوضع الداكن تكمل خصائصه الأساسية المعرّفة سابقًا. */
 body.dark{
   background:#090e18;
   color:#f8fafc;
@@ -3019,9 +2997,6 @@ body.dark .academy-nav-btn:hover{
   background:color-mix(in srgb,var(--support-lavender) 15%,#ffffff 85%);
   color:var(--support-purple);
   text-align:center;
-}
-
-.academy-footer{
   display:grid;
   justify-items:center;
   gap:8px;
@@ -3706,8 +3681,10 @@ body.dark .ai-message.bot.is-missed{
     right:0;
     bottom:0;
     width:min(460px,calc(100vw - 80px));
+    /* stylelint-disable declaration-block-no-duplicate-properties -- قيمة 100vh احتياطية للمتصفحات الأقدم. */
     height:100vh;
     height:100dvh;
+    /* stylelint-enable declaration-block-no-duplicate-properties */
     margin:0;
     border-radius:18px 0 0 18px;
     display:grid;
@@ -3999,6 +3976,7 @@ body.dark .ai-notice,
 }
 
 /* Responsive layout refinement for Cloudflare Pages */
+/* stylelint-disable-next-line no-duplicate-selectors -- طبقة نهائية لمتغيرات الاستجابة دون تغيير القيم الأساسية. */
 :root{
   --responsive-max-width:1280px;
   --responsive-gutter:clamp(12px,3vw,32px);
@@ -4026,6 +4004,7 @@ body.dark .ai-notice,
   min-width:0;
 }
 
+/* stylelint-disable-next-line no-duplicate-selectors -- تحسين استجابة شريط التنقل بعد تعريفه الأساسي. */
 .site-nav{
   padding-inline:clamp(18px,3vw,44px);
 }
@@ -4038,10 +4017,12 @@ body.dark .ai-notice,
   height:auto;
 }
 
+/* stylelint-disable-next-line no-duplicate-selectors -- تحسين استجابة حاوية الصفحة بعد تعريفها الأساسي. */
 .academy-page{
   margin-block:clamp(22px,3vw,42px) clamp(48px,6vw,78px);
 }
 
+/* stylelint-disable-next-line no-duplicate-selectors -- تحسين الفجوات بعد تعريف شبكة البطل الأساسية. */
 .academy-hero{
   gap:clamp(16px,2vw,28px);
 }
@@ -4067,16 +4048,19 @@ body.dark .ai-notice,
   min-width:0;
 }
 
+/* stylelint-disable-next-line no-duplicate-selectors -- تحسين استجابة البانر بعد تعريفه الأساسي. */
 .academy-main-banner{
   min-height:clamp(238px,24vw,330px);
   padding:clamp(28px,4vw,56px);
 }
 
+/* stylelint-disable-next-line no-duplicate-selectors -- ضبط حجم العنوان المتجاوب بعد تعريفه الأساسي. */
 .academy-main-banner h1{
   max-width:min(680px,100%);
   font-size:clamp(32px,3.5vw,52px);
 }
 
+/* stylelint-disable-next-line no-duplicate-selectors -- ضبط عرض النص المتجاوب بعد تعريفه الأساسي. */
 .academy-main-banner p{
   max-width:min(720px,100%);
 }

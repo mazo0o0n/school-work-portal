@@ -2,6 +2,20 @@
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
+    const fixedNow = Date.parse("2026-07-19T09:29:00.000Z");
+    const NativeDate = Date;
+
+    class FixedDate extends NativeDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+
+      static now() {
+        return fixedNow;
+      }
+    }
+
+    window.Date = FixedDate;
     localStorage.setItem("schoolGuestMode", "1");
     localStorage.setItem("preferredTheme", "light");
   });

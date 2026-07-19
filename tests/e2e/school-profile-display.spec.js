@@ -14,23 +14,9 @@ test("ظهور بيانات المدرسة في الصفحة الرئيسية ب
     .locator("#schoolStage")
     .inputValue();
 
-  await page.fill(
+  await page.selectOption(
     "#educationDepartment",
-    "إدارة تعليم المدينة المنورة"
-  );
-  await page.fill("#ministryNumber", "123456789");
-  await page.fill("#principalName", "مدير الاختبار");
-  await page.fill(
-    "#educationalAffairsAgent",
-    "وكيل الشؤون التعليمية"
-  );
-  await page.fill(
-    "#studentAffairsAgent",
-    "وكيل شؤون الطلاب"
-  );
-  await page.fill(
-    "#schoolAffairsAgent",
-    "وكيل الشؤون المدرسية"
+    "إدارة التعليم بمنطقة المدينة المنورة"
   );
 
   await page

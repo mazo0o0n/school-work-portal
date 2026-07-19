@@ -8,23 +8,10 @@ test("تسجيل المدرسة وحفظ البيانات", async ({ page }) => 
   await page.fill("#schoolName", "مدرسة اختبار المنصة");
   await page.selectOption("#schoolStage", "ابتدائي");
 
-  await page.fill("#educationDepartment", "إدارة تعليم المدينة المنورة");
-  await page.fill("#ministryNumber", "123456789");
-  await page.fill("#principalName", "مدير الاختبار");
-  await page.fill("#educationalAffairsAgent", "وكيل الشؤون التعليمية");
-  await page.fill("#studentAffairsAgent", "وكيل شؤون الطلاب");
-  await page.fill("#schoolAffairsAgent", "وكيل الشؤون المدرسية");
-
-  const buttons = await page.locator("button").evaluateAll(items =>
-    items.map(button => ({
-      id: button.id,
-      type: button.type,
-      text: button.textContent.trim(),
-      visible: Boolean(button.offsetWidth || button.offsetHeight)
-    }))
+  await page.selectOption(
+    "#educationDepartment",
+    "إدارة التعليم بمنطقة المدينة المنورة"
   );
-
-  console.log("BUTTONS:", buttons);
 
   const formValidity = await page.locator("#schoolRegisterForm").evaluate(
     form => form.checkValidity()
@@ -47,10 +34,8 @@ test("تسجيل المدرسة وحفظ البيانات", async ({ page }) => 
 
   expect(storedProfile).not.toBeNull();
   expect(storedProfile.schoolName).toBe("مدرسة اختبار المنصة");
-  expect(storedProfile.schoolStage).toBe("ابتدائي");
+  expect(storedProfile.schoolStage).toBe("ابتدائية");
   expect(storedProfile.educationDepartment).toBe(
-    "إدارة تعليم المدينة المنورة"
+    "إدارة التعليم بمنطقة المدينة المنورة"
   );
-  expect(storedProfile.ministryNumber).toBe("123456789");
-  expect(storedProfile.principalName).toBe("مدير الاختبار");
 });

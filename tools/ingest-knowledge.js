@@ -237,7 +237,9 @@ async function generateVectorFile(chunks){
   }catch(error){
     fs.rmSync(TEMP_OUT_FILE, { force: true });
     fs.rmSync(OUT_FILE, { force: true });
-    throw new Error(`فشل توليد ملف vectors: ${error.message || error}`);
+    throw new Error(`فشل توليد ملف vectors: ${error.message || error}`, {
+      cause: error
+    });
   }
 }
 

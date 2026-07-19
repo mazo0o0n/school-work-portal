@@ -36,7 +36,7 @@ function localTargetExists(file, href) {
   const cleanHref = href.split('#')[0].split('?')[0];
   if (!cleanHref) return true;
 
-  let decodedHref = cleanHref;
+  let decodedHref;
   try {
     decodedHref = decodeURIComponent(cleanHref);
   } catch (_) {
