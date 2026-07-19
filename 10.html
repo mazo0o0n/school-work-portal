@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <meta name="description" content="نسخة أرشيفية قديمة من موارد منصة التنظيم المدرسي والموارد التعليمية.">
 <meta name="robots" content="noindex, nofollow">
-<title>منصة التنظيم المدرسي والموارد التعليمية</title>
+<title>نسخة أرشيفية | منصة التنظيم المدرسي والموارد التعليمية</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -37,6 +37,17 @@ button{font-family:inherit;cursor:pointer}
 
 .note{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13px;color:#4b6166}
 .note b{color:#0a6e5f}
+.archive-notice{
+  max-width:var(--maxW);
+  margin:10px auto 0;
+  padding:10px 14px;
+  border:1px solid #e9c46a;
+  border-radius:12px;
+  background:#fff8e6;
+  color:#654d14;
+  font-size:13px;
+}
+.archive-notice a{color:#0a6e5f;font-weight:800;text-decoration:underline}
 
 .container{max-width:var(--maxW);margin-inline:auto;padding:10px 16px 72px}
 .section{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 10px 22px rgba(0,0,0,.04)}
@@ -99,7 +110,7 @@ button{font-family:inherit;cursor:pointer}
 .search-results .ttl{font-weight:800;font-size:13.5px;color:#064a45}
 .search-results .meta{font-size:12px;color:#5d737a}
 .search-results .tag{font-size:11px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);background:#f5fbfb;color:#0a5a56;margin-inline-start:6px}
-.search-results .act a{font-size:12px;padding:6px 10px;border:1px solid var(--line);border-radius:10px}
+.search-results .act a,.search-results .act span{font-size:12px;padding:6px 10px;border:1px solid var(--line);border-radius:10px}
 .search-results .itm:hover{background:#f9fdfd}
 .search-empty{padding:12px;color:#6b7;font-size:12.5px}
 
@@ -388,6 +399,12 @@ button{font-family:inherit;cursor:pointer}
 <body>
 
 <div class="masthead"><img src="assets/images/logo2.png" alt="هوية"></div>
+
+<div class="archive-notice" role="note">
+  <strong>نسخة أرشيفية:</strong>
+  هذه صفحة قديمة محفوظة للرجوع فقط، وقد لا تعكس أحدث محتوى أو روابط المنصة.
+  <a href="index.html">الانتقال إلى النسخة الحالية</a>
+</div>
 
 <div id="announce" class="announce" role="status" aria-live="polite">
   <span class="dot" aria-hidden="true"></span>
@@ -765,19 +782,19 @@ button{font-family:inherit;cursor:pointer}
         <div class="badge new" style="position:absolute;top:10px;inset-inline-end:10px">محدّث</div>
       </a>
 
-      <a class="card" href="#" aria-disabled="true" tabindex="-1" style="text-align:center;position:relative">
+      <div class="card" aria-disabled="true" style="text-align:center;position:relative">
         <div class="ico">📊</div>
         <div class="title" style="margin-top:6px">تقييم الأداء الوظيفي</div>
         <div class="desc">تخطيط ومراجعة وتقييم.</div>
         <div class="badge new" style="position:absolute;top:10px;inset-inline-end:10px">محدّث</div>
-      </a>
+      </div>
 
-      <a class="card" href="#" aria-disabled="true" tabindex="-1" style="text-align:center;position:relative">
+      <div class="card" aria-disabled="true" style="text-align:center;position:relative">
         <div class="ico">👨‍🏫</div>
         <div class="title" style="margin-top:6px">استمارة دعم وتطوير الهيئة التعليمية</div>
         <div class="desc">زيارة معلم — توثيق الدعم والتطوير المهني داخل الصف.</div>
         <div class="badge new" style="position:absolute;top:10px;inset-inline-end:10px">محدّث</div>
-      </a>
+      </div>
 
       <a class="card" href="1.html" style="text-align:center;position:relative">
         <div class="ico">🧾</div>
@@ -1095,7 +1112,7 @@ function setupSearchUI(){
       return;
     }
     list.forEach(it=>{
-      const openBtn = isValidUrl(it.url) ? `<a href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">فتح</a>` : `<a aria-disabled="true">فتح</a>`;
+      const openBtn = isValidUrl(it.url) ? `<a href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">فتح</a>` : `<span aria-disabled="true">فتح</span>`;
       box.insertAdjacentHTML('beforeend',`
         <div class="itm" role="option">
           <div>
@@ -1215,10 +1232,6 @@ setupSearchUI();
 setupPlatforms();
 
 document.querySelector('#announce .close')?.addEventListener('click',()=>{document.getElementById('announce').style.display='none'});
-document.addEventListener('click', event=>{
-  const disabledLink = event.target.closest('a[aria-disabled="true"][href="#"]');
-  if(disabledLink) event.preventDefault();
-});
 </script>
 
 <script type="module">
