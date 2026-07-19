@@ -60,7 +60,7 @@ node tools/check-links.js index.html about.html privacy.html
 
 ## ملاحظات الإصدار المحلي v1.5.1
 
-- الإصدار `v1.5.1` قيد التجهيز محليًا وغير منشور، والمنشور الحالي هو `v1.5.0`.
+- الإصدار المنشور الحالي هو `v1.5.1`.
 - البنود التالية توثق قرارات تقنية مستمرة من النسخة السابقة.
 
 - أُبقيت قوالب DOCX في `assets/report-templates/manager-reports/` ضمن Static Assets بواسطة استثناء `.assetsignore` الحالي.
