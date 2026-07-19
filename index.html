@@ -599,10 +599,10 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
   <button class="ai-toggle" id="aiToggle" type="button" aria-label="اسأل المساعد" aria-expanded="false" aria-controls="aiPanel">
     <img src="assets/images/ai-assistant-mark.svg" alt="" aria-hidden="true">
   </button>
-  <div class="ai-panel" id="aiPanel" hidden>
+  <div class="ai-panel" id="aiPanel" role="dialog" aria-labelledby="aiAssistantTitle" hidden>
     <div class="ai-head">
       <div>
-        <h2>مساعد المنصة</h2>
+        <h2 id="aiAssistantTitle">مساعد المنصة</h2>
         <p>يُجيب من قاعدة معرفة المنصة فقط.</p>
       </div>
       <div class="ai-head-actions">
@@ -612,7 +612,7 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
       </div>
     </div>
     <div class="ai-knowledge-count" id="aiKnowledgeCount">118 سؤال/إجابة متاحة</div>
-    <div class="ai-messages" id="aiMessages" aria-live="polite">
+    <div class="ai-messages" id="aiMessages" role="log" aria-live="polite" aria-relevant="additions" aria-atomic="false">
       <section class="ai-suggestions" id="aiSuggestions" aria-labelledby="aiSuggestionsTitle">
         <h3 id="aiSuggestionsTitle">جرّب أن تسأل:</h3>
         <div class="ai-suggestion-chips">
@@ -624,16 +624,17 @@ if(localStorage.getItem('preferredTheme') === 'dark'){
         </div>
       </section>
     </div>
-    <form class="ai-form" id="aiForm">
+    <form class="ai-form" id="aiForm" aria-label="إرسال سؤال إلى مساعد المنصة">
       <button class="ai-submit" id="aiSubmit" type="submit" aria-label="إرسال السؤال">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M12 19V5M6.5 10.5 12 5l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <span>إرسال</span>
       </button>
-      <input id="aiQuestion" type="text" dir="rtl" maxlength="1000" placeholder="اكتب سؤالك هنا..." autocomplete="off" aria-label="سؤال للمساعد">
+      <input id="aiQuestion" type="text" dir="rtl" maxlength="1000" placeholder="اكتب سؤالك هنا..." autocomplete="off" enterkeyhint="send" aria-label="سؤال للمساعد" aria-describedby="aiFormStatus aiPrivacyNote">
+      <p class="ai-form-status" id="aiFormStatus" role="status" aria-live="polite" hidden></p>
     </form>
-    <p class="ai-privacy-note">الإجابات مبنية على ملفات المنصة للمساعدة، ولا تُعد قرارًا رسميًا.</p>
+    <p class="ai-privacy-note" id="aiPrivacyNote">الإجابات مبنية على ملفات المنصة للمساعدة، ولا تُعد قرارًا رسميًا.</p>
   </div>
 </aside>
 

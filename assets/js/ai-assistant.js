@@ -6,6 +6,7 @@ const aiClearConversation = document.getElementById('aiClearConversation');
 const aiForm = document.getElementById('aiForm');
 const aiSubmit = document.getElementById('aiSubmit');
 const aiQuestion = document.getElementById('aiQuestion');
+const aiFormStatus = document.getElementById('aiFormStatus');
 const aiMessages = document.getElementById('aiMessages');
 const aiSuggestions = document.getElementById('aiSuggestions');
 const aiExportQuestions = document.getElementById('aiExportQuestions');
@@ -137,6 +138,28 @@ function wasAiPanelOpen(){
 
 function isMobileAssistantView(){
   return window.matchMedia('(max-width: 900px)').matches;
+}
+
+function setAiFormStatus(message = '', isError = false){
+  if(!aiFormStatus) return;
+  aiFormStatus.textContent = message;
+  aiFormStatus.hidden = !message;
+  aiFormStatus.classList.toggle('is-error', Boolean(message && isError));
+  aiQuestion?.toggleAttribute('aria-invalid', Boolean(message && isError));
+}
+
+function setAiRequestPending(pending){
+  aiRequestPending = Boolean(pending);
+  aiSubmit.disabled = aiRequestPending;
+  aiSubmit.setAttribute('aria-label', aiRequestPending ? 'جاري إرسال السؤال' : 'إرسال السؤال');
+  aiForm?.setAttribute('aria-busy', String(aiRequestPending));
+  if(aiQuestion){
+    aiQuestion.readOnly = aiRequestPending;
+    aiQuestion.toggleAttribute('aria-disabled', aiRequestPending);
+  }
+  aiSuggestions?.querySelectorAll('button').forEach((button) => {
+    button.disabled = aiRequestPending;
+  });
 }
 
 const apiFallbackAnswer = 'ما عندي معلومة مؤكدة عن هذا السؤال حاليًا، تقدر تعيد صياغته أو تراجع الجهة المختصة.';
@@ -588,7 +611,9 @@ async function answerQuestion(question){
   addAiMessage(question, 'user');
   const loadingMessage = addAiMessage('جاري البحث في ملفات المنصة...', 'bot', '', false, false);
   loadingMessage.classList.add('ai-loading');
-  aiMessages.setAttribute('aria-busy', 'true');
+  loadingMessage.setAttribute('role', 'status');
+  loadingMessage.setAttribute('aria-live', 'polite');
+  loadingMessage.setAttribute('aria-atomic', 'true');
   try{
     const answer = await findAnswer(question);
     loadingMessage.remove();
@@ -601,23 +626,31 @@ async function answerQuestion(question){
     showAiReviewHint();
   }catch(error){
     loadingMessage.remove();
-    addAiMessage(error?.userMessage || temporaryErrorDisplayAnswer, 'bot', 'حالة الاتصال', false, false);
+    const errorMessage = addAiMessage(error?.userMessage || temporaryErrorDisplayAnswer, 'bot', 'حالة الاتصال', false, false);
+    errorMessage.classList.add('ai-error');
+    errorMessage.setAttribute('role', 'alert');
+    errorMessage.querySelector('.ai-copy-answer')?.remove();
   }finally{
     loadingMessage.remove();
-    aiMessages.removeAttribute('aria-busy');
   }
 }
 
 async function submitAiQuestion(question){
   const normalizedQuestion = String(question || '').trim();
-  if(!normalizedQuestion || aiRequestPending) return;
+  if(aiRequestPending) return;
+  if(!normalizedQuestion){
+    setAiFormStatus('اكتب سؤالًا قبل الإرسال.', true);
+    aiQuestion.focus();
+    return;
+  }
   if(Array.from(normalizedQuestion).length > aiMaxQuestionLength){
-    addAiMessage(invalidRequestDisplayAnswer, 'bot', 'حالة الطلب', false, false);
+    setAiFormStatus(invalidRequestDisplayAnswer, true);
+    aiQuestion.focus();
     return;
   }
 
-  aiRequestPending = true;
-  aiSubmit.disabled = true;
+  setAiFormStatus();
+  setAiRequestPending(true);
   aiQuestion.value = '';
   if(aiSuggestions) aiSuggestions.hidden = true;
   setAiConversationStarted(true);
@@ -628,8 +661,7 @@ async function submitAiQuestion(question){
       aiMessages.scrollTop = aiMessages.scrollHeight;
     });
   }finally{
-    aiRequestPending = false;
-    aiSubmit.disabled = false;
+    setAiRequestPending(false);
     if(!isMobileAssistantView()) aiQuestion.focus();
   }
 }
@@ -662,6 +694,7 @@ function openAiPanel(){
   if(aiSuggestions && !aiSuggestions.hidden){
     aiMessages.appendChild(aiSuggestions);
   }
+  setAiFormStatus();
   if(!isMobileAssistantView()) aiQuestion.focus();
 }
 
@@ -678,6 +711,7 @@ function closeAiPanel(options = {}){
     aiHistoryEntryActive = false;
     history.back();
   }
+  if(!options.fromHistory) aiToggle.focus({ preventScroll: true });
 }
 
 aiToggle?.addEventListener('click', () => {
@@ -715,6 +749,10 @@ aiQuestion?.addEventListener('keydown', (event) => {
   if(event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
   event.preventDefault();
   aiForm.requestSubmit();
+});
+
+aiQuestion?.addEventListener('input', () => {
+  if(aiFormStatus && !aiFormStatus.hidden) setAiFormStatus();
 });
 
 document.addEventListener('click', async (event) => {
