@@ -406,3 +406,46 @@ test('prepares archive support without applying or deleting data', async () => {
   assert.match(migration, /status,\s*updated_at DESC,\s*id DESC/);
   assert.doesNotMatch(migration, /^\s*DELETE\b/im);
 });
+import { URL } from 'node:url';
+
+const { test: headerRegressionTest } = await import('node:test');
+const { default: headerAssert } = await import('node:assert/strict');
+const { readFile: readHeaderRules } = await import('node:fs/promises');
+
+headerRegressionTest(
+  'static asset headers protect html redirects and final clean internal routes',
+  async () => {
+    const headersText = await readHeaderRules(
+      new URL('../_headers', import.meta.url),
+      'utf8'
+    );
+    const internalPages = [
+      '/admin-unanswered',
+      '/assistant-status',
+      '/knowledge-status',
+      '/assistant-test'
+    ];
+
+    const getExactRouteBlock = (route) => {
+      const escapedRoute = route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return headersText.match(
+        new RegExp(`^${escapedRoute}\\r?\\n((?: {2}[^\\r\\n]+\\r?\\n?)+)`, 'm')
+      )?.[1] || '';
+    };
+
+    internalPages.forEach((cleanRoute) => {
+      const htmlBlock = getExactRouteBlock(`${cleanRoute}.html`);
+      const cleanBlock = getExactRouteBlock(cleanRoute);
+
+      [htmlBlock, cleanBlock].forEach((routeBlock) => {
+        headerAssert.match(routeBlock, /Cache-Control: no-store(?:,|$)/);
+        headerAssert.match(routeBlock, /Pragma: no-cache/);
+        headerAssert.match(routeBlock, /X-Robots-Tag: noindex(?:,|$)/);
+      });
+    });
+
+    const publicControlBlock = getExactRouteBlock('/index.html');
+    headerAssert.doesNotMatch(publicControlBlock, /Cache-Control:.*no-store/i);
+    headerAssert.doesNotMatch(publicControlBlock, /X-Robots-Tag:.*noindex/i);
+  }
+);

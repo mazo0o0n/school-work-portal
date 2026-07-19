@@ -5,25 +5,49 @@
   X-Frame-Options: SAMEORIGIN
 
 /admin-unanswered.html
-  Cache-Control: no-store
+  Cache-Control: no-store, no-cache, must-revalidate
   Pragma: no-cache
   Expires: 0
-  X-Robots-Tag: noindex, nofollow
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/admin-unanswered
+  Cache-Control: no-store, no-cache, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+  X-Robots-Tag: noindex, nofollow, noarchive
 
 /assistant-status.html
-  Cache-Control: no-store
+  Cache-Control: no-store, no-cache, must-revalidate
   Pragma: no-cache
   Expires: 0
-  X-Robots-Tag: noindex, nofollow
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/assistant-status
+  Cache-Control: no-store, no-cache, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+  X-Robots-Tag: noindex, nofollow, noarchive
 
 /knowledge-status.html
-  Cache-Control: no-store
+  Cache-Control: no-store, no-cache, must-revalidate
   Pragma: no-cache
   Expires: 0
-  X-Robots-Tag: noindex, nofollow
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/knowledge-status
+  Cache-Control: no-store, no-cache, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+  X-Robots-Tag: noindex, nofollow, noarchive
 
 /assistant-test.html
-  Cache-Control: no-store
+  Cache-Control: no-store, no-cache, must-revalidate
   Pragma: no-cache
   Expires: 0
-  X-Robots-Tag: noindex, nofollow
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/assistant-test
+  Cache-Control: no-store, no-cache, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+  X-Robots-Tag: noindex, nofollow, noarchive
