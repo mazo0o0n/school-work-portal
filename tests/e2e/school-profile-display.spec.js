@@ -1,8 +1,11 @@
 ﻿const { test, expect } = require("@playwright/test");
 
+const { mockSchoolRegistrationApi } = require('./helpers/school-registration');
+
 test("ظهور بيانات المدرسة في الصفحة الرئيسية بعد التسجيل", async ({ page }) => {
   test.setTimeout(15000);
 
+  await mockSchoolRegistrationApi(page);
   await page.goto("http://127.0.0.1:4173/register.html");
 
   const schoolName = "مدرسة اختبار المنصة";
