@@ -42,7 +42,13 @@ let currentPage = 1;
 let totalPages = 1;
 let busy = false;
 let searchTimer = 0;
+let autoRefreshTimer = 0;
+let refreshInFlight = false;
+let knownSchoolTotal = null;
+let lastAutomaticRefreshAt = 0;
 const pageSize = 25;
+const autoRefreshIntervalMs = 15000;
+const automaticRefreshCooldownMs = 1000;
 
 function setStatus(message, type = ''){
   statusLine.textContent = message;
@@ -77,10 +83,12 @@ function resetCounts(){
 }
 
 function resetSession(message = 'تم تسجيل الخروج ومسح رمز الإدارة من الذاكرة.', type = 'success'){
+  stopAutoRefresh();
   adminToken = '';
   adminTokenInput.value = '';
   currentPage = 1;
   totalPages = 1;
+  knownSchoolTotal = null;
   schoolsTableBody.replaceChildren();
   resetCounts();
   setAdminVisible(false);
@@ -229,29 +237,89 @@ function buildSchoolsUrl(){
 async function loadSummary(){
   const data = await apiRequest('/api/admin/schools?summary=1');
   renderSummary(data);
+  knownSchoolTotal = Number(data?.status_counts?.all || 0);
+  return knownSchoolTotal;
 }
 
 async function loadSchools(){
-  const data = await apiRequest(buildSchoolsUrl());
+  let data = await apiRequest(buildSchoolsUrl());
+  const availablePages = Math.max(1, Number(data?.pagination?.pages || 1));
+
+  if(currentPage > availablePages){
+    currentPage = availablePages;
+    data = await apiRequest(buildSchoolsUrl());
+  }
+
   renderSchools(data);
 }
 
-async function refreshAll(successMessage = 'تم تحديث بيانات المدارس.'){
-  if(!adminToken || busy) return;
+async function refreshAll(
+  successMessage = 'تم تحديث بيانات المدارس.',
+  { automatic = false } = {}
+){
+  if(!adminToken || busy || refreshInFlight) return false;
 
-  setBusy(true);
-  setStatus('جارٍ تحميل بيانات المدارس...');
+  const previousTotal = knownSchoolTotal;
+  refreshInFlight = true;
+
+  if(!automatic){
+    setBusy(true);
+    setStatus('جارٍ تحميل بيانات المدارس...');
+  }
+
   try{
-    await Promise.all([loadSummary(), loadSchools()]);
+    const [newTotal] = await Promise.all([loadSummary(), loadSchools()]);
     setAdminVisible(true);
-    setStatus(successMessage, 'success');
+
+    if(automatic){
+      if(previousTotal !== null && newTotal > previousTotal){
+        setStatus('تمت إضافة مدرسة جديدة إلى القائمة.', 'success');
+      }
+    }else{
+      setStatus(successMessage, 'success');
+    }
+
+    return true;
   }catch(error){
-    if(adminToken){
+    if(adminToken && !automatic){
       setStatus(error instanceof Error ? error.message : 'تعذر تحميل البيانات.', 'error');
     }
+    return false;
   }finally{
-    setBusy(false);
+    refreshInFlight = false;
+    if(!automatic) setBusy(false);
   }
+}
+
+function requestAutomaticRefresh(){
+  if(!adminToken || document.visibilityState !== 'visible') return;
+
+  const now = Date.now();
+  if(now - lastAutomaticRefreshAt < automaticRefreshCooldownMs) return;
+
+  lastAutomaticRefreshAt = now;
+  refreshAll('', { automatic: true });
+}
+
+function stopAutoRefresh(){
+  if(!autoRefreshTimer) return;
+  window.clearInterval(autoRefreshTimer);
+  autoRefreshTimer = 0;
+}
+
+function startAutoRefresh(){
+  stopAutoRefresh();
+  if(!adminToken) return;
+
+  lastAutomaticRefreshAt = Date.now();
+  autoRefreshTimer = window.setInterval(
+    requestAutomaticRefresh,
+    autoRefreshIntervalMs
+  );
+}
+
+function handleVisibilityChange(){
+  if(document.visibilityState === 'visible') requestAutomaticRefresh();
 }
 
 async function connect(){
@@ -264,7 +332,8 @@ async function connect(){
 
   adminToken = token;
   currentPage = 1;
-  await refreshAll('تم الدخول وتحميل المدارس المسجلة.');
+  const connected = await refreshAll('تم الدخول وتحميل المدارس المسجلة.');
+  if(connected && adminToken) startAutoRefresh();
 }
 
 async function updateSchoolStatus(school, status){
@@ -344,7 +413,11 @@ nextPageBtn.addEventListener('click', () => {
   refreshAll();
 });
 
+window.addEventListener('focus', requestAutomaticRefresh);
+document.addEventListener('visibilitychange', handleVisibilityChange);
+
 window.addEventListener('pagehide', () => {
+  stopAutoRefresh();
   adminToken = '';
   adminTokenInput.value = '';
 });
