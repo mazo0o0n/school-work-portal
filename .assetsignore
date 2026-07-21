@@ -1,11 +1,40 @@
+# Source control, dependencies, local state, and generated output
 /.git/
 /.github/
 /node_modules/
 /.wrangler/
 /tmp/
+/.tmp/
 /audit-reports/
 /reports/
-/knowledge-files/extracted/
+/test-results/
+/playwright-report/
+
+# Development, tests, internal documentation, and server-side source
+/tests/
+/docs/
+/tools/
+/migrations/
+/knowledge-files/
+/report-automation/
+/src/
+
+# Non-public project files at the asset root
+/package.json
+/package-lock.json
+/README.md
+/AGENTS.md
+/assistant-test-cases.md
+/playwright.config.cjs
+/local-server.cjs
+/semgrep-report.json
+*.md
+*.sql
 *.log
 *.tmp
+*.backup
 ~$*
+
+# Word templates: block DOCX by default, then allow approved manager reports
+*.docx
+!assets/report-templates/manager-reports/*.docx
