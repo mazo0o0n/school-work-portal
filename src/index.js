@@ -957,6 +957,194 @@ async function handleAdminUnansweredItem(request, env, id){
   return jsonResponse({ error: 'Method not allowed' }, 405);
 }
 
+
+class SchoolRegistrationError extends Error {
+  constructor(code, status, message) {
+    super(message);
+    this.name = 'SchoolRegistrationError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+const SCHOOL_REGISTER_MAX_BYTES = 4096;
+
+const SCHOOL_STAGES = new Set([
+  '\u0627\u0628\u062A\u062F\u0627\u0626\u064A\u0629',
+  '\u0645\u062A\u0648\u0633\u0637\u0629',
+  '\u062B\u0627\u0646\u0648\u064A\u0629'
+]);
+
+function normalizeSchoolField(value) {
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function bytesToBase64Url(bytes) {
+  let binary = '';
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+async function hashSchoolEditToken(editToken) {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    SECRET_TOKEN_ENCODER.encode(String(editToken))
+  );
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function readSchoolRegistrationBody(request) {
+  const contentType = String(
+    request.headers.get('Content-Type') || ''
+  ).toLowerCase();
+
+  if (!contentType.includes('application/json')) {
+    throw new SchoolRegistrationError(
+      'unsupported_content_type',
+      415,
+      'Content-Type must be application/json.'
+    );
+  }
+
+  const rawBody = await request.text();
+  const bodySize = SECRET_TOKEN_ENCODER.encode(rawBody).byteLength;
+
+  if (bodySize > SCHOOL_REGISTER_MAX_BYTES) {
+    throw new SchoolRegistrationError(
+      'payload_too_large',
+      413,
+      'Request body is too large.'
+    );
+  }
+
+  try {
+    const body = JSON.parse(rawBody);
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      throw new Error('Invalid object.');
+    }
+
+    return body;
+  } catch {
+    throw new SchoolRegistrationError(
+      'invalid_json',
+      400,
+      'Invalid JSON.'
+    );
+  }
+}
+
+async function handleSchoolRegistration(request, env) {
+  if (!env.PLATFORM_DB || typeof env.PLATFORM_DB.prepare !== 'function') {
+    return jsonResponse({
+      error: 'School database is unavailable.',
+      code: 'school_database_unavailable'
+    }, 503);
+  }
+
+  try {
+    const body = await readSchoolRegistrationBody(request);
+
+    const schoolName = normalizeSchoolField(body.schoolName);
+    const schoolStage = normalizeSchoolField(body.schoolStage);
+    const educationDepartment =
+      normalizeSchoolField(body.educationDepartment);
+
+    if (schoolName.length < 2 || schoolName.length > 120) {
+      throw new SchoolRegistrationError(
+        'invalid_school_name',
+        400,
+        'School name must be between 2 and 120 characters.'
+      );
+    }
+
+    if (!SCHOOL_STAGES.has(schoolStage)) {
+      throw new SchoolRegistrationError(
+        'invalid_school_stage',
+        400,
+        'School stage is not supported.'
+      );
+    }
+
+    if (
+      educationDepartment.length < 3 ||
+      educationDepartment.length > 160
+    ) {
+      throw new SchoolRegistrationError(
+        'invalid_education_department',
+        400,
+        'Education department must be between 3 and 160 characters.'
+      );
+    }
+
+    const publicIdBytes = new Uint8Array(16);
+    crypto.getRandomValues(publicIdBytes);
+    const publicId = 'school_' + bytesToBase64Url(publicIdBytes);
+
+    const editTokenBytes = new Uint8Array(32);
+    crypto.getRandomValues(editTokenBytes);
+    const editToken = bytesToBase64Url(editTokenBytes);
+    const editTokenHash = await hashSchoolEditToken(editToken);
+
+    const result = await env.PLATFORM_DB.prepare(
+      'INSERT INTO schools ' +
+      '(public_id, edit_token_hash, school_name, school_stage, education_department) ' +
+      'VALUES (?1, ?2, ?3, ?4, ?5)'
+    )
+      .bind(
+        publicId,
+        editTokenHash,
+        schoolName,
+        schoolStage,
+        educationDepartment
+      )
+      .run();
+
+    if (result?.success === false) {
+      throw new Error('D1 insert failed.');
+    }
+
+    return jsonResponse({
+      ok: true,
+      school: {
+        publicId,
+        schoolName,
+        schoolStage,
+        educationDepartment,
+        verificationStatus: 'unverified'
+      },
+      editToken
+    }, 201);
+  } catch (error) {
+    if (error instanceof SchoolRegistrationError) {
+      return jsonResponse({
+        error: error.message,
+        code: error.code
+      }, error.status);
+    }
+
+    console.error('School registration failed.', error);
+
+    return jsonResponse({
+      error: 'Unable to register school.',
+      code: 'school_registration_failed'
+    }, 500);
+  }
+}
+
+
 export default {
   async fetch(request, env){
     const url = new URL(request.url);
@@ -971,6 +1159,35 @@ export default {
       }
 
       return handleAdminUnanswered(request, env);
+    }
+
+
+    if(url.pathname === '/api/schools/register'){
+      if(request.method !== 'POST'){
+        return jsonResponse(
+          { error: 'Method not allowed' },
+          405,
+          { 'Allow': 'POST' }
+        );
+      }
+
+      const allowed = await isRateLimitAllowed(
+        request,
+        env,
+        'school-register',
+        env.CHAT_RATE_LIMITER
+      );
+
+      if(!allowed){
+        return jsonResponse({
+          error: 'Too many requests',
+          code: 'rate_limited'
+        }, 429, {
+          'Retry-After': String(RATE_LIMIT_WINDOW_SECONDS)
+        });
+      }
+
+      return handleSchoolRegistration(request, env);
     }
 
     if(url.pathname === '/api/chat'){
