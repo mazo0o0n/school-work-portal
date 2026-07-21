@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>لوحة المطور المحلية | منصة التنظيم المدرسي</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f8f8;
+      --surface: #ffffff;
+      --surface-soft: #edf8f7;
+      --text: #173238;
+      --muted: #60767b;
+      --line: #cfe0e2;
+      --accent: #079c99;
+      --accent-strong: #087570;
+      --notice: #fff8db;
+      --notice-line: #e6c65a;
+      --shadow: 0 14px 32px rgba(20, 59, 66, 0.09);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Tahoma, Arial, sans-serif;
+      line-height: 1.6;
+    }
+
+    button, a { font: inherit; }
+
+    button {
+      border: 0;
+      cursor: pointer;
+    }
+
+    .dashboard {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+
+    .hero, .section-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .hero { padding: 24px; }
+
+    .notice {
+      margin: 0 0 18px;
+      padding: 12px 14px;
+      border: 1px solid var(--notice-line);
+      border-radius: 12px;
+      background: var(--notice);
+      color: #5f4b00;
+      font-weight: 700;
+    }
+
+    h1, h2, p { margin-top: 0; }
+    h1 { margin-bottom: 8px; font-size: clamp(26px, 4vw, 38px); }
+    .intro { margin-bottom: 20px; color: var(--muted); }
+
+    .environment-switcher {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .environment-switcher strong { margin-inline-end: 4px; }
+
+    .environment-button, .action-button, .open-section-button {
+      min-height: 42px;
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-weight: 700;
+      transition: background-color 160ms ease, border-color 160ms ease;
+    }
+
+    .environment-button, .action-button {
+      border: 1px solid var(--line);
+      background: var(--surface-soft);
+      color: var(--text);
+    }
+
+    .environment-button[aria-pressed="true"],
+    .open-section-button,
+    .action-button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    .environment-url {
+      flex: 1 1 100%;
+      direction: ltr;
+      color: var(--muted);
+      font-size: 14px;
+      overflow-wrap: anywhere;
+      text-align: right;
+    }
+
+    .sections {
+      display: grid;
+      gap: 18px;
+      margin-top: 20px;
+    }
+
+    .section-card { padding: 20px; }
+
+    .section-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .section-heading h2 { margin-bottom: 0; font-size: 21px; }
+
+    .links-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+
+    .link-card {
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface-soft);
+    }
+
+    .link-name { display: block; margin-bottom: 3px; }
+
+    .link-url {
+      display: block;
+      min-height: 44px;
+      direction: ltr;
+      color: var(--muted);
+      font-size: 13px;
+      overflow-wrap: anywhere;
+      text-align: left;
+    }
+
+    .link-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .action-button { flex: 1 1 110px; }
+
+    .status {
+      position: sticky;
+      bottom: 12px;
+      z-index: 2;
+      min-height: 24px;
+      margin: 18px auto 0;
+      padding: 9px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--muted);
+      box-shadow: var(--shadow);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+
+    .status.visible { opacity: 1; }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #07141b;
+        --surface: #10222b;
+        --surface-soft: #142c36;
+        --text: #edf8f8;
+        --muted: #aac0c4;
+        --line: #284650;
+        --accent: #14b8b4;
+        --accent-strong: #3fd1cd;
+        --notice: #332d14;
+        --notice-line: #76611b;
+        --shadow: 0 14px 32px rgba(0, 0, 0, 0.25);
+      }
+
+      .notice { color: #f5df82; }
+    }
+
+    @media (max-width: 640px) {
+      .dashboard { width: min(100% - 20px, 1180px); padding-top: 10px; }
+      .hero, .section-card { border-radius: 14px; padding: 16px; }
+      .section-heading { align-items: stretch; flex-direction: column; }
+      .open-section-button { width: 100%; }
+      .links-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="dashboard">
+    <header class="hero">
+      <p class="notice">هذه لوحة محلية للمطور فقط، وليست جزءًا من الموقع العام.</p>
+      <h1>لوحة روابط المشروع</h1>
+      <p class="intro">اختر البيئة، ثم افتح الصفحة المطلوبة أو انسخ رابطها دون تشغيل الصفحات تلقائيًا.</p>
+      <div class="environment-switcher" aria-label="اختيار بيئة الروابط">
+        <strong>البيئة:</strong>
+        <button class="environment-button" type="button" data-environment="local" aria-pressed="true">المحلي</button>
+        <button class="environment-button" type="button" data-environment="production" aria-pressed="false">الإنتاج</button>
+        <span id="environmentUrl" class="environment-url">http://127.0.0.1:4173</span>
+      </div>
+    </header>
+
+    <div id="sections" class="sections"></div>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </main>
+
+  <script>
+    'use strict';
+
+    const environments = {
+      local: 'http://127.0.0.1:4173',
+      production: 'https://mazen.zb-store.com'
+    };
+
+    const sections = [
+      {
+        title: 'صفحات الموقع العامة',
+        links: [
+          ['الرئيسية', '/'],
+          ['تسجيل مدرسة', 'register.html'],
+          ['طريقة الاستخدام', 'how-to-use.html'],
+          ['عن المنصة', 'about.html'],
+          ['الخصوصية', 'privacy.html'],
+          ['سياسة الاستخدام', 'usage-policy.html'],
+          ['التحديثات', 'updates.html'],
+          ['خريطة الموقع', 'sitemap.html'],
+          ['الملاحظات والاقتراحات', 'feedback.html']
+        ]
+      },
+      {
+        title: 'أدوات الدعم المدرسي',
+        links: [
+          ['الأداة الأولى', '1.html'],
+          ['الأداة الثانية', '2.html'],
+          ['الأداة الثالثة', '3.html']
+        ]
+      },
+      {
+        title: 'صفحات الإدارة',
+        links: [
+          ['إدارة المدارس', 'admin-schools.html'],
+          ['الأسئلة غير المجابة', 'admin-unanswered.html'],
+          ['حالة المساعد', 'assistant-status.html'],
+          ['حالة المعرفة', 'knowledge-status.html'],
+          ['اختبار المساعد', 'assistant-test.html']
+        ]
+      },
+      {
+        title: 'قوالب تقارير المدير',
+        links: [
+          ['سجل اجتماعات الأقسام', 'assets/report-templates/manager-reports/meeting-template-test.docx'],
+          ['لجنة التحصيل الدراسي', 'assets/report-templates/manager-reports/academic-achievement-committee.docx'],
+          ['تكليف الموجه الصحي', 'assets/report-templates/manager-reports/health-guide-assignment.docx'],
+          ['تكليف حارس المدرسة', 'assets/report-templates/manager-reports/school-guard-assignment.docx'],
+          ['تكليف رائد النشاط', 'assets/report-templates/manager-reports/activity-leader-assignment-1448.docx']
+        ]
+      },
+      {
+        title: 'روابط المشروع الخارجية',
+        external: true,
+        links: [
+          ['الموقع المنشور', 'https://mazen.zb-store.com'],
+          ['مستودع GitHub', 'https://github.com/mazo0o0n/school-work-portal.git']
+        ]
+      }
+    ];
+
+    const sectionsContainer = document.getElementById('sections');
+    const environmentUrl = document.getElementById('environmentUrl');
+    const status = document.getElementById('status');
+    const environmentButtons = [...document.querySelectorAll('[data-environment]')];
+    let selectedEnvironment = 'local';
+    let statusTimer = 0;
+
+    function resolveUrl(path, external = false) {
+      if (external) return path;
+      return new URL(path, `${environments[selectedEnvironment]}/`).href;
+    }
+
+    function showStatus(message) {
+      window.clearTimeout(statusTimer);
+      status.textContent = message;
+      status.classList.add('visible');
+      statusTimer = window.setTimeout(() => {
+        status.classList.remove('visible');
+      }, 2400);
+    }
+
+    function openUrl(url) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.click();
+    }
+
+    async function copyUrl(url) {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(url);
+        } else {
+          const input = document.createElement('textarea');
+          input.value = url;
+          input.setAttribute('readonly', '');
+          input.style.position = 'fixed';
+          input.style.opacity = '0';
+          document.body.append(input);
+          input.select();
+          document.execCommand('copy');
+          input.remove();
+        }
+        showStatus('تم نسخ الرابط.');
+      } catch {
+        showStatus('تعذر نسخ الرابط تلقائيًا.');
+      }
+    }
+
+    function createActionButton(label, className, action) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `action-button ${className}`.trim();
+      button.textContent = label;
+      button.addEventListener('click', action);
+      return button;
+    }
+
+    function renderSections() {
+      const renderedSections = sections.map((section) => {
+        const sectionElement = document.createElement('section');
+        sectionElement.className = 'section-card';
+
+        const heading = document.createElement('div');
+        heading.className = 'section-heading';
+        const title = document.createElement('h2');
+        title.textContent = section.title;
+
+        const openAllButton = document.createElement('button');
+        openAllButton.type = 'button';
+        openAllButton.className = 'open-section-button';
+        openAllButton.textContent = 'فتح القسم كاملًا';
+        openAllButton.addEventListener('click', () => {
+          section.links.forEach(([, path]) => {
+            openUrl(resolveUrl(path, section.external));
+          });
+          showStatus(
+            `تم طلب فتح ${section.links.length} روابط. قد يتطلب ذلك السماح بالنوافذ المنبثقة.`
+          );
+        });
+
+        heading.append(title, openAllButton);
+
+        const grid = document.createElement('div');
+        grid.className = 'links-grid';
+
+        section.links.forEach(([name, path]) => {
+          const card = document.createElement('article');
+          card.className = 'link-card';
+          const nameElement = document.createElement('strong');
+          nameElement.className = 'link-name';
+          nameElement.textContent = name;
+          const urlElement = document.createElement('span');
+          urlElement.className = 'link-url';
+          urlElement.dataset.path = path;
+          urlElement.dataset.external = String(Boolean(section.external));
+
+          const actions = document.createElement('div');
+          actions.className = 'link-actions';
+          actions.append(
+            createActionButton('فتح الصفحة', 'primary', () => {
+              openUrl(resolveUrl(path, section.external));
+            }),
+            createActionButton('نسخ الرابط', '', () => {
+              copyUrl(resolveUrl(path, section.external));
+            })
+          );
+
+          card.append(nameElement, urlElement, actions);
+          grid.append(card);
+        });
+
+        sectionElement.append(heading, grid);
+        return sectionElement;
+      });
+
+      sectionsContainer.replaceChildren(...renderedSections);
+      updateUrls();
+    }
+
+    function updateUrls() {
+      environmentUrl.textContent = environments[selectedEnvironment];
+      document.querySelectorAll('.link-url').forEach((element) => {
+        element.textContent = resolveUrl(
+          element.dataset.path,
+          element.dataset.external === 'true'
+        );
+      });
+    }
+
+    environmentButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        selectedEnvironment = button.dataset.environment;
+        environmentButtons.forEach((candidate) => {
+          candidate.setAttribute(
+            'aria-pressed',
+            String(candidate === button)
+          );
+        });
+        updateUrls();
+      });
+    });
+
+    renderSections();
+  </script>
+</body>
+</html>
