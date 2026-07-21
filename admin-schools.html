@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>إدارة المدارس المسجلة | منصة التنظيم المدرسي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/admin-schools.css">
+  <script src="assets/js/admin-schools.js" defer></script>
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-header">
+      <div>
+        <p class="eyebrow">لوحة إدارة المنصة</p>
+        <h1>المدارس المسجلة</h1>
+        <p class="subtitle">استعراض سجلات المدارس، البحث والتصفية، وتحديث حالة التحقق.</p>
+      </div>
+      <nav class="admin-nav" aria-label="التنقل بين صفحات الإدارة">
+        <a class="nav-link active" href="admin-schools.html" aria-current="page">المدارس</a>
+        <a class="nav-link" href="admin-unanswered.html">الأسئلة غير المجابة</a>
+        <a class="nav-link" href="index.html">المنصة</a>
+      </nav>
+    </header>
+
+    <section class="token-panel" aria-labelledby="accessTitle">
+      <div>
+        <h2 id="accessTitle">الدخول الإداري</h2>
+        <p>أدخل رمز الإدارة. لا يتم حفظ الرمز في المتصفح، ويُمسح عند إغلاق الصفحة أو تسجيل الخروج.</p>
+      </div>
+      <div class="token-row">
+        <label class="sr-only" for="adminToken">رمز الإدارة</label>
+        <input id="adminToken" type="password" autocomplete="current-password" placeholder="رمز الإدارة" spellcheck="false">
+        <button id="connectBtn" type="button">دخول</button>
+        <button id="logoutBtn" class="secondary-btn" type="button" hidden>تسجيل الخروج</button>
+      </div>
+    </section>
+
+    <p id="statusLine" class="status-line" role="status" aria-live="polite">أدخل رمز الإدارة لعرض المدارس المسجلة.</p>
+
+    <section class="admin-content stats-section" hidden aria-labelledby="statsTitle">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">نظرة عامة</p>
+          <h2 id="statsTitle">إحصاءات التسجيل</h2>
+        </div>
+        <button id="refreshBtn" class="secondary-btn" type="button">تحديث البيانات</button>
+      </div>
+
+      <div class="stats-grid" aria-label="إحصاءات حالات المدارس">
+        <article class="stat-card total"><span>إجمالي المدارس</span><strong id="allCount">—</strong></article>
+        <article class="stat-card"><span>غير متحققة</span><strong id="unverifiedCount">—</strong></article>
+        <article class="stat-card pending"><span>بانتظار المراجعة</span><strong id="pendingCount">—</strong></article>
+        <article class="stat-card verified"><span>متحققة</span><strong id="verifiedCount">—</strong></article>
+        <article class="stat-card suspended"><span>موقوفة</span><strong id="suspendedCount">—</strong></article>
+      </div>
+
+      <div class="stage-summary" aria-label="الإحصاءات حسب المرحلة">
+        <span>ابتدائية: <strong id="primaryCount">—</strong></span>
+        <span>متوسطة: <strong id="middleCount">—</strong></span>
+        <span>ثانوية: <strong id="secondaryCount">—</strong></span>
+      </div>
+    </section>
+
+    <section class="admin-content toolbar" hidden aria-labelledby="filtersTitle">
+      <div class="section-heading compact">
+        <div>
+          <p class="eyebrow">البحث والتصفية</p>
+          <h2 id="filtersTitle">سجلات المدارس</h2>
+        </div>
+        <span id="resultsSummary" class="results-summary">—</span>
+      </div>
+
+      <div class="filters-grid">
+        <label>
+          <span>بحث</span>
+          <input id="searchInput" type="search" placeholder="اسم المدرسة، إدارة التعليم، أو المعرّف">
+        </label>
+        <label>
+          <span>المرحلة</span>
+          <select id="stageFilter">
+            <option value="">كل المراحل</option>
+            <option value="ابتدائية">ابتدائية</option>
+            <option value="متوسطة">متوسطة</option>
+            <option value="ثانوية">ثانوية</option>
+          </select>
+        </label>
+        <label>
+          <span>حالة التحقق</span>
+          <select id="statusFilter">
+            <option value="">كل الحالات</option>
+            <option value="unverified">غير متحققة</option>
+            <option value="pending">بانتظار المراجعة</option>
+            <option value="verified">متحققة</option>
+            <option value="suspended">موقوفة</option>
+          </select>
+        </label>
+        <label>
+          <span>الترتيب</span>
+          <select id="sortSelect">
+            <option value="newest">الأحدث تسجيلًا</option>
+            <option value="oldest">الأقدم تسجيلًا</option>
+            <option value="name">اسم المدرسة</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <section class="admin-content records-panel" hidden aria-labelledby="recordsTitle">
+      <h2 id="recordsTitle" class="sr-only">قائمة المدارس المسجلة</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">المدرسة</th>
+              <th scope="col">المرحلة</th>
+              <th scope="col">إدارة التعليم</th>
+              <th scope="col">الحالة</th>
+              <th scope="col">تاريخ التسجيل</th>
+              <th scope="col">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="schoolsTableBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyState" class="empty-state" hidden>
+        <strong>لا توجد مدارس مطابقة</strong>
+        <span>غيّر خيارات البحث أو التصفية ثم حاول مرة أخرى.</span>
+      </div>
+      <div class="pagination" aria-label="التنقل بين صفحات المدارس">
+        <button id="previousPageBtn" class="secondary-btn" type="button">السابق</button>
+        <span id="pageIndicator">الصفحة ١ من ١</span>
+        <button id="nextPageBtn" class="secondary-btn" type="button">التالي</button>
+      </div>
+    </section>
+  </main>
+
+  <template id="schoolRowTemplate">
+    <tr>
+      <td data-label="المدرسة">
+        <strong class="school-name"></strong>
+        <small class="school-id"></small>
+      </td>
+      <td data-label="المرحلة" class="school-stage"></td>
+      <td data-label="إدارة التعليم" class="education-department"></td>
+      <td data-label="الحالة"><span class="status-badge"></span></td>
+      <td data-label="تاريخ التسجيل" class="created-at"></td>
+      <td data-label="الإجراءات">
+        <div class="row-actions">
+          <select class="status-action" aria-label="تغيير حالة المدرسة">
+            <option value="unverified">غير متحققة</option>
+            <option value="pending">بانتظار المراجعة</option>
+            <option value="verified">متحققة</option>
+            <option value="suspended">موقوفة</option>
+          </select>
+          <button class="save-status-btn" type="button">حفظ</button>
+          <button class="delete-btn" type="button">حذف</button>
+        </div>
+      </td>
+    </tr>
+  </template>
+</body>
+</html>
