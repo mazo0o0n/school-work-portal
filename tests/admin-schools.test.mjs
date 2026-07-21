@@ -15,6 +15,22 @@ const loadableSource = source.replace("'./index.js'", JSON.stringify(baseWorkerM
 const workerModule = `data:text/javascript;base64,${Buffer.from(loadableSource).toString('base64')}`;
 const { default: worker } = await import(workerModule);
 
+const registrationSource = await readFile(
+  new globalThis.URL('../src/index.js', import.meta.url),
+  'utf8'
+);
+const chatSecurityModuleUrl = new globalThis.URL(
+  '../src/chat-security.mjs',
+  import.meta.url
+).href;
+const loadableRegistrationSource = registrationSource.replace(
+  "'./chat-security.mjs'",
+  JSON.stringify(chatSecurityModuleUrl)
+);
+const registrationWorkerModule =
+  `data:text/javascript;base64,${Buffer.from(loadableRegistrationSource).toString('base64')}`;
+const { default: registrationWorker } = await import(registrationWorkerModule);
+
 const TOKEN = 'test-admin-token';
 const BASE_URL = 'https://example.test';
 
@@ -114,6 +130,84 @@ function createEnv(database = createDatabase().binding){
         });
       }
     }
+  };
+}
+
+function createRegistrationDatabase(){
+  const rows = [];
+  let inserted = 0;
+
+  return {
+    rows,
+    get inserted(){
+      return inserted;
+    },
+    binding: {
+      prepare(sql){
+        return {
+          bind(...values){
+            if(sql.startsWith('SELECT school_name')){
+              return {
+                async all(){
+                  return {
+                    results: rows.filter((row) => row.school_stage === values[0])
+                  };
+                }
+              };
+            }
+
+            if(sql.startsWith('INSERT INTO schools')){
+              return {
+                async run(){
+                  const publicId = values[0];
+                  const schoolName = values[2];
+                  const schoolStage = values[3];
+                  const educationDepartment = values[4];
+                  const duplicate = rows.some((row) => (
+                    row.school_name === schoolName &&
+                    row.school_stage === schoolStage &&
+                    row.education_department === educationDepartment
+                  ));
+
+                  if(duplicate){
+                    return { success: true, meta: { changes: 0 } };
+                  }
+
+                  rows.push({
+                    public_id: publicId,
+                    school_name: schoolName,
+                    school_stage: schoolStage,
+                    education_department: educationDepartment
+                  });
+                  inserted += 1;
+                  return { success: true, meta: { changes: 1 } };
+                }
+              };
+            }
+
+            throw new Error(`Unexpected registration SQL: ${sql}`);
+          }
+        };
+      }
+    }
+  };
+}
+
+async function registerSchool(database, payload){
+  const response = await registrationWorker.fetch(new globalThis.Request(
+    `${BASE_URL}/api/schools/register`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }
+  ), {
+    PLATFORM_DB: database.binding
+  });
+
+  return {
+    response,
+    body: await response.json()
   };
 }
 
@@ -218,4 +312,57 @@ test('delegates unrelated requests to the existing worker', async () => {
   const response = await worker.fetch(new Request(`${BASE_URL}/index.html`), createEnv());
   assert.equal(response.status, 202);
   assert.equal(await response.text(), 'delegated');
+});
+
+test('prevents only duplicate normalized school identities', async () => {
+  const database = createRegistrationDatabase();
+  const baseSchool = {
+    schoolName: 'اختبار 2',
+    schoolStage: 'متوسطة',
+    educationDepartment: 'إدارة التعليم بمنطقة المدينة المنورة'
+  };
+
+  const first = await registerSchool(database, baseSchool);
+  assert.equal(first.response.status, 201);
+  assert.equal(first.body.ok, true);
+  assert.equal(database.inserted, 1);
+
+  const duplicate = await registerSchool(database, baseSchool);
+  assert.equal(duplicate.response.status, 409);
+  assert.equal(duplicate.body.code, 'duplicate_school');
+  assert.equal(
+    duplicate.body.error,
+    'هذه المدرسة مسجلة مسبقًا بنفس المرحلة وإدارة التعليم.'
+  );
+  assert.equal(database.inserted, 1);
+
+  const differentDepartment = await registerSchool(database, {
+    ...baseSchool,
+    educationDepartment: 'إدارة التعليم بمنطقة الحدود الشمالية'
+  });
+  assert.equal(differentDepartment.response.status, 201);
+  assert.equal(database.inserted, 2);
+
+  const differentStage = await registerSchool(database, {
+    schoolName: baseSchool.schoolName,
+    stage: 'ابتدائية',
+    educationDepartment: baseSchool.educationDepartment
+  });
+  assert.equal(differentStage.response.status, 201);
+  assert.equal(database.inserted, 3);
+
+  const differentName = await registerSchool(database, {
+    ...baseSchool,
+    schoolName: 'اختبار 3'
+  });
+  assert.equal(differentName.response.status, 201);
+  assert.equal(database.inserted, 4);
+
+  const spacedDuplicate = await registerSchool(database, {
+    ...baseSchool,
+    schoolName: '  اختبار   2  '
+  });
+  assert.equal(spacedDuplicate.response.status, 409);
+  assert.equal(spacedDuplicate.body.code, 'duplicate_school');
+  assert.equal(database.inserted, 4);
 });

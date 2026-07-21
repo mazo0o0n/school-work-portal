@@ -5,6 +5,8 @@ const nameError = document.getElementById('schoolNameError');
 const educationDepartmentInput = document.getElementById('educationDepartment');
 const englishLettersPattern = /[A-Za-z]/;
 const schoolProfileStorageKey = 'registeredSchoolProfile';
+const duplicateSchoolMessage =
+  'هذه المدرسة مسجلة مسبقًا بنفس المرحلة وإدارة التعليم.';
 
 function getDisplayName(){
   const name = nameInput.value.trim();
@@ -149,7 +151,9 @@ document
         !result.editToken
       ) {
         const message =
-          result.error === 'Too many requests'
+          result.code === 'duplicate_school'
+            ? duplicateSchoolMessage
+            : result.error === 'Too many requests'
             ? 'تم تجاوز عدد محاولات التسجيل المسموح بها. حاول بعد قليل.'
             : result.error || 'تعذر تسجيل المدرسة حاليًا. حاول مرة أخرى.';
 

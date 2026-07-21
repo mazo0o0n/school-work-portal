@@ -968,6 +968,8 @@ class SchoolRegistrationError extends Error {
 }
 
 const SCHOOL_REGISTER_MAX_BYTES = 4096;
+const DUPLICATE_SCHOOL_MESSAGE =
+  'هذه المدرسة مسجلة مسبقًا بنفس المرحلة وإدارة التعليم.';
 
 const SCHOOL_STAGES = new Set([
   '\u0627\u0628\u062A\u062F\u0627\u0626\u064A\u0629',
@@ -979,6 +981,48 @@ function normalizeSchoolField(value) {
   return String(value ?? '')
     .trim()
     .replace(/\s+/g, ' ');
+}
+
+function hasMatchingSchoolIdentity(
+  rows,
+  schoolName,
+  schoolStage,
+  educationDepartment
+) {
+  return rows.some((row) => (
+    normalizeSchoolField(row.school_name) === schoolName &&
+    normalizeSchoolField(row.school_stage) === schoolStage &&
+    normalizeSchoolField(row.education_department) === educationDepartment
+  ));
+}
+
+function duplicateSchoolError() {
+  return new SchoolRegistrationError(
+    'duplicate_school',
+    409,
+    DUPLICATE_SCHOOL_MESSAGE
+  );
+}
+
+async function schoolIdentityExists(
+  database,
+  schoolName,
+  schoolStage,
+  educationDepartment
+) {
+  const result = await database.prepare(
+    'SELECT school_name, school_stage, education_department ' +
+    'FROM schools WHERE school_stage = ?1'
+  )
+    .bind(schoolStage)
+    .all();
+
+  return hasMatchingSchoolIdentity(
+    Array.isArray(result?.results) ? result.results : [],
+    schoolName,
+    schoolStage,
+    educationDepartment
+  );
 }
 
 function bytesToBase64Url(bytes) {
@@ -1058,7 +1102,9 @@ async function handleSchoolRegistration(request, env) {
     const body = await readSchoolRegistrationBody(request);
 
     const schoolName = normalizeSchoolField(body.schoolName);
-    const schoolStage = normalizeSchoolField(body.schoolStage);
+    const schoolStage = normalizeSchoolField(
+      body.schoolStage ?? body.stage
+    );
     const educationDepartment =
       normalizeSchoolField(body.educationDepartment);
 
@@ -1089,6 +1135,15 @@ async function handleSchoolRegistration(request, env) {
       );
     }
 
+    if (await schoolIdentityExists(
+      env.PLATFORM_DB,
+      schoolName,
+      schoolStage,
+      educationDepartment
+    )) {
+      throw duplicateSchoolError();
+    }
+
     const publicIdBytes = new Uint8Array(16);
     crypto.getRandomValues(publicIdBytes);
     const publicId = 'school_' + bytesToBase64Url(publicIdBytes);
@@ -1101,7 +1156,13 @@ async function handleSchoolRegistration(request, env) {
     const result = await env.PLATFORM_DB.prepare(
       'INSERT INTO schools ' +
       '(public_id, edit_token_hash, school_name, school_stage, education_department) ' +
-      'VALUES (?1, ?2, ?3, ?4, ?5)'
+      'SELECT ?1, ?2, ?3, ?4, ?5 ' +
+      'WHERE NOT EXISTS (' +
+      'SELECT 1 FROM schools ' +
+      'WHERE school_name = ?3 ' +
+      'AND school_stage = ?4 ' +
+      'AND education_department = ?5' +
+      ')'
     )
       .bind(
         publicId,
@@ -1114,6 +1175,10 @@ async function handleSchoolRegistration(request, env) {
 
     if (result?.success === false) {
       throw new Error('D1 insert failed.');
+    }
+
+    if (Number(result?.meta?.changes || 0) === 0) {
+      throw duplicateSchoolError();
     }
 
     return jsonResponse({
