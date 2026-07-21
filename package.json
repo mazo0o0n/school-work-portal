@@ -4,7 +4,7 @@
   "private": true,
   "description": "Local tooling for linting and testing the school work portal",
   "scripts": {
-    "check:syntax": "node --check assets/js/index.js && node --check assets/js/report-word-generator.js && node --check assets/js/ai-assistant.js && node --check assets/js/register.js && node --check assets/js/visitor-counter.js && node --check assets/js/admin-unanswered.js && node --check src/chat-security.mjs && node --check src/index.js && node --check tests/assistant-security.test.mjs && node --check tests/assistant-legacy-cleanup.test.mjs && node --check tests/admin-unanswered.test.mjs && node --check tests/vectorize-lifecycle.test.mjs && node --check tests/version-consistency.test.mjs && node --check tools/check-links.js && node --check tools/check-knowledge.js && node --check tools/ingest-knowledge.js && node --check tools/vectorize-lifecycle.js && node --check tools/update-knowledge-stats.js && node --check local-server.cjs",
+    "check:syntax": "node --check assets/js/index.js && node --check assets/js/report-word-generator.js && node --check assets/js/ai-assistant.js && node --check assets/js/register.js && node --check assets/js/visitor-counter.js && node --check assets/js/admin-unanswered.js && node --check assets/js/admin-schools.js && node --check src/chat-security.mjs && node --check src/index.js && node --check src/worker.js && node --check tests/assistant-security.test.mjs && node --check tests/assistant-legacy-cleanup.test.mjs && node --check tests/admin-unanswered.test.mjs && node --check tests/admin-schools.test.mjs && node --check tests/vectorize-lifecycle.test.mjs && node --check tests/version-consistency.test.mjs && node --check tools/check-links.js && node --check tools/check-knowledge.js && node --check tools/ingest-knowledge.js && node --check tools/vectorize-lifecycle.js && node --check tools/update-knowledge-stats.js && node --check local-server.cjs",
     "lint:js": "eslint assets/js src tools tests local-server.cjs playwright.config.cjs eslint.config.cjs",
     "lint:css": "stylelint \"assets/css/**/*.css\"",
     "lint:html": "htmlhint \"*.html\"",
@@ -15,10 +15,11 @@
     "test:assistant-security": "node --test tests/assistant-security.test.mjs",
     "test:assistant-legacy-cleanup": "node --test tests/assistant-legacy-cleanup.test.mjs",
     "test:admin-unanswered": "node --test tests/admin-unanswered.test.mjs",
+    "test:admin-schools": "node --test tests/admin-schools.test.mjs",
     "test:vectorize-lifecycle": "node --test tests/vectorize-lifecycle.test.mjs",
     "test:version-consistency": "node --test tests/version-consistency.test.mjs",
     "test:visual": "playwright test tests/e2e/visual-regression.spec.js --project=chromium --output \"%TEMP%\\school-work-portal-playwright-visual\"",
-    "qa": "npm run check:syntax && npm run lint:js && npm run lint:css && npm run lint:html && npm run check:links && npm run check:knowledge && npm run test:assistant-security && npm run test:assistant-legacy-cleanup && npm run test:admin-unanswered && npm run test:vectorize-lifecycle && npm run test:version-consistency && npm run test:e2e && npm run test:visual"
+    "qa": "npm run check:syntax && npm run lint:js && npm run lint:css && npm run lint:html && npm run check:links && npm run check:knowledge && npm run test:assistant-security && npm run test:assistant-legacy-cleanup && npm run test:admin-unanswered && npm run test:admin-schools && npm run test:vectorize-lifecycle && npm run test:version-consistency && npm run test:e2e && npm run test:visual"
   },
   "license": "UNLICENSED",
   "devDependencies": {
