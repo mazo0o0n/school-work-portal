@@ -40,3 +40,10 @@ required = [ "RATE_LIMIT_SALT" ]
 binding = "UNANSWERED_DB"
 database_name = "school-unanswered-questions"
 database_id = "34747b5a-9df1-4a7d-98b0-5cbce29358ae"
+
+
+[[d1_databases]]
+binding = "PLATFORM_DB"
+database_name = "school-platform-db"
+database_id = "8b9e3fb9-ff59-4834-82e9-01c45409d484"
+migrations_dir = "migrations/platform"
