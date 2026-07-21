@@ -28,15 +28,38 @@ html:not(.app-booting) body{
 <script>
 (function(){
   document.documentElement.classList.add('app-booting');
-  if(localStorage.getItem('preferredTheme') === 'dark'){
-    document.documentElement.classList.add('preload-dark');
-  }
   window.__appBootFallback = window.setTimeout(function(){
     document.documentElement.classList.remove('app-booting');
   }, 800);
-  const hasSchool = (localStorage.getItem('registeredSchoolName') || localStorage.getItem('registeredSchoolBaseName') || '').trim();
-  const guestMode = localStorage.getItem('schoolGuestMode') === '1';
-  if(!hasSchool && !guestMode){
+
+  let hasSchoolRegistration = false;
+  let guestMode = false;
+
+  try{
+    if(localStorage.getItem('preferredTheme') === 'dark'){
+      document.documentElement.classList.add('preload-dark');
+    }
+
+    const registeredSchoolName = String(localStorage.getItem('registeredSchoolName') || '').trim();
+    const storedProfile = localStorage.getItem('registeredSchoolProfile');
+
+    if(storedProfile){
+      try{
+        const profile = JSON.parse(storedProfile);
+        hasSchoolRegistration = Boolean(
+          profile &&
+          typeof profile === 'object' &&
+          !Array.isArray(profile) &&
+          String(profile.schoolName || '').trim()
+        );
+      }catch{}
+    }
+
+    hasSchoolRegistration = hasSchoolRegistration || Boolean(registeredSchoolName);
+    guestMode = localStorage.getItem('schoolGuestMode') === '1';
+  }catch{}
+
+  if(!hasSchoolRegistration && !guestMode){
     window.location.replace('register.html');
   }
 })();
