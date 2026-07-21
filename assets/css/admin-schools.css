@@ -83,6 +83,7 @@ h2{font-size:21px}
 }
 .token-panel p{margin:6px 0 0;color:var(--muted);font-size:14px;font-weight:700;line-height:1.7}
 .token-row{display:grid;grid-template-columns:1fr auto auto;gap:10px}
+.token-row.session-active{grid-template-columns:auto;justify-content:end}
 input,select{
   min-height:42px;
   width:100%;

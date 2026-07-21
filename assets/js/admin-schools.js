@@ -1,4 +1,7 @@
 const adminTokenInput = document.getElementById('adminToken');
+const accessTitle = document.getElementById('accessTitle');
+const accessDescription = document.getElementById('accessDescription');
+const tokenRow = document.querySelector('.token-row');
 const connectBtn = document.getElementById('connectBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 const refreshBtn = document.getElementById('refreshBtn');
@@ -59,8 +62,15 @@ function setAdminVisible(value){
   adminContent.forEach((element) => {
     element.hidden = !value;
   });
+  accessTitle.textContent = value ? 'جلسة الإدارة' : 'الدخول الإداري';
+  accessDescription.textContent = value
+    ? 'تم تفعيل الجلسة الإدارية مؤقتًا. لا يتم حفظ رمز الإدارة في المتصفح، وسيتم إنهاء الجلسة عند تسجيل الخروج أو إغلاق الصفحة.'
+    : 'أدخل رمز الإدارة. لا يتم حفظ الرمز في المتصفح، ويُمسح عند إغلاق الصفحة أو تسجيل الخروج.';
+  adminTokenInput.hidden = value;
+  tokenRow.classList.toggle('session-active', value);
   logoutBtn.hidden = !value;
   connectBtn.hidden = value;
+  if(value) adminTokenInput.value = '';
 }
 
 function setBusy(value){
