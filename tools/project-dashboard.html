@@ -7,18 +7,18 @@
   <title>لوحة المطور المحلية | منصة التنظيم المدرسي</title>
   <style>
     :root {
-      color-scheme: light dark;
-      --bg: #f4f8f8;
-      --surface: #ffffff;
-      --surface-soft: #edf8f7;
-      --text: #173238;
-      --muted: #60767b;
-      --line: #cfe0e2;
-      --accent: #079c99;
-      --accent-strong: #087570;
-      --notice: #fff8db;
-      --notice-line: #e6c65a;
-      --shadow: 0 14px 32px rgba(20, 59, 66, 0.09);
+      color-scheme: dark;
+      --bg: #07131b;
+      --sidebar: #0d202a;
+      --surface: #112731;
+      --surface-soft: #16333e;
+      --text: #effafa;
+      --muted: #a6bdc2;
+      --line: #294852;
+      --accent: #17b8b3;
+      --accent-soft: rgba(23, 184, 179, 0.15);
+      --warning: #f0d57a;
+      --shadow: 0 20px 55px rgba(0, 0, 0, 0.28);
     }
 
     * { box-sizing: border-box; }
@@ -26,6 +26,7 @@
     body {
       margin: 0;
       min-height: 100vh;
+      overflow-x: hidden;
       background: var(--bg);
       color: var(--text);
       font-family: Tahoma, Arial, sans-serif;
@@ -33,197 +34,269 @@
     }
 
     button, a { font: inherit; }
+    button { cursor: pointer; }
 
-    button {
-      border: 0;
-      cursor: pointer;
+    .dashboard-shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 310px minmax(0, 1fr);
+      direction: rtl;
     }
 
-    .dashboard {
-      width: min(1180px, calc(100% - 32px));
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 20px;
+      border-inline-end: 1px solid var(--line);
+      background: var(--sidebar);
+    }
+
+    .local-notice {
+      margin: 0 0 18px;
+      padding: 11px 12px;
+      border: 1px solid #675b2a;
+      border-radius: 11px;
+      background: #312c16;
+      color: var(--warning);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 5px; font-size: 24px; }
+    .sidebar-intro { margin-bottom: 18px; color: var(--muted); font-size: 13px; }
+
+    .environment-switcher {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #091920;
+    }
+
+    .environment-button {
+      min-height: 40px;
+      border: 1px solid transparent;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .environment-button[aria-pressed="true"] {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--text);
+    }
+
+    .nav-group + .nav-group { margin-top: 20px; }
+    .nav-group h2 { margin-bottom: 8px; color: var(--muted); font-size: 13px; }
+    .page-list { display: grid; gap: 6px; }
+
+    .page-button {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 9px 11px;
+      background: transparent;
+      color: var(--text);
+      text-align: right;
+    }
+
+    .page-button:hover,
+    .page-button.active {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .workspace {
+      min-width: 0;
+      padding: clamp(18px, 3vw, 40px);
+    }
+
+    .empty-state,
+    .page-panel {
+      width: min(100%, 1100px);
       margin: 0 auto;
-      padding: 28px 0 48px;
-    }
-
-    .hero, .section-card {
       border: 1px solid var(--line);
       border-radius: 18px;
       background: var(--surface);
       box-shadow: var(--shadow);
     }
 
-    .hero { padding: 24px; }
+    .empty-state { padding: 42px; text-align: center; }
+    .empty-state h2 { margin-bottom: 8px; }
+    .empty-state p { margin-bottom: 0; color: var(--muted); }
+    .page-panel { padding: clamp(18px, 3vw, 30px); }
 
-    .notice {
-      margin: 0 0 18px;
-      padding: 12px 14px;
-      border: 1px solid var(--notice-line);
-      border-radius: 12px;
-      background: var(--notice);
-      color: #5f4b00;
-      font-weight: 700;
-    }
-
-    h1, h2, p { margin-top: 0; }
-    h1 { margin-bottom: 8px; font-size: clamp(26px, 4vw, 38px); }
-    .intro { margin-bottom: 20px; color: var(--muted); }
-
-    .environment-switcher {
+    .page-heading {
       display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .environment-switcher strong { margin-inline-end: 4px; }
-
-    .environment-button, .action-button, .open-section-button {
-      min-height: 42px;
-      border-radius: 10px;
-      padding: 9px 14px;
-      font-weight: 700;
-      transition: background-color 160ms ease, border-color 160ms ease;
-    }
-
-    .environment-button, .action-button {
-      border: 1px solid var(--line);
-      background: var(--surface-soft);
-      color: var(--text);
-    }
-
-    .environment-button[aria-pressed="true"],
-    .open-section-button,
-    .action-button.primary {
-      border-color: var(--accent);
-      background: var(--accent);
-      color: #ffffff;
-    }
-
-    .environment-url {
-      flex: 1 1 100%;
-      direction: ltr;
-      color: var(--muted);
-      font-size: 14px;
-      overflow-wrap: anywhere;
-      text-align: right;
-    }
-
-    .sections {
-      display: grid;
-      gap: 18px;
-      margin-top: 20px;
-    }
-
-    .section-card { padding: 20px; }
-
-    .section-heading {
-      display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 16px;
+      gap: 16px;
     }
 
-    .section-heading h2 { margin-bottom: 0; font-size: 21px; }
+    .page-heading h2 { margin-bottom: 5px; font-size: clamp(24px, 3vw, 34px); }
+    .page-description { margin-bottom: 18px; color: var(--muted); }
 
-    .links-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 12px;
-    }
-
-    .link-card {
-      min-width: 0;
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--surface-soft);
-    }
-
-    .link-name { display: block; margin-bottom: 3px; }
-
-    .link-url {
+    .page-url {
       display: block;
-      min-height: 44px;
+      margin-bottom: 18px;
+      padding: 11px 13px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
       direction: ltr;
-      color: var(--muted);
-      font-size: 13px;
+      background: #0a1b23;
+      color: #bfe9e7;
       overflow-wrap: anywhere;
       text-align: left;
     }
 
-    .link-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
-    }
-
-    .action-button { flex: 1 1 110px; }
-
-    .status {
-      position: sticky;
-      bottom: 12px;
-      z-index: 2;
-      min-height: 24px;
-      margin: 18px auto 0;
-      padding: 9px 14px;
+    .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 18px; }
+    .action-button {
+      min-height: 42px;
       border: 1px solid var(--line);
       border-radius: 10px;
-      background: var(--surface);
+      padding: 9px 14px;
+      background: var(--surface-soft);
+      color: var(--text);
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    .action-button.primary { border-color: var(--accent); background: var(--accent); color: #062326; }
+    .action-button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+    .environment-message,
+    .local-help {
+      margin: 0 0 16px;
+      padding: 11px 13px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #0c2029;
       color: var(--muted);
+    }
+
+    .viewer-wrap {
+      min-height: 420px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #ffffff;
+    }
+
+    .viewer-placeholder {
+      min-height: 420px;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: #0a1a22;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .page-viewer { width: 100%; height: 70vh; min-height: 520px; border: 0; background: #ffffff; }
+
+    .status {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      z-index: 10;
+      max-width: calc(100% - 24px);
+      margin: 0;
+      padding: 10px 16px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface-soft);
       box-shadow: var(--shadow);
+      color: var(--text);
       opacity: 0;
       pointer-events: none;
+      transform: translateX(-50%);
       transition: opacity 160ms ease;
     }
 
     .status.visible { opacity: 1; }
+    [hidden] { display: none !important; }
 
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #07141b;
-        --surface: #10222b;
-        --surface-soft: #142c36;
-        --text: #edf8f8;
-        --muted: #aac0c4;
-        --line: #284650;
-        --accent: #14b8b4;
-        --accent-strong: #3fd1cd;
-        --notice: #332d14;
-        --notice-line: #76611b;
-        --shadow: 0 14px 32px rgba(0, 0, 0, 0.25);
-      }
-
-      .notice { color: #f5df82; }
+    @media (max-width: 760px) {
+      .dashboard-shell { grid-template-columns: minmax(0, 1fr); }
+      .sidebar { position: static; height: auto; max-height: none; border-inline-end: 0; border-bottom: 1px solid var(--line); }
+      .sidebar-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .nav-group + .nav-group { margin-top: 0; }
+      .workspace { padding: 14px 10px 28px; }
+      .empty-state, .page-panel { border-radius: 14px; }
+      .empty-state { padding: 26px 18px; }
+      .page-heading { display: block; }
+      .actions { display: grid; grid-template-columns: 1fr 1fr; }
+      .action-button { text-align: center; }
+      .viewer-wrap, .viewer-placeholder { min-height: 360px; }
+      .page-viewer { min-height: 480px; }
     }
 
-    @media (max-width: 640px) {
-      .dashboard { width: min(100% - 20px, 1180px); padding-top: 10px; }
-      .hero, .section-card { border-radius: 14px; padding: 16px; }
-      .section-heading { align-items: stretch; flex-direction: column; }
-      .open-section-button { width: 100%; }
-      .links-grid { grid-template-columns: 1fr; }
+    @media (max-width: 430px) {
+      .sidebar { padding: 14px; }
+      .sidebar-nav, .actions { grid-template-columns: 1fr; }
+      .page-panel { padding: 15px; }
     }
   </style>
 </head>
 <body>
-  <main class="dashboard">
-    <header class="hero">
-      <p class="notice">هذه لوحة محلية للمطور فقط، وليست جزءًا من الموقع العام.</p>
-      <h1>لوحة روابط المشروع</h1>
-      <p class="intro">اختر البيئة، ثم افتح الصفحة المطلوبة أو انسخ رابطها دون تشغيل الصفحات تلقائيًا.</p>
-      <div class="environment-switcher" aria-label="اختيار بيئة الروابط">
-        <strong>البيئة:</strong>
-        <button class="environment-button" type="button" data-environment="local" aria-pressed="true">المحلي</button>
-        <button class="environment-button" type="button" data-environment="production" aria-pressed="false">الإنتاج</button>
-        <span id="environmentUrl" class="environment-url">http://127.0.0.1:4173</span>
-      </div>
-    </header>
+  <div class="dashboard-shell">
+    <aside class="sidebar" aria-label="قائمة صفحات المشروع">
+      <p class="local-notice">هذه لوحة محلية للمطور فقط، وليست جزءًا من الموقع العام.</p>
+      <h1>لوحة المطور</h1>
+      <p class="sidebar-intro">اختر البيئة والصفحة، ثم استخدم أدوات العرض والتحكم.</p>
 
-    <div id="sections" class="sections"></div>
-    <p id="status" class="status" role="status" aria-live="polite"></p>
-  </main>
+      <div class="environment-switcher" aria-label="اختيار بيئة الروابط">
+        <button class="environment-button" type="button" data-environment="production" aria-pressed="true">الإنتاج</button>
+        <button class="environment-button" type="button" data-environment="local" aria-pressed="false">المحلي</button>
+      </div>
+
+      <nav id="sidebarNav" class="sidebar-nav" aria-label="صفحات المشروع"></nav>
+    </aside>
+
+    <main class="workspace">
+      <section id="emptyState" class="empty-state">
+        <h2>اختر صفحة من القائمة</h2>
+        <p>لن يتم فتح أي صفحة تلقائيًا. اختر الصفحة المطلوبة لعرض معلوماتها وأدوات التحكم.</p>
+      </section>
+
+      <section id="pagePanel" class="page-panel" hidden>
+        <div class="page-heading">
+          <div>
+            <h2 id="pageTitle"></h2>
+            <p id="pageDescription" class="page-description"></p>
+          </div>
+        </div>
+
+        <code id="pageUrl" class="page-url"></code>
+
+        <div class="actions" aria-label="أدوات الصفحة المختارة">
+          <button id="openPanelButton" class="action-button primary" type="button">فتح داخل اللوحة</button>
+          <a id="openTabLink" class="action-button" href="about:blank" target="_blank" rel="noopener noreferrer">فتح في تبويب جديد</a>
+          <button id="copyButton" class="action-button" type="button">نسخ الرابط</button>
+          <button id="reloadButton" class="action-button" type="button" disabled>إعادة تحميل العارض</button>
+        </div>
+
+        <p id="environmentMessage" class="environment-message"></p>
+        <p id="localHelp" class="local-help" hidden>إذا لم تفتح الصفحة المحلية، شغّل tools/start-local-dashboard.bat أو node local-server.cjs.</p>
+
+        <div class="viewer-wrap">
+          <div id="viewerPlaceholder" class="viewer-placeholder">العارض متاح للبيئة المحلية فقط، وبعد الضغط على «فتح داخل اللوحة».</div>
+          <iframe id="pageViewer" class="page-viewer" title="عارض الصفحة المختارة" src="about:blank" referrerpolicy="no-referrer" hidden></iframe>
+        </div>
+      </section>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </main>
+  </div>
 
   <script>
     'use strict';
@@ -236,66 +309,52 @@
     const sections = [
       {
         title: 'صفحات الموقع العامة',
-        links: [
-          ['الرئيسية', '/'],
-          ['تسجيل مدرسة', 'register.html'],
-          ['طريقة الاستخدام', 'how-to-use.html'],
-          ['عن المنصة', 'about.html'],
-          ['الخصوصية', 'privacy.html'],
-          ['سياسة الاستخدام', 'usage-policy.html'],
-          ['التحديثات', 'updates.html'],
-          ['خريطة الموقع', 'sitemap.html'],
-          ['الملاحظات والاقتراحات', 'feedback.html']
-        ]
-      },
-      {
-        title: 'أدوات الدعم المدرسي',
-        links: [
-          ['الأداة الأولى', '1.html'],
-          ['الأداة الثانية', '2.html'],
-          ['الأداة الثالثة', '3.html']
+        pages: [
+          { name: 'الرئيسية', path: '/', description: 'الواجهة الرئيسية للمنصة وأقسام الموارد التعليمية.' },
+          { name: 'تسجيل مدرسة', path: 'register.html', description: 'صفحة تسجيل بيانات المدرسة والدخول إلى المنصة.' },
+          { name: 'طريقة الاستخدام', path: 'how-to-use.html', description: 'إرشادات مختصرة للاستفادة من أقسام المنصة.' },
+          { name: 'عن المنصة', path: 'about.html', description: 'تعريف بالمنصة وأهدافها ونطاق خدماتها.' },
+          { name: 'الخصوصية', path: 'privacy.html', description: 'سياسة الخصوصية والتعامل مع بيانات المستخدم.' },
+          { name: 'سياسة الاستخدام', path: 'usage-policy.html', description: 'ضوابط وشروط استخدام المنصة.' },
+          { name: 'التحديثات', path: 'updates.html', description: 'سجل تحديثات المنصة والتحسينات الأخيرة.' },
+          { name: 'خريطة الموقع', path: 'sitemap.html', description: 'فهرس منظم لصفحات المنصة وروابطها.' },
+          { name: 'الملاحظات والاقتراحات', path: 'feedback.html', description: 'واجهة إرسال الملاحظات والاقتراحات المتعلقة بالمنصة.' }
         ]
       },
       {
         title: 'صفحات الإدارة',
-        links: [
-          ['إدارة المدارس', 'admin-schools.html'],
-          ['الأسئلة غير المجابة', 'admin-unanswered.html'],
-          ['حالة المساعد', 'assistant-status.html'],
-          ['حالة المعرفة', 'knowledge-status.html'],
-          ['اختبار المساعد', 'assistant-test.html']
-        ]
-      },
-      {
-        title: 'قوالب تقارير المدير',
-        links: [
-          ['سجل اجتماعات الأقسام', 'assets/report-templates/manager-reports/meeting-template-test.docx'],
-          ['لجنة التحصيل الدراسي', 'assets/report-templates/manager-reports/academic-achievement-committee.docx'],
-          ['تكليف الموجه الصحي', 'assets/report-templates/manager-reports/health-guide-assignment.docx'],
-          ['تكليف حارس المدرسة', 'assets/report-templates/manager-reports/school-guard-assignment.docx'],
-          ['تكليف رائد النشاط', 'assets/report-templates/manager-reports/activity-leader-assignment-1448.docx']
-        ]
-      },
-      {
-        title: 'روابط المشروع الخارجية',
-        external: true,
-        links: [
-          ['الموقع المنشور', 'https://mazen.zb-store.com'],
-          ['مستودع GitHub', 'https://github.com/mazo0o0n/school-work-portal.git']
+        pages: [
+          { name: 'إدارة المدارس', path: 'admin-schools.html', description: 'إدارة المدارس المسجلة وحالات التحقق.' },
+          { name: 'الأسئلة غير المجابة', path: 'admin-unanswered.html', description: 'مراجعة الأسئلة التي لم يجد المساعد إجابة موثوقة لها.' },
+          { name: 'حالة المساعد', path: 'assistant-status.html', description: 'عرض مؤشرات حالة مساعد المنصة.' },
+          { name: 'حالة المعرفة', path: 'knowledge-status.html', description: 'عرض إحصاءات ملفات ومصادر المعرفة.' },
+          { name: 'اختبار المساعد', path: 'assistant-test.html', description: 'واجهة داخلية لاختبار إجابات المساعد.' }
         ]
       }
     ];
 
-    const sectionsContainer = document.getElementById('sections');
-    const environmentUrl = document.getElementById('environmentUrl');
+    const sidebarNav = document.getElementById('sidebarNav');
+    const emptyState = document.getElementById('emptyState');
+    const pagePanel = document.getElementById('pagePanel');
+    const pageTitle = document.getElementById('pageTitle');
+    const pageDescription = document.getElementById('pageDescription');
+    const pageUrl = document.getElementById('pageUrl');
+    const openPanelButton = document.getElementById('openPanelButton');
+    const openTabLink = document.getElementById('openTabLink');
+    const copyButton = document.getElementById('copyButton');
+    const reloadButton = document.getElementById('reloadButton');
+    const environmentMessage = document.getElementById('environmentMessage');
+    const localHelp = document.getElementById('localHelp');
+    const viewerPlaceholder = document.getElementById('viewerPlaceholder');
+    const pageViewer = document.getElementById('pageViewer');
     const status = document.getElementById('status');
     const environmentButtons = [...document.querySelectorAll('[data-environment]')];
-    let selectedEnvironment = 'local';
+    let selectedEnvironment = 'production';
+    let selectedPage = null;
     let statusTimer = 0;
 
-    function resolveUrl(path, external = false) {
-      if (external) return path;
-      return new URL(path, `${environments[selectedEnvironment]}/`).href;
+    function resolveUrl(page) {
+      return new URL(page.path, `${environments[selectedEnvironment]}/`).href;
     }
 
     function showStatus(message) {
@@ -305,14 +364,6 @@
       statusTimer = window.setTimeout(() => {
         status.classList.remove('visible');
       }, 2400);
-    }
-
-    function openUrl(url) {
-      const link = document.createElement('a');
-      link.href = url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.click();
     }
 
     async function copyUrl(url) {
@@ -336,101 +387,104 @@
       }
     }
 
-    function createActionButton(label, className, action) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = `action-button ${className}`.trim();
-      button.textContent = label;
-      button.addEventListener('click', action);
-      return button;
+    function closeViewer() {
+      pageViewer.src = 'about:blank';
+      pageViewer.hidden = true;
+      viewerPlaceholder.hidden = false;
+      reloadButton.disabled = true;
     }
 
-    function renderSections() {
-      const renderedSections = sections.map((section) => {
-        const sectionElement = document.createElement('section');
-        sectionElement.className = 'section-card';
+    function updatePageDetails() {
+      if (!selectedPage) return;
 
-        const heading = document.createElement('div');
-        heading.className = 'section-heading';
+      const url = resolveUrl(selectedPage);
+      const isLocal = selectedEnvironment === 'local';
+      pageTitle.textContent = selectedPage.name;
+      pageDescription.textContent = selectedPage.description;
+      pageUrl.textContent = url;
+      openTabLink.href = url;
+      openPanelButton.disabled = !isLocal;
+      localHelp.hidden = !isLocal;
+      environmentMessage.textContent = isLocal
+        ? 'يمكن عرض الصفحة المحلية داخل اللوحة عند تشغيل الخادم المحلي.'
+        : 'لأسباب أمنية قد لا تظهر صفحات الإنتاج داخل العارض. استخدم زر فتح في تبويب جديد.';
+      closeViewer();
+    }
+
+    function selectPage(page, button) {
+      selectedPage = page;
+      document.querySelectorAll('.page-button').forEach((candidate) => {
+        const isSelected = candidate === button;
+        candidate.classList.toggle('active', isSelected);
+        if (isSelected) {
+          candidate.setAttribute('aria-current', 'page');
+        } else {
+          candidate.removeAttribute('aria-current');
+        }
+      });
+      emptyState.hidden = true;
+      pagePanel.hidden = false;
+      updatePageDetails();
+    }
+
+    function renderNavigation() {
+      const groups = sections.map((section) => {
+        const group = document.createElement('section');
+        group.className = 'nav-group';
         const title = document.createElement('h2');
         title.textContent = section.title;
+        const list = document.createElement('div');
+        list.className = 'page-list';
 
-        const openAllButton = document.createElement('button');
-        openAllButton.type = 'button';
-        openAllButton.className = 'open-section-button';
-        openAllButton.textContent = 'فتح القسم كاملًا';
-        openAllButton.addEventListener('click', () => {
-          section.links.forEach(([, path]) => {
-            openUrl(resolveUrl(path, section.external));
-          });
-          showStatus(
-            `تم طلب فتح ${section.links.length} روابط. قد يتطلب ذلك السماح بالنوافذ المنبثقة.`
-          );
+        section.pages.forEach((page) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'page-button';
+          button.textContent = page.name;
+          button.addEventListener('click', () => selectPage(page, button));
+          list.append(button);
         });
 
-        heading.append(title, openAllButton);
-
-        const grid = document.createElement('div');
-        grid.className = 'links-grid';
-
-        section.links.forEach(([name, path]) => {
-          const card = document.createElement('article');
-          card.className = 'link-card';
-          const nameElement = document.createElement('strong');
-          nameElement.className = 'link-name';
-          nameElement.textContent = name;
-          const urlElement = document.createElement('span');
-          urlElement.className = 'link-url';
-          urlElement.dataset.path = path;
-          urlElement.dataset.external = String(Boolean(section.external));
-
-          const actions = document.createElement('div');
-          actions.className = 'link-actions';
-          actions.append(
-            createActionButton('فتح الصفحة', 'primary', () => {
-              openUrl(resolveUrl(path, section.external));
-            }),
-            createActionButton('نسخ الرابط', '', () => {
-              copyUrl(resolveUrl(path, section.external));
-            })
-          );
-
-          card.append(nameElement, urlElement, actions);
-          grid.append(card);
-        });
-
-        sectionElement.append(heading, grid);
-        return sectionElement;
+        group.append(title, list);
+        return group;
       });
 
-      sectionsContainer.replaceChildren(...renderedSections);
-      updateUrls();
+      sidebarNav.replaceChildren(...groups);
     }
 
-    function updateUrls() {
-      environmentUrl.textContent = environments[selectedEnvironment];
-      document.querySelectorAll('.link-url').forEach((element) => {
-        element.textContent = resolveUrl(
-          element.dataset.path,
-          element.dataset.external === 'true'
-        );
+    function setEnvironment(environment, activeButton) {
+      selectedEnvironment = environment;
+      environmentButtons.forEach((button) => {
+        button.setAttribute('aria-pressed', String(button === activeButton));
       });
+      if (selectedPage) updatePageDetails();
     }
 
     environmentButtons.forEach((button) => {
       button.addEventListener('click', () => {
-        selectedEnvironment = button.dataset.environment;
-        environmentButtons.forEach((candidate) => {
-          candidate.setAttribute(
-            'aria-pressed',
-            String(candidate === button)
-          );
-        });
-        updateUrls();
+        setEnvironment(button.dataset.environment, button);
       });
     });
 
-    renderSections();
+    openPanelButton.addEventListener('click', () => {
+      if (!selectedPage || selectedEnvironment !== 'local') return;
+      pageViewer.title = `عارض صفحة ${selectedPage.name}`;
+      pageViewer.src = resolveUrl(selectedPage);
+      pageViewer.hidden = false;
+      viewerPlaceholder.hidden = true;
+      reloadButton.disabled = false;
+    });
+
+    reloadButton.addEventListener('click', () => {
+      if (!selectedPage || pageViewer.hidden) return;
+      pageViewer.src = resolveUrl(selectedPage);
+    });
+
+    copyButton.addEventListener('click', () => {
+      if (selectedPage) copyUrl(resolveUrl(selectedPage));
+    });
+
+    renderNavigation();
   </script>
 </body>
 </html>
