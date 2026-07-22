@@ -1,0 +1,117 @@
+[
+  {
+    "id": "meeting-template-test",
+    "title": "سجل اجتماعات الأقسام",
+    "description": "نموذج لاجتماعات الأقسام واللجان والمجتمعات المهنية.",
+    "category": "الاجتماعات",
+    "status": "تجريبي",
+    "sectionId": "managerReports",
+    "templatePath": "assets/report-templates/manager-reports/meeting-template-test.docx",
+    "outputFileName": "سجل اجتماعات الأقسام - {{schoolDisplayName}}.docx",
+    "tags": ["اجتماعات", "أقسام", "لجان"],
+    "fields": [
+      "educationDepartment",
+      "schoolDisplayName",
+      "principalName",
+      "educationalAffairsAgent"
+    ],
+    "requiredFields": [],
+    "optionalFields": [
+      "educationDepartment",
+      "schoolDisplayName",
+      "principalName",
+      "educationalAffairsAgent"
+    ],
+    "customFields": [
+      {
+        "key": "departmentName",
+        "label": "اسم القسم",
+        "type": "text",
+        "placeholder": "مثال: قسم الرياضيات"
+      },
+      {
+        "key": "meetingTitle",
+        "label": "عنوان الاجتماع",
+        "type": "text",
+        "placeholder": "مثال: اجتماع قسم الرياضيات"
+      },
+      {
+        "key": "meetingDate",
+        "label": "تاريخ الاجتماع",
+        "type": "text",
+        "placeholder": "مثال: 15 / 3 / 1447 هـ"
+      },
+      {
+        "key": "meetingDay",
+        "label": "اليوم",
+        "type": "text",
+        "placeholder": "مثال: الخميس"
+      }
+    ],
+    "notes": ""
+  },
+  {
+    "id": "academic-achievement-committee",
+    "title": "تشكيل لجنة التحصيل الدراسي",
+    "description": "نموذج خاص بلجنة التحصيل الدراسي ومتابعة أعمالها.",
+    "category": "اللجان",
+    "status": "معتمد",
+    "sectionId": "managerReports",
+    "templatePath": "assets/report-templates/manager-reports/academic-achievement-committee.docx",
+    "outputFileName": "تشكيل لجنة التحصيل الدراسي - {{schoolDisplayName}}.docx",
+    "tags": ["لجنة", "تحصيل دراسي"],
+    "fields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "requiredFields": [],
+    "optionalFields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "customFields": [],
+    "notes": ""
+  },
+  {
+    "id": "health-guide-assignment",
+    "title": "تكليف الموجه الصحي",
+    "description": "نموذج تكليف الموجه الصحي بمهامه ومسؤولياته داخل المدرسة.",
+    "category": "النماذج",
+    "status": "معتمد",
+    "sectionId": "managerReports",
+    "templatePath": "assets/report-templates/manager-reports/health-guide-assignment.docx",
+    "outputFileName": "تكليف الموجه الصحي - {{schoolDisplayName}}.docx",
+    "tags": ["تكليف", "موجه صحي"],
+    "fields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "requiredFields": [],
+    "optionalFields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "customFields": [],
+    "notes": ""
+  },
+  {
+    "id": "school-guard-assignment",
+    "title": "تكليف حارس المدرسة",
+    "description": "نموذج تكليف حارس المدرسة بمهام محددة.",
+    "category": "النماذج",
+    "status": "معتمد",
+    "sectionId": "managerReports",
+    "templatePath": "assets/report-templates/manager-reports/school-guard-assignment.docx",
+    "outputFileName": "تكليف حارس المدرسة - {{schoolDisplayName}}.docx",
+    "tags": ["تكليف", "حارس المدرسة"],
+    "fields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "requiredFields": [],
+    "optionalFields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "customFields": [],
+    "notes": ""
+  },
+  {
+    "id": "activity-leader-assignment-1448",
+    "title": "تكليف رائد النشاط للعام 1448 هـ",
+    "description": "نموذج تكليف رائد النشاط بمهام ومسؤوليات النشاط الطلابي.",
+    "category": "النماذج",
+    "status": "معتمد",
+    "sectionId": "managerReports",
+    "templatePath": "assets/report-templates/manager-reports/activity-leader-assignment-1448.docx",
+    "outputFileName": "تكليف رائد النشاط للعام 1448 هـ - {{schoolDisplayName}}.docx",
+    "tags": ["تكليف", "رائد النشاط", "1448"],
+    "fields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "requiredFields": [],
+    "optionalFields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "customFields": [],
+    "notes": ""
+  }
+]

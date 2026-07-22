@@ -1,110 +1,8 @@
 (function(){
   'use strict';
 
-  const managerReportTemplates = [
-    {
-      id:'meeting-template-test',
-      title:'سجل اجتماعات الأقسام',
-      description:'نموذج لاجتماعات الأقسام واللجان والمجتمعات المهنية.',
-      category:'الاجتماعات',
-      sectionId:'managerReports',
-      templatePath:'assets/report-templates/manager-reports/meeting-template-test.docx',
-      outputFileName:'سجل اجتماعات الأقسام - {{schoolDisplayName}}.docx',
-      fields:[
-        'educationDepartment',
-        'schoolDisplayName',
-        'principalName',
-        'educationalAffairsAgent'
-      ],
-      customFields:[
-        {
-          key:'departmentName',
-          label:'اسم القسم',
-          type:'text',
-          placeholder:'مثال: قسم الرياضيات'
-        },
-        {
-          key:'meetingTitle',
-          label:'عنوان الاجتماع',
-          type:'text',
-          placeholder:'مثال: اجتماع قسم الرياضيات'
-        },
-        {
-          key:'meetingDate',
-          label:'تاريخ الاجتماع',
-          type:'text',
-          placeholder:'مثال: 15 / 3 / 1447 هـ'
-        },
-        {
-          key:'meetingDay',
-          label:'اليوم',
-          type:'text',
-          placeholder:'مثال: الخميس'
-        }
-      ],
-      status:'تجريبي'
-    },
-    {
-      id:'academic-achievement-committee',
-      title:'تشكيل لجنة التحصيل الدراسي',
-      description:'نموذج خاص بلجنة التحصيل الدراسي ومتابعة أعمالها.',
-      category:'اللجان',
-      sectionId:'managerReports',
-      templatePath:'assets/report-templates/manager-reports/academic-achievement-committee.docx',
-      outputFileName:'تشكيل لجنة التحصيل الدراسي - {{schoolDisplayName}}.docx',
-      fields:[
-        'educationDepartment',
-        'schoolDisplayName',
-        'principalName'
-      ],
-      status:'معتمد'
-    },
-    {
-      id:'health-guide-assignment',
-      title:'تكليف الموجه الصحي',
-      description:'نموذج تكليف الموجه الصحي بمهامه ومسؤولياته داخل المدرسة.',
-      category:'النماذج',
-      sectionId:'managerReports',
-      templatePath:'assets/report-templates/manager-reports/health-guide-assignment.docx',
-      outputFileName:'تكليف الموجه الصحي - {{schoolDisplayName}}.docx',
-      fields:[
-        'educationDepartment',
-        'schoolDisplayName',
-        'principalName'
-      ],
-      status:'معتمد'
-    },
-    {
-      id:'school-guard-assignment',
-      title:'تكليف حارس المدرسة',
-      description:'نموذج تكليف حارس المدرسة بمهام محددة.',
-      category:'النماذج',
-      sectionId:'managerReports',
-      templatePath:'assets/report-templates/manager-reports/school-guard-assignment.docx',
-      outputFileName:'تكليف حارس المدرسة - {{schoolDisplayName}}.docx',
-      fields:[
-        'educationDepartment',
-        'schoolDisplayName',
-        'principalName'
-      ],
-      status:'معتمد'
-    },
-    {
-      id:'activity-leader-assignment-1448',
-      title:'تكليف رائد النشاط للعام 1448 هـ',
-      description:'نموذج تكليف رائد النشاط بمهام ومسؤوليات النشاط الطلابي.',
-      category:'النماذج',
-      sectionId:'managerReports',
-      templatePath:'assets/report-templates/manager-reports/activity-leader-assignment-1448.docx',
-      outputFileName:'تكليف رائد النشاط للعام 1448 هـ - {{schoolDisplayName}}.docx',
-      fields:[
-        'educationDepartment',
-        'schoolDisplayName',
-        'principalName'
-      ],
-      status:'معتمد'
-    }
-  ];
+  const managerReportsDataPath = 'assets/data/manager-reports.json';
+  let managerReportTemplates = [];
 
   const reportFields = [
     'schoolName',
@@ -164,12 +62,40 @@
       isReady:()=>typeof window.PizZip === 'function'
     }
   ];
-  const reportSearchText = new Map(
-    managerReportTemplates.map(report=>[
-      report.id,
-      normalizeSearch(`${report.title} ${report.description} ${report.category}`)
-    ])
-  );
+  const reportSearchText = new Map();
+
+  function rebuildReportSearchText(){
+    reportSearchText.clear();
+    managerReportTemplates.forEach(report=>{
+      reportSearchText.set(
+        report.id,
+        normalizeSearch(`${report.title} ${report.description} ${report.category} ${(report.tags || []).join(' ')}`)
+      );
+    });
+  }
+
+  async function loadManagerReportTemplates(){
+    try{
+      const response = await fetch(managerReportsDataPath, {cache:'no-store'});
+      if(!response.ok) throw new Error('تعذر تحميل بيانات تقارير المدير.');
+      const reports = await response.json();
+      if(!Array.isArray(reports)) throw new Error('بيانات تقارير المدير غير صالحة.');
+      managerReportTemplates = reports;
+      rebuildReportSearchText();
+      lastRenderKey = '';
+      renderManagerReportLibrary();
+      return true;
+    }catch{
+      managerReportTemplates = [];
+      reportSearchText.clear();
+      grid.replaceChildren();
+      empty.textContent = 'تعذر تحميل مكتبة التقارير. أعد تحميل الصفحة وحاول مرة أخرى.';
+      empty.hidden = false;
+      return false;
+    }
+  }
+
+  const managerReportsReady = loadManagerReportTemplates();
 
   function createSchoolDisplayName(stage, schoolName){
     return [stage, schoolName]
@@ -655,5 +581,11 @@
     generateManagerReport(report, button, status);
   });
 
-  window.renderManagerReportLibrary = renderManagerReportLibrary;
+  window.renderManagerReportLibrary = ()=>{
+    managerReportsReady.then(loaded=>{
+      if(!loaded) return;
+      lastRenderKey = '';
+      renderManagerReportLibrary();
+    });
+  };
 })();
