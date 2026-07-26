@@ -19,6 +19,9 @@ const UNANSWERED_MAX_PAGE_SIZE = 50;
 const ADMIN_PATCH_MAX_REQUEST_BYTES = 4 * 1024;
 const SECRET_TOKEN_ENCODER = new TextEncoder();
 const RATE_LIMIT_WINDOW_SECONDS = 60;
+const RATE_LIMIT_ALLOWED = 'allowed';
+const RATE_LIMIT_DENIED = 'denied';
+const RATE_LIMIT_UNAVAILABLE = 'unavailable';
 const INTERNAL_PAGE_PATHS = new Set([
   '/admin-unanswered.html',
   '/assistant-status.html',
@@ -128,6 +131,26 @@ function rateLimitResponse(scope){
   );
 }
 
+function rateLimitUnavailableResponse(scope){
+  const isChat = scope === 'chat';
+  const message = 'خدمة الحماية غير متاحة مؤقتًا. حاول مرة أخرى لاحقًا.';
+
+  return jsonResponse(
+    isChat
+      ? {
+          answer: message,
+          source: 'مساعد المنصة',
+          notFound: true,
+          error: 'rate_limit_unavailable'
+        }
+      : {
+          error: message,
+          code: 'rate_limit_unavailable'
+        },
+    503
+  );
+}
+
 async function getRateLimitClientKey(request, env, scope){
   const clientAddress = String(request.headers.get('CF-Connecting-IP') || '').trim();
   const secretSalt = String(env.RATE_LIMIT_SALT || '').trim();
@@ -147,20 +170,25 @@ async function getRateLimitClientKey(request, env, scope){
 
 async function isRateLimitAllowed(request, env, scope, limiter){
   if(!limiter || typeof limiter.limit !== 'function'){
-    return true;
+    console.error('Rate limiting configuration unavailable.');
+    return RATE_LIMIT_UNAVAILABLE;
   }
 
   const key = await getRateLimitClientKey(request, env, scope);
   if(!key){
-    return true;
+    console.error('Rate limiting configuration unavailable.');
+    return RATE_LIMIT_UNAVAILABLE;
   }
 
   try{
     const result = await limiter.limit({ key });
-    return result?.success !== false;
+    if(result?.success === true) return RATE_LIMIT_ALLOWED;
+    if(result?.success === false) return RATE_LIMIT_DENIED;
+    console.error('Rate limiting binding returned an invalid result.');
+    return RATE_LIMIT_UNAVAILABLE;
   }catch{
     console.error('Rate limiting binding unavailable.');
-    return true;
+    return RATE_LIMIT_UNAVAILABLE;
   }
 }
 
@@ -889,13 +917,16 @@ async function isAdminRequestAllowed(request, env){
   const adminToken = request.headers.get('X-Admin-Token') || '';
   const tokenMatches = await timingSafeTokenEqual(adminToken, env.ADMIN_API_TOKEN);
   if(!tokenMatches){
-    const allowed = await isRateLimitAllowed(
+    const rateLimitStatus = await isRateLimitAllowed(
       request,
       env,
       'admin-auth',
       env.ADMIN_AUTH_RATE_LIMITER
     );
-    if(!allowed){
+    if(rateLimitStatus === RATE_LIMIT_UNAVAILABLE){
+      return { ok: false, response: rateLimitUnavailableResponse('admin') };
+    }
+    if(rateLimitStatus === RATE_LIMIT_DENIED){
       return { ok: false, response: rateLimitResponse('admin') };
     }
     return { ok: false, response: jsonResponse({ error: 'Forbidden' }, 403) };
@@ -1236,14 +1267,17 @@ export default {
         );
       }
 
-      const allowed = await isRateLimitAllowed(
+      const rateLimitStatus = await isRateLimitAllowed(
         request,
         env,
         'school-register',
         env.CHAT_RATE_LIMITER
       );
 
-      if(!allowed){
+      if(rateLimitStatus === RATE_LIMIT_UNAVAILABLE){
+        return rateLimitUnavailableResponse('school-register');
+      }
+      if(rateLimitStatus === RATE_LIMIT_DENIED){
         return jsonResponse({
           error: 'Too many requests',
           code: 'rate_limited'
@@ -1260,13 +1294,16 @@ export default {
         return jsonResponse({ error: 'Method not allowed' }, 405);
       }
 
-      const allowed = await isRateLimitAllowed(
+      const rateLimitStatus = await isRateLimitAllowed(
         request,
         env,
         'chat',
         env.CHAT_RATE_LIMITER
       );
-      if(!allowed){
+      if(rateLimitStatus === RATE_LIMIT_UNAVAILABLE){
+        return rateLimitUnavailableResponse('chat');
+      }
+      if(rateLimitStatus === RATE_LIMIT_DENIED){
         return rateLimitResponse('chat');
       }
 

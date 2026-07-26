@@ -17,7 +17,7 @@ const reportsDataPath = path.join(projectRoot, 'assets', 'data', 'manager-report
 const templatesDirectory = path.join(projectRoot, 'assets', 'report-templates', 'manager-reports');
 const checkScriptPath = path.join(__dirname, 'check-manager-reports.js');
 const allowedCategories = new Set(['الاجتماعات', 'اللجان', 'النماذج', 'السجلات', 'أخرى']);
-const allowedStatuses = new Set(['متاح', 'تجريبي', 'مخطط']);
+const allowedStatuses = new Set(['متاح', 'معتمد', 'تجريبي', 'مخطط']);
 let addQueue = Promise.resolve();
 
 class RequestError extends Error{

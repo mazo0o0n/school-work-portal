@@ -28,9 +28,13 @@
 /playwright.config.cjs
 /local-server.cjs
 /semgrep-report.json
+eslint-report.*
+stylelint-report.*
+*.txt
 *.md
 *.sql
 *.log
+*.map
 *.tmp
 *.backup
 ~$*

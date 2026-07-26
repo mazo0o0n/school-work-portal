@@ -72,6 +72,12 @@ function createRagEnv({ matches, answer = 'إجابة موثوقة من معرف
   return {
     embeddingInputs,
     env: {
+      RATE_LIMIT_SALT: 'test-only-rate-limit-salt',
+      CHAT_RATE_LIMITER: {
+        async limit() {
+          return { success: true };
+        }
+      },
       AI: {
         async run(_model, payload) {
           if(typeof payload.text === 'string') {
@@ -129,24 +135,30 @@ function createRateLimiter(allowedRequests) {
   };
 }
 
-async function responseJson(request, env = {}) {
-  const response = await worker.fetch(request, env);
+async function responseJson(request, env = createRagEnv().env) {
+  const headers = new globalThis.Headers(request.headers);
+  if(!headers.has('CF-Connecting-IP')) {
+    headers.set('CF-Connecting-IP', '198.51.100.10');
+  }
+  const response = await worker.fetch(new globalThis.Request(request, { headers }), env);
   return {
     response,
     body: await response.json()
   };
 }
 
-test('fails open locally without rate limiting bindings or salt', async () => {
+test('fails closed when rate limiting configuration is unavailable', async () => {
   const { env } = createRagEnv();
+  delete env.CHAT_RATE_LIMITER;
+  delete env.RATE_LIMIT_SALT;
   const { response, body } = await responseJson(
     jsonRequest({ question: 'ما برنامج فرص؟' }),
     env
   );
 
-  assert.equal(response.status, 200);
-  assert.equal(body.notFound, false);
-  assert.equal(body.answer, 'إجابة موثوقة من معرفة المنصة.');
+  assert.equal(response.status, 503);
+  assert.equal(body.notFound, true);
+  assert.equal(body.error, 'rate_limit_unavailable');
 });
 
 test('configures separate chat and admin rate limiting bindings without a public salt', async () => {
@@ -235,7 +247,7 @@ test('returns a private 429 chat response after 20 requests per minute', async (
   assert.doesNotMatch(JSON.stringify(blocked.body), /203\.0\.113\.11|test-only-rate-limit-salt/);
 });
 
-test('fails open without logging the derived key, salt, address, or question', async () => {
+test('fails closed without logging the derived key, salt, address, or question', async () => {
   const { env } = createRagEnv();
   const sensitiveSalt = 'test-only-log-salt';
   const sensitiveAddress = '203.0.113.12';
@@ -261,7 +273,7 @@ test('fails open without logging the derived key, salt, address, or question', a
       ),
       env
     );
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 503);
   } finally {
     globalThis.console.error = originalConsoleError;
   }

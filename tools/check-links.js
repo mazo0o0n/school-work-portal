@@ -13,6 +13,14 @@ const htmlFiles = requestedFiles.length
 
 const issues = [];
 let linksChecked = 0;
+const blockingIssueTypes = new Set([
+  'missing-html-file',
+  'empty-href',
+  'placeholder-href',
+  'unsafe-external-link',
+  'missing-local-target'
+]);
+const brokenInternalIssueTypes = new Set(['missing-html-file', 'missing-local-target']);
 
 function report(file, type, href, detail) {
   issues.push({
@@ -110,4 +118,13 @@ if (!issues.length) {
   });
 }
 
-process.exitCode = issues.some((issue) => issue.type === 'missing-html-file') ? 1 : 0;
+const blockingIssues = issues.filter((issue) => blockingIssueTypes.has(issue.type));
+const brokenInternalLinks = issues.filter((issue) => brokenInternalIssueTypes.has(issue.type));
+const warnings = issues.filter((issue) => !blockingIssueTypes.has(issue.type));
+
+console.log(`الروابط الداخلية المفقودة: ${brokenInternalLinks.length}.`);
+console.log(`الأخطاء الحقيقية: ${blockingIssues.length}.`);
+console.log(`الملاحظات غير المانعة: ${warnings.length}.`);
+console.log(`قرار الفحص: ${blockingIssues.length ? 'فشل (exit code 1)' : 'نجاح (exit code 0)'}.`);
+
+process.exitCode = blockingIssues.length ? 1 : 0;

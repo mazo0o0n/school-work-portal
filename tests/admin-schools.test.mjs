@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const source = await readFile(new URL('../src/worker.js', import.meta.url), 'utf8');
+const source = await readFile(new globalThis.URL('../src/worker.js', import.meta.url), 'utf8');
 const baseWorkerModule = `data:text/javascript;base64,${Buffer.from(`
   export default {
     async fetch(){
@@ -123,9 +123,14 @@ function createEnv(database = createDatabase().binding){
     ADMIN_API_TOKEN: TOKEN,
     PLATFORM_DB: database,
     RATE_LIMIT_SALT: 'test-rate-limit-salt',
+    ADMIN_AUTH_RATE_LIMITER: {
+      async limit(){
+        return { success: true };
+      }
+    },
     ASSETS: {
       async fetch(){
-        return new Response('<!doctype html><title>schools</title>', {
+        return new globalThis.Response('<!doctype html><title>schools</title>', {
           headers: { 'Content-Type': 'text/html; charset=utf-8' }
         });
       }
@@ -198,11 +203,20 @@ async function registerSchool(database, payload){
     `${BASE_URL}/api/schools/register`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '198.51.100.30'
+      },
       body: JSON.stringify(payload)
     }
   ), {
-    PLATFORM_DB: database.binding
+    PLATFORM_DB: database.binding,
+    RATE_LIMIT_SALT: 'test-rate-limit-salt',
+    CHAT_RATE_LIMITER: {
+      async limit(){
+        return { success: true };
+      }
+    }
   });
 
   return {
@@ -212,7 +226,7 @@ async function registerSchool(database, payload){
 }
 
 function adminRequest(path, options = {}){
-  return new Request(`${BASE_URL}${path}`, {
+  return new globalThis.Request(`${BASE_URL}${path}`, {
     ...options,
     headers: {
       'X-Admin-Token': TOKEN,
@@ -223,13 +237,37 @@ function adminRequest(path, options = {}){
 
 test('rejects invalid admin tokens before querying the schools database', async () => {
   const database = createDatabase();
-  const response = await worker.fetch(new Request(`${BASE_URL}/api/admin/schools`, {
-    headers: { 'X-Admin-Token': 'wrong-token' }
+  const response = await worker.fetch(new globalThis.Request(`${BASE_URL}/api/admin/schools`, {
+    headers: {
+      'X-Admin-Token': 'wrong-token',
+      'CF-Connecting-IP': '198.51.100.31'
+    }
   }), createEnv(database.binding));
 
   assert.equal(response.status, 403);
   assert.equal(database.statements.length, 0);
   assert.equal(response.headers.get('Cache-Control'), 'no-store');
+});
+
+test('fails closed when the admin rate limiter is not configured', async () => {
+  const database = createDatabase();
+  const env = createEnv(database.binding);
+  delete env.ADMIN_AUTH_RATE_LIMITER;
+
+  const response = await worker.fetch(new globalThis.Request(
+    `${BASE_URL}/api/admin/schools`,
+    {
+      headers: {
+        'X-Admin-Token': 'wrong-token',
+        'CF-Connecting-IP': '198.51.100.32'
+      }
+    }
+  ), env);
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(body.code, 'rate_limit_unavailable');
+  assert.equal(database.statements.length, 0);
 });
 
 test('returns school summaries without exposing edit token hashes', async () => {
@@ -298,7 +336,7 @@ test('updates verification status and deletes a school', async () => {
 
 test('protects the admin page from caching and indexing', async () => {
   const response = await worker.fetch(
-    new Request(`${BASE_URL}/admin-schools.html`),
+    new globalThis.Request(`${BASE_URL}/admin-schools.html`),
     createEnv()
   );
 
@@ -309,7 +347,7 @@ test('protects the admin page from caching and indexing', async () => {
 });
 
 test('delegates unrelated requests to the existing worker', async () => {
-  const response = await worker.fetch(new Request(`${BASE_URL}/index.html`), createEnv());
+  const response = await worker.fetch(new globalThis.Request(`${BASE_URL}/index.html`), createEnv());
   assert.equal(response.status, 202);
   assert.equal(await response.text(), 'delegated');
 });

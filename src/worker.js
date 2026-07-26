@@ -9,6 +9,9 @@ const MAX_PAGE_SIZE = 50;
 const MAX_ADMIN_BODY_BYTES = 4 * 1024;
 const RATE_LIMIT_WINDOW_SECONDS = 60;
 const TOKEN_ENCODER = new TextEncoder();
+const RATE_LIMIT_ALLOWED = 'allowed';
+const RATE_LIMIT_DENIED = 'denied';
+const RATE_LIMIT_UNAVAILABLE = 'unavailable';
 
 function jsonResponse(body, status = 200, extraHeaders = {}){
   return new Response(JSON.stringify(body), {
@@ -64,17 +67,26 @@ async function getRateLimitKey(request, env){
 
 async function isInvalidAdminAttemptAllowed(request, env){
   const limiter = env.ADMIN_AUTH_RATE_LIMITER;
-  if(!limiter || typeof limiter.limit !== 'function') return true;
+  if(!limiter || typeof limiter.limit !== 'function'){
+    console.error('Admin schools rate limiting configuration unavailable.');
+    return RATE_LIMIT_UNAVAILABLE;
+  }
 
   const key = await getRateLimitKey(request, env);
-  if(!key) return true;
+  if(!key){
+    console.error('Admin schools rate limiting configuration unavailable.');
+    return RATE_LIMIT_UNAVAILABLE;
+  }
 
   try{
     const result = await limiter.limit({ key });
-    return result?.success !== false;
+    if(result?.success === true) return RATE_LIMIT_ALLOWED;
+    if(result?.success === false) return RATE_LIMIT_DENIED;
+    console.error('Admin schools rate limiting binding returned an invalid result.');
+    return RATE_LIMIT_UNAVAILABLE;
   }catch{
     console.error('Admin schools rate limiting binding unavailable.');
-    return true;
+    return RATE_LIMIT_UNAVAILABLE;
   }
 }
 
@@ -88,7 +100,18 @@ async function authorizeAdmin(request, env){
     return { ok: true };
   }
 
-  if(!await isInvalidAdminAttemptAllowed(request, env)){
+  const rateLimitStatus = await isInvalidAdminAttemptAllowed(request, env);
+  if(rateLimitStatus === RATE_LIMIT_UNAVAILABLE){
+    return {
+      ok: false,
+      response: adminErrorResponse(
+        'خدمة الحماية غير متاحة مؤقتًا. حاول مرة أخرى لاحقًا.',
+        503,
+        'rate_limit_unavailable'
+      )
+    };
+  }
+  if(rateLimitStatus === RATE_LIMIT_DENIED){
     return {
       ok: false,
       response: jsonResponse({

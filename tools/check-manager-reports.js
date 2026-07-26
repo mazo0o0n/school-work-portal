@@ -5,7 +5,9 @@ const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..');
 const reportsDataPath = path.join(projectRoot, 'assets', 'data', 'manager-reports.json');
-const requiredProperties = ['id', 'title', 'category', 'templatePath'];
+const requiredProperties = ['id', 'title', 'category', 'status', 'templatePath'];
+const allowedCategories = new Set(['الاجتماعات', 'اللجان', 'النماذج', 'السجلات', 'أخرى']);
+const allowedStatuses = new Set(['متاح', 'معتمد', 'تجريبي', 'مخطط']);
 
 function addDuplicateIssues(reports, property, issues){
   const seen = new Set();
@@ -39,6 +41,13 @@ function main(){
         issues.push(`السجل ${index + 1} لا يحتوي على ${property}.`);
       }
     });
+
+    if(report.category && !allowedCategories.has(String(report.category).trim())){
+      issues.push(`السجل ${index + 1} يحتوي على تصنيف غير صالح: ${report.category}`);
+    }
+    if(report.status && !allowedStatuses.has(String(report.status).trim())){
+      issues.push(`السجل ${index + 1} يحتوي على حالة غير صالحة: ${report.status}`);
+    }
 
     const templatePath = String(report.templatePath || '').trim();
     if(!templatePath) return;

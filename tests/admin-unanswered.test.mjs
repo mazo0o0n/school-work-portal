@@ -110,9 +110,19 @@ function createItem(id, updatedAt, repeatCount = 1){
 }
 
 async function fetchAdmin(request, database, extraEnv = {}){
-  const response = await worker.fetch(request, {
+  const headers = new globalThis.Headers(request.headers);
+  if(!headers.has('CF-Connecting-IP')){
+    headers.set('CF-Connecting-IP', '198.51.100.20');
+  }
+  const response = await worker.fetch(new globalThis.Request(request, { headers }), {
     ADMIN_API_TOKEN: ADMIN_TOKEN,
     UNANSWERED_DB: database.binding,
+    RATE_LIMIT_SALT: 'test-only-rate-limit-salt',
+    ADMIN_AUTH_RATE_LIMITER: {
+      async limit(){
+        return { success: true };
+      }
+    },
     ...extraEnv
   });
   return { response, body: await response.json() };

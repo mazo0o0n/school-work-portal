@@ -116,7 +116,7 @@ async function apiRequest(url, options = {}, resetOnForbidden = true){
     }
   });
 
-  let body = {};
+  let body;
   try{
     body = await response.json();
   }catch{
