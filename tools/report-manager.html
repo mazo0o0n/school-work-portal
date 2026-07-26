@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>إدارة تقارير المدير | أداة محلية</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090e18;
+      --surface: #101a26;
+      --surface-soft: #162536;
+      --surface-deep: #0b1520;
+      --text: #f8fafc;
+      --muted: #cbd5e1;
+      --line: #374151;
+      --accent: #0da9a6;
+      --accent-strong: #1f9b8f;
+      --green: #11824b;
+      --gold: #c1b489;
+      --danger: #e66a74;
+      --shadow: 0 16px 38px rgba(0, 0, 0, 0.24);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { min-width: 0; }
+
+    body {
+      margin: 0;
+      min-width: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
+      background:
+        radial-gradient(circle at 8% 2%, rgba(13, 169, 166, 0.1), transparent 31%),
+        linear-gradient(180deg, #111827, var(--bg) 48%);
+      color: var(--text);
+      font-family: Tahoma, Arial, sans-serif;
+      line-height: 1.65;
+    }
+
+    button, input, select, textarea { font: inherit; }
+
+    button {
+      cursor: pointer;
+      transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease;
+    }
+
+    :where(button, input, select, textarea):focus-visible {
+      outline: 3px solid rgba(13, 169, 166, 0.35);
+      outline-offset: 2px;
+    }
+
+    .app-shell {
+      width: min(1180px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 26px 0 42px;
+    }
+
+    .local-notice {
+      margin: 0 0 18px;
+      padding: 11px 14px;
+      border: 1px solid rgba(193, 180, 137, 0.34);
+      border-radius: 12px;
+      background: rgba(193, 180, 137, 0.1);
+      color: #e7dab0;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .hero {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 22px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--accent);
+      border-radius: 18px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow { margin: 0 0 3px; color: var(--accent); font-size: 13px; font-weight: 900; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 7px; font-size: clamp(28px, 4vw, 42px); line-height: 1.25; }
+    .hero-description { max-width: 720px; margin-bottom: 0; color: var(--muted); }
+
+    .report-count {
+      min-width: 150px;
+      padding: 14px;
+      border: 1px solid rgba(13, 169, 166, 0.38);
+      border-radius: 14px;
+      background: rgba(13, 169, 166, 0.1);
+      text-align: center;
+    }
+
+    .report-count strong { display: block; color: #73e1dc; font-size: 30px; line-height: 1.1; }
+    .report-count span { color: var(--muted); font-size: 13px; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(290px, 0.8fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .card {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .card-header { padding: 20px 22px 0; }
+    .card-header h2 { margin-bottom: 5px; font-size: 22px; }
+    .card-header p { margin-bottom: 0; color: var(--muted); font-size: 14px; }
+    .form-body { padding: 20px 22px 22px; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .field { display: grid; min-width: 0; gap: 7px; }
+    .field.is-wide { grid-column: 1 / -1; }
+    .field-label { color: #eef8f8; font-size: 14px; font-weight: 800; }
+    .optional { color: var(--muted); font-size: 12px; font-weight: 400; }
+
+    input, select, textarea {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--surface-deep);
+      color: var(--text);
+      padding: 11px 12px;
+    }
+
+    input, select { min-height: 46px; }
+    textarea { min-height: 92px; resize: vertical; }
+    input::placeholder, textarea::placeholder { color: #718096; }
+
+    .file-picker {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 54px;
+      padding: 9px;
+      border: 1px dashed #476375;
+      border-radius: 12px;
+      background: var(--surface-deep);
+    }
+
+    .file-picker input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .file-button, .slug-button {
+      flex: 0 0 auto;
+      min-height: 38px;
+      border: 1px solid var(--accent);
+      border-radius: 9px;
+      background: rgba(13, 169, 166, 0.12);
+      color: #dcffff;
+      padding: 7px 12px;
+      font-weight: 800;
+    }
+
+    .file-name { min-width: 0; color: var(--muted); overflow-wrap: anywhere; }
+    .slug-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .field-help { margin: 0; color: var(--muted); font-size: 12px; }
+
+    .primary-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .button {
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface-soft);
+      color: var(--text);
+      padding: 9px 15px;
+      font-weight: 900;
+    }
+
+    .button:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
+    .button.primary { border-color: var(--accent); background: linear-gradient(135deg, var(--accent), var(--accent-strong)); }
+    .button.success { border-color: var(--green); background: var(--green); }
+    .button:disabled { cursor: wait; opacity: 0.55; }
+
+    .side-stack { display: grid; gap: 20px; }
+    .tool-card, .result-card { padding: 20px; }
+    .tool-card h2, .result-card h2 { margin-bottom: 6px; font-size: 20px; }
+    .tool-card > p, .result-card > p { color: var(--muted); font-size: 13px; }
+    .tool-actions { display: grid; gap: 9px; }
+    .tool-actions .button { width: 100%; text-align: right; }
+
+    .result-status {
+      margin-bottom: 14px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-inline-start: 4px solid var(--gold);
+      border-radius: 10px;
+      background: var(--surface-deep);
+      color: var(--muted);
+    }
+
+    .result-status.is-success { border-inline-start-color: var(--green); color: #c9f4db; }
+    .result-status.is-error { border-inline-start-color: var(--danger); color: #ffd7db; }
+    .result-details { display: grid; gap: 9px; margin: 0; }
+    .result-details div { min-width: 0; }
+    .result-details dt { color: var(--muted); font-size: 12px; }
+    .result-details dd { margin: 1px 0 0; color: var(--text); overflow-wrap: anywhere; }
+
+    .check-output, .git-commands {
+      margin: 14px 0 0;
+      max-width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #071018;
+      color: #bfe9e7;
+      padding: 12px;
+      direction: ltr;
+      text-align: left;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .git-section { margin-top: 16px; }
+    .git-section h3 { margin-bottom: 7px; font-size: 15px; }
+    .git-section .button { margin-top: 8px; width: 100%; }
+    [hidden] { display: none !important; }
+
+    @media (max-width: 880px) {
+      .layout { grid-template-columns: minmax(0, 1fr); }
+      .side-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 620px) {
+      .app-shell { width: min(100% - 18px, 1180px); padding-top: 12px; }
+      .hero { display: block; padding: 18px; }
+      .report-count { margin-top: 16px; }
+      .form-grid, .side-stack { grid-template-columns: minmax(0, 1fr); }
+      .card-header, .form-body, .tool-card, .result-card { padding-inline: 15px; }
+      .slug-row { grid-template-columns: minmax(0, 1fr); }
+      .primary-actions { display: grid; }
+      .primary-actions .button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <p class="local-notice">هذه أداة محلية للمطور فقط، وليست جزءًا من الموقع العام.</p>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">أدوات منصة التنظيم المدرسي</p>
+        <h1>إدارة تقارير المدير</h1>
+        <p class="hero-description">اختر قالب Word وأدخل بيانات التقرير، ثم افحصه مبدئيًا قبل إضافته إلى مكتبة المشروع.</p>
+      </div>
+      <div class="report-count" aria-live="polite">
+        <strong id="reportCount">—</strong>
+        <span>تقريرًا في المكتبة</span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <section class="card" aria-labelledby="addReportTitle">
+        <header class="card-header">
+          <h2 id="addReportTitle">إضافة تقرير جديد</h2>
+          <p>الحقول الأساسية مطلوبة. لن يُكتب أي ملف عند استخدام الفحص المبدئي.</p>
+        </header>
+
+        <form id="reportForm" class="form-body" autocomplete="off">
+          <div class="form-grid">
+            <label class="field is-wide">
+              <span class="field-label">ملف Word بصيغة DOCX</span>
+              <span class="file-picker">
+                <span class="file-button">اختيار ملف</span>
+                <span id="fileName" class="file-name">لم يتم اختيار ملف</span>
+                <input id="reportFile" name="reportFile" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required>
+              </span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">عنوان التقرير بالعربية</span>
+              <input id="title" name="title" type="text" maxlength="160" placeholder="مثال: محضر زيارة صفية" required>
+            </label>
+
+            <label class="field">
+              <span class="field-label">التصنيف</span>
+              <select id="category" name="category" required>
+                <option value="">اختر التصنيف</option>
+                <option value="الاجتماعات">الاجتماعات</option>
+                <option value="اللجان">اللجان</option>
+                <option value="النماذج">النماذج</option>
+                <option value="السجلات">السجلات</option>
+                <option value="أخرى">أخرى</option>
+              </select>
+            </label>
+
+            <div class="field is-wide">
+              <label class="field-label" for="slug">slug إنجليزي آمن</label>
+              <div class="slug-row">
+                <input id="slug" name="slug" type="text" dir="ltr" maxlength="80" placeholder="classroom-visit-report" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required>
+                <button id="suggestSlug" class="slug-button" type="button">اقتراح slug</button>
+              </div>
+              <p id="slugHelp" class="field-help">أحرف إنجليزية صغيرة وأرقام وشرطات فقط، بدون .docx.</p>
+            </div>
+
+            <label class="field is-wide">
+              <span class="field-label">وصف مختصر</span>
+              <textarea id="description" name="description" maxlength="1000" placeholder="اكتب وصفًا موجزًا لاستخدام التقرير."></textarea>
+            </label>
+
+            <label class="field">
+              <span class="field-label">الحالة</span>
+              <select id="status" name="status">
+                <option value="متاح">متاح</option>
+                <option value="تجريبي" selected>تجريبي</option>
+                <option value="مخطط">مخطط</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span class="field-label">الوسوم <span class="optional">اختياري</span></span>
+              <input id="tags" name="tags" type="text" placeholder="اجتماع, متابعة, لجنة">
+            </label>
+
+            <label class="field">
+              <span class="field-label">الحقول المطلوبة <span class="optional">اختياري</span></span>
+              <input id="requiredFields" name="requiredFields" type="text" dir="ltr" placeholder="schoolDisplayName,principalName">
+            </label>
+
+            <label class="field">
+              <span class="field-label">الحقول الاختيارية <span class="optional">اختياري</span></span>
+              <input id="optionalFields" name="optionalFields" type="text" dir="ltr" placeholder="educationDepartment,ministryNumber">
+            </label>
+
+            <label class="field is-wide">
+              <span class="field-label">ملاحظات <span class="optional">اختياري</span></span>
+              <textarea id="notes" name="notes" maxlength="2000" placeholder="ملاحظات داخلية عن القالب أو استخدامه."></textarea>
+            </label>
+          </div>
+
+          <div class="primary-actions">
+            <button id="dryRunButton" class="button primary" type="button">فحص مبدئي Dry Run</button>
+            <button id="addButton" class="button success" type="submit">إضافة التقرير</button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="side-stack">
+        <section class="card tool-card" aria-labelledby="toolsTitle">
+          <h2 id="toolsTitle">أدوات محلية</h2>
+          <p>عمليات مساعدة لا تنفذ نشرًا أو أوامر Git تلقائيًا.</p>
+          <div class="tool-actions">
+            <button id="checkReports" class="button" type="button">فحص كل التقارير</button>
+            <button id="openTemplates" class="button" type="button">فتح مجلد قوالب التقارير</button>
+            <button id="openJson" class="button" type="button">فتح ملف manager-reports.json</button>
+            <button id="openDashboard" class="button" type="button">فتح الداشبورد المحلي</button>
+          </div>
+        </section>
+
+        <section class="card result-card" aria-labelledby="resultsTitle">
+          <h2 id="resultsTitle">نتيجة العملية</h2>
+          <p id="resultStatus" class="result-status" role="status" aria-live="polite">الأداة جاهزة. اختر ملفًا وأدخل بيانات التقرير.</p>
+          <dl class="result-details">
+            <div><dt>اسم ملف DOCX الناتج</dt><dd id="outputFileName">—</dd></div>
+            <div><dt>مسار القالب</dt><dd id="templatePath">—</dd></div>
+            <div><dt>عدد التقارير الحالي</dt><dd id="resultReportCount">—</dd></div>
+          </dl>
+          <pre id="checkOutput" class="check-output" hidden></pre>
+
+          <div id="gitSection" class="git-section" hidden>
+            <h3>أوامر Git المقترحة</h3>
+            <pre id="gitCommands" class="git-commands"></pre>
+            <button id="copyGitCommands" class="button" type="button">نسخ أوامر Git المقترحة</button>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    'use strict';
+
+    const form = document.getElementById('reportForm');
+    const fileInput = document.getElementById('reportFile');
+    const fileName = document.getElementById('fileName');
+    const titleInput = document.getElementById('title');
+    const categoryInput = document.getElementById('category');
+    const slugInput = document.getElementById('slug');
+    const slugHelp = document.getElementById('slugHelp');
+    const statusInput = document.getElementById('status');
+    const descriptionInput = document.getElementById('description');
+    const tagsInput = document.getElementById('tags');
+    const requiredFieldsInput = document.getElementById('requiredFields');
+    const optionalFieldsInput = document.getElementById('optionalFields');
+    const notesInput = document.getElementById('notes');
+    const dryRunButton = document.getElementById('dryRunButton');
+    const addButton = document.getElementById('addButton');
+    const reportCount = document.getElementById('reportCount');
+    const resultStatus = document.getElementById('resultStatus');
+    const outputFileName = document.getElementById('outputFileName');
+    const templatePath = document.getElementById('templatePath');
+    const resultReportCount = document.getElementById('resultReportCount');
+    const checkOutput = document.getElementById('checkOutput');
+    const gitSection = document.getElementById('gitSection');
+    const gitCommands = document.getElementById('gitCommands');
+    const operationButtons = Array.from(document.querySelectorAll('button'));
+    let lastGitCommands = [];
+
+    function setResult(message, type = '') {
+      resultStatus.textContent = message;
+      resultStatus.classList.toggle('is-success', type === 'success');
+      resultStatus.classList.toggle('is-error', type === 'error');
+    }
+
+    function setBusy(isBusy) {
+      operationButtons.forEach((button) => {
+        button.disabled = isBusy;
+      });
+      form.setAttribute('aria-busy', String(isBusy));
+    }
+
+    function parseList(value) {
+      return value.split(',').map((item) => item.trim()).filter(Boolean);
+    }
+
+    function arrayBufferToBase64(buffer) {
+      const bytes = new Uint8Array(buffer);
+      const chunkSize = 0x8000;
+      let binary = '';
+      for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+      }
+      return window.btoa(binary);
+    }
+
+    async function buildPayload() {
+      if (!form.reportValidity()) throw new Error('أكمل الحقول المطلوبة واختر ملف DOCX صالحًا.');
+      const file = fileInput.files[0];
+      if (!file || !file.name.toLowerCase().endsWith('.docx')) throw new Error('اختر ملف Word بصيغة DOCX.');
+      return {
+        fileName: file.name,
+        fileBase64: arrayBufferToBase64(await file.arrayBuffer()),
+        title: titleInput.value.trim(),
+        category: categoryInput.value,
+        slug: slugInput.value.trim(),
+        description: descriptionInput.value.trim(),
+        status: statusInput.value,
+        tags: parseList(tagsInput.value),
+        requiredFields: parseList(requiredFieldsInput.value),
+        optionalFields: parseList(optionalFieldsInput.value),
+        notes: notesInput.value.trim()
+      };
+    }
+
+    async function apiRequest(path, options = {}) {
+      const requestOptions = {...options};
+      if (requestOptions.method === 'POST') {
+        requestOptions.headers = {
+          'Content-Type': 'application/json',
+          'X-Report-Manager': 'local',
+          ...requestOptions.headers
+        };
+      }
+      const response = await fetch(path, requestOptions);
+      const data = await response.json().catch(() => ({ok: false, message: 'تعذر قراءة استجابة الخادم المحلي.'}));
+      if (!response.ok || data.ok === false) throw new Error(data.message || data.output || 'تعذر تنفيذ العملية.');
+      return data;
+    }
+
+    function displayOperation(data) {
+      setResult(data.message || 'اكتملت العملية بنجاح.', 'success');
+      outputFileName.textContent = data.outputFileName || '—';
+      templatePath.textContent = data.templatePath || '—';
+      const count = data.reportCount ?? data.nextReportCount;
+      resultReportCount.textContent = count ?? '—';
+      if (typeof data.reportCount === 'number') reportCount.textContent = String(data.reportCount);
+      checkOutput.hidden = !data.check?.output;
+      checkOutput.textContent = data.check?.output || '';
+      lastGitCommands = Array.isArray(data.gitCommands) ? data.gitCommands : [];
+      gitSection.hidden = lastGitCommands.length === 0;
+      gitCommands.textContent = lastGitCommands.join('\n');
+    }
+
+    async function runReportOperation(endpoint) {
+      setBusy(true);
+      setResult(endpoint.endsWith('dry-run') ? 'جاري تنفيذ الفحص المبدئي...' : 'جاري إضافة التقرير وفحص المكتبة...');
+      try {
+        const payload = await buildPayload();
+        const data = await apiRequest(endpoint, {method: 'POST', body: JSON.stringify(payload)});
+        displayOperation(data);
+        if (endpoint.endsWith('/add')) await loadReports();
+      } catch (error) {
+        setResult(error.message, 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function loadReports() {
+      try {
+        const data = await apiRequest('/api/reports/list');
+        reportCount.textContent = String(data.count);
+        resultReportCount.textContent = String(data.count);
+      } catch (error) {
+        reportCount.textContent = '—';
+        setResult(error.message, 'error');
+      }
+    }
+
+    async function runSimpleAction(path, pendingMessage) {
+      setBusy(true);
+      setResult(pendingMessage);
+      try {
+        const method = path.startsWith('/api/open/') ? 'POST' : 'GET';
+        const options = method === 'POST' ? {method, body: '{}'} : {};
+        const data = await apiRequest(path, options);
+        setResult(data.message || 'تم تنفيذ العملية.', 'success');
+        if (data.output) {
+          checkOutput.textContent = data.output;
+          checkOutput.hidden = false;
+        }
+      } catch (error) {
+        setResult(error.message, 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      fileName.textContent = file ? `${file.name} — ${(file.size / 1024).toFixed(1)} KB` : 'لم يتم اختيار ملف';
+    });
+
+    document.getElementById('suggestSlug').addEventListener('click', () => {
+      const title = titleInput.value.trim();
+      const suggestions = [
+        {matches: ['زيارة', 'صفية'], slug: 'classroom-visit-report'},
+        {matches: ['اجتماع'], slug: 'meeting-minutes-report'},
+        {matches: ['لجنة'], slug: 'school-committee-report'},
+        {matches: ['نشاط'], slug: 'activity-report'}
+      ];
+      const suggestion = suggestions.find((item) => item.matches.every((word) => title.includes(word)));
+      if (suggestion) {
+        slugInput.value = suggestion.slug;
+        slugHelp.textContent = `اقتراح واضح: ${suggestion.slug}`;
+        slugInput.focus();
+      } else {
+        slugHelp.textContent = 'اكتب اسمًا إنجليزيًا قصيرًا مثل classroom-visit-report.';
+        slugInput.focus();
+      }
+    });
+
+    dryRunButton.addEventListener('click', () => runReportOperation('/api/reports/dry-run'));
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const confirmed = window.confirm('سيتم نسخ القالب وتعديل manager-reports.json محليًا. هل تريد المتابعة؟');
+      if (confirmed) runReportOperation('/api/reports/add');
+    });
+
+    document.getElementById('checkReports').addEventListener('click', () => {
+      runSimpleAction('/api/reports/check', 'جاري فحص جميع التقارير...');
+    });
+    document.getElementById('openTemplates').addEventListener('click', () => {
+      runSimpleAction('/api/open/templates-folder', 'جاري فتح مجلد القوالب...');
+    });
+    document.getElementById('openJson').addEventListener('click', () => {
+      runSimpleAction('/api/open/reports-json', 'جاري فتح ملف البيانات...');
+    });
+    document.getElementById('openDashboard').addEventListener('click', () => {
+      runSimpleAction('/api/open/dashboard', 'جاري فتح الداشبورد المحلي...');
+    });
+    document.getElementById('copyGitCommands').addEventListener('click', async () => {
+      if (!lastGitCommands.length) return;
+      try {
+        await navigator.clipboard.writeText(lastGitCommands.join('\n'));
+        setResult('تم نسخ أوامر Git المقترحة. لن يتم تنفيذها تلقائيًا.', 'success');
+      } catch {
+        setResult('تعذر نسخ الأوامر تلقائيًا. يمكنك نسخها يدويًا من الصندوق.', 'error');
+      }
+    });
+
+    loadReports();
+  </script>
+</body>
+</html>

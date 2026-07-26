@@ -113,6 +113,33 @@
       box-shadow: inset 0 0 0 1px rgba(13, 169, 166, 0.08);
     }
 
+    .local-tool-entry {
+      margin-bottom: 20px;
+      padding: 13px;
+      border: 1px solid rgba(13, 169, 166, 0.34);
+      border-radius: 12px;
+      background: var(--accent-soft);
+    }
+
+    .local-tool-entry h2 { margin-bottom: 5px; color: #ffffff; font-size: 15px; }
+    .local-tool-entry p { margin-bottom: 10px; color: var(--muted); font-size: 12px; }
+    .local-tool-entry small { display: block; margin-top: 8px; color: var(--gold); line-height: 1.5; }
+
+    .local-tool-link {
+      display: block;
+      min-height: 40px;
+      border: 1px solid var(--accent);
+      border-radius: 9px;
+      padding: 8px 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      color: #ffffff;
+      font-weight: 900;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .local-tool-link:hover { border-color: var(--green); background: var(--green); transform: translateY(-1px); }
+
     .nav-group + .nav-group { margin-top: 20px; }
     .nav-group h2 { margin-bottom: 8px; color: var(--gold); font-size: 13px; }
     .page-list { display: grid; gap: 6px; }
@@ -302,6 +329,13 @@
         <button class="environment-button" type="button" data-environment="production" aria-pressed="true">الإنتاج</button>
         <button class="environment-button" type="button" data-environment="local" aria-pressed="false">المحلي</button>
       </div>
+
+      <section class="local-tool-entry" aria-labelledby="reportManagerEntryTitle">
+        <h2 id="reportManagerEntryTitle">إدارة تقارير المدير</h2>
+        <p>واجهة محلية رسومية لإضافة قوالب تقارير المدير بدون أوامر PowerShell.</p>
+        <a class="local-tool-link" href="http://127.0.0.1:4174" target="_blank" rel="noopener noreferrer">فتح إدارة التقارير</a>
+        <small>شغّل tools/open-report-manager.bat من مجلد tools أولًا.</small>
+      </section>
 
       <nav id="sidebarNav" class="sidebar-nav" aria-label="صفحات المشروع"></nav>
     </aside>
