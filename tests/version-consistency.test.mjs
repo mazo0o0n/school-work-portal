@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-
-const publishedVersion = '1.5.1';
 
 async function readProjectFile(relativePath){
   return readFile(new globalThis.URL(`../${relativePath}`, import.meta.url), 'utf8');
@@ -11,13 +10,26 @@ async function readProjectFile(relativePath){
 test('keeps package metadata on the published version', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const packageLock = JSON.parse(await readProjectFile('package-lock.json'));
+  const publishedVersion = packageJson.version;
 
-  assert.equal(packageJson.version, publishedVersion);
   assert.equal(packageLock.version, publishedVersion);
   assert.equal(packageLock.packages[''].version, publishedVersion);
 });
 
+test('matches package metadata to the latest release tag', async () => {
+  const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const latestTag = execFileSync(
+    'git',
+    ['describe', '--tags', '--abbrev=0'],
+    { encoding: 'utf8' }
+  ).trim();
+
+  assert.equal(latestTag, `v${packageJson.version}`);
+});
+
 test('documents the current version as published', async () => {
+  const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const publishedVersion = packageJson.version;
   const files = [
     'index.html',
     'updates.html',

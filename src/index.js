@@ -1014,19 +1014,6 @@ function normalizeSchoolField(value) {
     .replace(/\s+/g, ' ');
 }
 
-function hasMatchingSchoolIdentity(
-  rows,
-  schoolName,
-  schoolStage,
-  educationDepartment
-) {
-  return rows.some((row) => (
-    normalizeSchoolField(row.school_name) === schoolName &&
-    normalizeSchoolField(row.school_stage) === schoolStage &&
-    normalizeSchoolField(row.education_department) === educationDepartment
-  ));
-}
-
 function duplicateSchoolError() {
   return new SchoolRegistrationError(
     'duplicate_school',
@@ -1041,18 +1028,24 @@ async function schoolIdentityExists(
   schoolStage,
   educationDepartment
 ) {
-  const result = await database.prepare(
-    'SELECT school_name, school_stage, education_department ' +
-    'FROM schools WHERE school_stage = ?1'
+  const match = await database.prepare(
+    'SELECT 1 AS found FROM schools ' +
+    'WHERE lower(trim(school_name)) = lower(trim(?1)) ' +
+    'AND school_stage = ?2 ' +
+    'AND lower(trim(education_department)) = lower(trim(?3)) ' +
+    'LIMIT 1'
   )
-    .bind(schoolStage)
-    .all();
+    .bind(schoolName, schoolStage, educationDepartment)
+    .first();
 
-  return hasMatchingSchoolIdentity(
-    Array.isArray(result?.results) ? result.results : [],
-    schoolName,
-    schoolStage,
-    educationDepartment
+  return Boolean(match);
+}
+
+function isSchoolIdentityConstraintError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('unique constraint failed') && (
+    message.includes('idx_schools_identity_unique') ||
+    message.includes('schools.school_name')
   );
 }
 
@@ -1181,6 +1174,8 @@ async function handleSchoolRegistration(request, env) {
 
     const editTokenBytes = new Uint8Array(32);
     crypto.getRandomValues(editTokenBytes);
+    // Compatibility credential for a future claim/edit flow. The current
+    // registration UI still requires and stores it, so issuance remains stable.
     const editToken = bytesToBase64Url(editTokenBytes);
     const editTokenHash = await hashSchoolEditToken(editToken);
 
@@ -1190,9 +1185,10 @@ async function handleSchoolRegistration(request, env) {
       'SELECT ?1, ?2, ?3, ?4, ?5 ' +
       'WHERE NOT EXISTS (' +
       'SELECT 1 FROM schools ' +
-      'WHERE school_name = ?3 ' +
+      'WHERE lower(trim(school_name)) = lower(trim(?3)) ' +
       'AND school_stage = ?4 ' +
-      'AND education_department = ?5' +
+      'AND lower(trim(education_department)) = lower(trim(?5)) ' +
+      'LIMIT 1' +
       ')'
     )
       .bind(
@@ -1229,6 +1225,14 @@ async function handleSchoolRegistration(request, env) {
         error: error.message,
         code: error.code
       }, error.status);
+    }
+
+    if (isSchoolIdentityConstraintError(error)) {
+      const duplicateError = duplicateSchoolError();
+      return jsonResponse({
+        error: duplicateError.message,
+        code: duplicateError.code
+      }, duplicateError.status);
     }
 
     console.error('School registration failed.', error);

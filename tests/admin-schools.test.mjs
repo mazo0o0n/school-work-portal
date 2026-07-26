@@ -30,6 +30,20 @@ const loadableRegistrationSource = registrationSource.replace(
 const registrationWorkerModule =
   `data:text/javascript;base64,${Buffer.from(loadableRegistrationSource).toString('base64')}`;
 const { default: registrationWorker } = await import(registrationWorkerModule);
+const schoolIdentityMigration = await readFile(
+  new globalThis.URL(
+    '../migrations/platform/0002_add_school_identity_unique_index.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
+const auditMigration = await readFile(
+  new globalThis.URL(
+    '../migrations/platform/0003_create_audit_logs.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
 
 const TOKEN = 'test-admin-token';
 const BASE_URL = 'https://example.test';
@@ -140,23 +154,37 @@ function createEnv(database = createDatabase().binding){
 
 function createRegistrationDatabase(){
   const rows = [];
+  const statements = [];
   let inserted = 0;
+
+  const normalizeIdentityPart = (value) => String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
 
   return {
     rows,
+    statements,
     get inserted(){
       return inserted;
     },
     binding: {
       prepare(sql){
+        const statement = { sql, values: [] };
+        statements.push(statement);
         return {
           bind(...values){
-            if(sql.startsWith('SELECT school_name')){
+            statement.values = values;
+            if(sql.startsWith('SELECT 1 AS found')){
               return {
-                async all(){
-                  return {
-                    results: rows.filter((row) => row.school_stage === values[0])
-                  };
+                async first(){
+                  const [schoolName, schoolStage, educationDepartment] = values;
+                  return rows.some((row) => (
+                    normalizeIdentityPart(row.school_name) === normalizeIdentityPart(schoolName) &&
+                    row.school_stage === schoolStage &&
+                    normalizeIdentityPart(row.education_department) ===
+                      normalizeIdentityPart(educationDepartment)
+                  )) ? { found: 1 } : null;
                 }
               };
             }
@@ -169,9 +197,10 @@ function createRegistrationDatabase(){
                   const schoolStage = values[3];
                   const educationDepartment = values[4];
                   const duplicate = rows.some((row) => (
-                    row.school_name === schoolName &&
+                    normalizeIdentityPart(row.school_name) === normalizeIdentityPart(schoolName) &&
                     row.school_stage === schoolStage &&
-                    row.education_department === educationDepartment
+                    normalizeIdentityPart(row.education_department) ===
+                      normalizeIdentityPart(educationDepartment)
                   ));
 
                   if(duplicate){
@@ -334,6 +363,19 @@ test('updates verification status and deletes a school', async () => {
   assert.equal(deleteBody.deleted, 1);
 });
 
+test('defines school identity uniqueness and admin audit migrations safely', () => {
+  assert.match(schoolIdentityMigration, /CREATE UNIQUE INDEX IF NOT EXISTS idx_schools_identity_unique/);
+  assert.match(schoolIdentityMigration, /lower\(trim\(school_name\)\)/);
+  assert.match(schoolIdentityMigration, /lower\(trim\(education_department\)\)/);
+
+  assert.match(auditMigration, /CREATE TABLE IF NOT EXISTS audit_logs/);
+  assert.match(auditMigration, /trg_audit_school_status_update/);
+  assert.match(auditMigration, /school_status_changed/);
+  assert.match(auditMigration, /trg_audit_school_delete/);
+  assert.match(auditMigration, /school_deleted/);
+  assert.doesNotMatch(auditMigration, /ADMIN_API_TOKEN|edit_token|school_name/i);
+});
+
 test('protects the admin page from caching and indexing', async () => {
   const response = await worker.fetch(
     new globalThis.Request(`${BASE_URL}/admin-schools.html`),
@@ -364,6 +406,16 @@ test('prevents only duplicate normalized school identities', async () => {
   assert.equal(first.response.status, 201);
   assert.equal(first.body.ok, true);
   assert.equal(database.inserted, 1);
+  const identityQuery = database.statements.find((item) =>
+    item.sql.startsWith('SELECT 1 AS found')
+  );
+  assert.ok(identityQuery);
+  assert.match(identityQuery.sql, /LIMIT 1$/);
+  assert.deepEqual(identityQuery.values, [
+    baseSchool.schoolName,
+    baseSchool.schoolStage,
+    baseSchool.educationDepartment
+  ]);
 
   const duplicate = await registerSchool(database, baseSchool);
   assert.equal(duplicate.response.status, 409);
