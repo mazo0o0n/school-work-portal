@@ -1,6 +1,9 @@
 ﻿const { test, expect } = require("@playwright/test");
 
-const { mockSchoolRegistrationApi } = require('./helpers/school-registration');
+const {
+  completeRegistrationContact,
+  mockSchoolRegistrationApi
+} = require('./helpers/school-registration');
 
 test("تسجيل المدرسة وحفظ البيانات", async ({ page }) => {
   test.setTimeout(15000);
@@ -15,6 +18,7 @@ test("تسجيل المدرسة وحفظ البيانات", async ({ page }) => 
     "#educationDepartment",
     "إدارة التعليم بمنطقة المدينة المنورة"
   );
+  await completeRegistrationContact(page);
 
   const formValidity = await page.locator("#schoolRegisterForm").evaluate(
     form => form.checkValidity()

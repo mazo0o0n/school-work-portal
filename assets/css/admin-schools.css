@@ -145,6 +145,9 @@ tbody tr:last-child td{border-bottom:0}
 .school-name{display:block;font-size:15px;line-height:1.6}
 .school-id{display:block;margin-top:3px;color:var(--muted);font-family:Consolas,monospace;font-size:11px;direction:ltr;text-align:right;overflow-wrap:anywhere}
 .school-stage,.education-department,.created-at{font-weight:700;line-height:1.6}
+.registration-contact-name{display:block;font-size:13px;line-height:1.6}
+.registration-contact-phone{display:block;margin-top:3px;color:var(--muted);font-size:12px;font-weight:800;direction:rtl;text-align:right}
+.registration-contact-phone.has-phone{color:#087f7c;font-family:Consolas,monospace;direction:ltr}
 .status-badge{display:inline-flex;align-items:center;justify-content:center;min-width:95px;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;background:#eef3f4;color:var(--muted)}
 .status-badge.unverified{background:#eef3f4;color:#53646b}
 .status-badge.pending{background:#fff6dc;color:#7a5700}

@@ -250,6 +250,12 @@ function createSchoolRow(school){
   row.querySelector('.school-id').textContent = school.public_id || '—';
   row.querySelector('.school-stage').textContent = school.school_stage || '—';
   row.querySelector('.education-department').textContent = school.education_department || '—';
+  row.querySelector('.registration-contact-name').textContent =
+    school.registration_contact_name || 'مسؤول غير مسمى';
+  const contactPhone = row.querySelector('.registration-contact-phone');
+  const registrationContactPhone = String(school.registration_contact_phone || '').trim();
+  contactPhone.textContent = registrationContactPhone || 'لا يوجد رقم محفوظ';
+  contactPhone.classList.toggle('has-phone', Boolean(registrationContactPhone));
   row.querySelector('.created-at').textContent = formatDate(school.created_at);
 
   const badge = row.querySelector('.status-badge');

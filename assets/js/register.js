@@ -3,40 +3,122 @@ const stageSelect = document.getElementById('schoolStage');
 const preview = document.getElementById('schoolPreview');
 const nameError = document.getElementById('schoolNameError');
 const educationDepartmentInput = document.getElementById('educationDepartment');
+const schoolRegisterForm = document.getElementById('schoolRegisterForm');
+const contactNameInput = document.getElementById('registrationContactName');
+const contactPhoneInput = document.getElementById('registrationContactPhone');
+const contactPhoneError = document.getElementById('registrationContactPhoneError');
+const registrationConsent = document.getElementById('registrationConsent');
 const englishLettersPattern = /[A-Za-z]/;
 const schoolProfileStorageKey = 'registeredSchoolProfile';
 const duplicateSchoolMessage =
   'هذه المدرسة مسجلة مسبقًا بنفس المرحلة وإدارة التعليم.';
 
-function getDisplayName(){
-  const name = nameInput.value.trim();
-  const stage = stageSelect.value.trim();
-  return name && stage ? `${stage} ${name}` : '';
+function readStorage(key){
+  try{
+    return localStorage.getItem(key) || '';
+  }catch{
+    return '';
+  }
 }
 
-function updatePreview(){
-  preview.textContent = getDisplayName() || 'سيظهر الاسم في الهيدر هنا';
-}
-
-function setNameError(message = ''){
-  nameError.textContent = message;
-  nameInput.classList.toggle('input-error', Boolean(message));
-}
-
-function removeEnglishLetters(value){
-  return value.replace(/[A-Za-z]/g, '');
+function applyPreferredTheme(){
+  if(readStorage('preferredTheme') === 'dark'){
+    document.documentElement.dataset.theme = 'dark';
+  }
 }
 
 function getStoredSchoolProfile(){
   try{
-    const profile = JSON.parse(localStorage.getItem(schoolProfileStorageKey) || '{}');
+    const profile = JSON.parse(readStorage(schoolProfileStorageKey) || '{}');
     return profile && typeof profile === 'object' && !Array.isArray(profile) ? profile : {};
   }catch{
     return {};
   }
 }
 
+function enterAsGuest(){
+  localStorage.removeItem('registeredSchoolBaseName');
+  localStorage.removeItem('registeredSchoolStage');
+  localStorage.removeItem('registeredSchoolName');
+  localStorage.removeItem(schoolProfileStorageKey);
+  localStorage.setItem('schoolGuestMode', '1');
+  window.location.href = 'index.html';
+}
+
+function bindGuestEntry(buttonId){
+  document.getElementById(buttonId)?.addEventListener('click', enterAsGuest);
+}
+
+function removeEnglishLetters(value){
+  return value.replace(/[A-Za-z]/g, '');
+}
+
+function normalizeDigits(value){
+  return String(value || '')
+    .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
+}
+
+function normalizeSaudiMobile(value){
+  const compact = normalizeDigits(value).replace(/[\s().-]/g, '');
+  if(/^05\d{8}$/.test(compact)){
+    return `+966${compact.slice(1)}`;
+  }
+  if(/^9665\d{8}$/.test(compact)){
+    return `+${compact}`;
+  }
+  if(/^\+9665\d{8}$/.test(compact)){
+    return compact;
+  }
+  return '';
+}
+
+function setContactPhoneError(message = ''){
+  if(!contactPhoneInput || !contactPhoneError){
+    return;
+  }
+  contactPhoneError.textContent = message;
+  contactPhoneInput.classList.toggle('input-error', Boolean(message));
+  contactPhoneInput.setAttribute('aria-invalid', String(Boolean(message)));
+}
+
+function validateContactPhone(){
+  if(!contactPhoneInput){
+    return '';
+  }
+  const normalizedPhone = normalizeSaudiMobile(contactPhoneInput.value);
+  if(!normalizedPhone){
+    setContactPhoneError('أدخل رقم جوال سعودي صحيحًا مثل 05xxxxxxxx أو +9665xxxxxxxx.');
+    return '';
+  }
+  setContactPhoneError('');
+  return normalizedPhone;
+}
+
+function getDisplayName(){
+  const name = nameInput?.value.trim() || '';
+  const stage = stageSelect?.value.trim() || '';
+  return name && stage ? `${stage} ${name}` : '';
+}
+
+function updatePreview(){
+  if(preview){
+    preview.textContent = getDisplayName() || 'سيظهر الاسم في الهيدر هنا';
+  }
+}
+
+function setNameError(message = ''){
+  if(!nameError || !nameInput){
+    return;
+  }
+  nameError.textContent = message;
+  nameInput.classList.toggle('input-error', Boolean(message));
+}
+
 function validateArabicSchoolName(){
+  if(!nameInput){
+    return true;
+  }
   if(englishLettersPattern.test(nameInput.value)){
     nameInput.value = removeEnglishLetters(nameInput.value);
     setNameError('اسم المدرسة يجب أن يكون باللغة العربية فقط، ولا يسمح بالحروف الإنجليزية.');
@@ -47,47 +129,69 @@ function validateArabicSchoolName(){
   return true;
 }
 
-const storedSchoolProfile = getStoredSchoolProfile();
-nameInput.value = removeEnglishLetters(localStorage.getItem('registeredSchoolBaseName') || storedSchoolProfile.schoolName || '');
-stageSelect.value = localStorage.getItem('registeredSchoolStage') || storedSchoolProfile.schoolStage || storedSchoolProfile.stage || '';
-educationDepartmentInput.value = String(storedSchoolProfile.educationDepartment || '');
-updatePreview();
-
-nameInput.addEventListener('beforeinput', (event) => {
-  if(event.data && englishLettersPattern.test(event.data)){
-    event.preventDefault();
-    setNameError('ممنوع استخدام الحروف الإنجليزية في اسم المدرسة.');
+function setupRegistrationForm(){
+  if(
+    !schoolRegisterForm ||
+    !nameInput ||
+    !stageSelect ||
+    !educationDepartmentInput ||
+    !contactNameInput ||
+    !contactPhoneInput ||
+    !registrationConsent
+  ){
+    return;
   }
-});
 
-nameInput.addEventListener('input', () => {
-  validateArabicSchoolName();
+  const storedSchoolProfile = getStoredSchoolProfile();
+  const isNewSchool = new URLSearchParams(window.location.search).get('new') === '1';
+  if(!isNewSchool){
+    nameInput.value = removeEnglishLetters(
+      readStorage('registeredSchoolBaseName') || storedSchoolProfile.schoolName || ''
+    );
+    stageSelect.value =
+      readStorage('registeredSchoolStage') ||
+      storedSchoolProfile.schoolStage ||
+      storedSchoolProfile.stage ||
+      '';
+    educationDepartmentInput.value = String(
+      storedSchoolProfile.educationDepartment || ''
+    );
+  }
   updatePreview();
-});
 
-nameInput.addEventListener('paste', () => {
-  requestAnimationFrame(validateArabicSchoolName);
-});
+  nameInput.addEventListener('beforeinput', (event) => {
+    if(event.data && englishLettersPattern.test(event.data)){
+      event.preventDefault();
+      setNameError('ممنوع استخدام الحروف الإنجليزية في اسم المدرسة.');
+    }
+  });
 
-stageSelect.addEventListener('change', updatePreview);
+  nameInput.addEventListener('input', () => {
+    validateArabicSchoolName();
+    updatePreview();
+  });
 
-document.getElementById('guestEntry').addEventListener('click', () => {
-  localStorage.removeItem('registeredSchoolBaseName');
-  localStorage.removeItem('registeredSchoolStage');
-  localStorage.removeItem('registeredSchoolName');
-  localStorage.removeItem(schoolProfileStorageKey);
-  localStorage.setItem('schoolGuestMode', '1');
-  window.location.href = 'index.html';
-});
+  nameInput.addEventListener('paste', () => {
+    requestAnimationFrame(validateArabicSchoolName);
+  });
 
-document
-  .getElementById('schoolRegisterForm')
-  .addEventListener('submit', async event => {
+  stageSelect.addEventListener('change', updatePreview);
+
+  contactPhoneInput.addEventListener('input', () => {
+    if(contactPhoneError?.textContent){
+      validateContactPhone();
+    }
+  });
+  contactPhoneInput.addEventListener('blur', validateContactPhone);
+
+  schoolRegisterForm.addEventListener('submit', async event => {
     event.preventDefault();
 
     const name = nameInput.value.trim();
     const stage = stageSelect.value.trim();
     const educationDepartment = educationDepartmentInput.value.trim();
+    const registrationContactName = contactNameInput.value.trim().replace(/\s+/g, ' ');
+    const registrationContactPhone = validateContactPhone();
     const displayName = getDisplayName();
 
     if (!name) {
@@ -107,6 +211,17 @@ document
 
     if (!educationDepartment) {
       educationDepartmentInput.focus();
+      return;
+    }
+
+    if (!registrationContactPhone) {
+      contactPhoneInput.focus();
+      return;
+    }
+
+    if (!registrationConsent.checked) {
+      registrationConsent.focus();
+      registrationConsent.reportValidity();
       return;
     }
 
@@ -130,7 +245,10 @@ document
         body: JSON.stringify({
           schoolName: name,
           schoolStage: stage,
-          educationDepartment
+          educationDepartment,
+          registrationContactName,
+          registrationContactPhone,
+          registrationContactConsent: true
         })
       });
 
@@ -204,3 +322,66 @@ document
       }
     }
   });
+}
+
+function setOptionalText(rowId, valueId, value){
+  const row = document.getElementById(rowId);
+  const target = document.getElementById(valueId);
+  if(!row || !target){
+    return;
+  }
+  const text = String(value || '').trim();
+  row.hidden = !text;
+  target.textContent = text;
+}
+
+function setupLoginPage(){
+  const storedState = document.getElementById('storedSchoolState');
+  const emptyState = document.getElementById('emptySchoolState');
+  if(!storedState || !emptyState){
+    return;
+  }
+
+  const profile = getStoredSchoolProfile();
+  const baseName = String(
+    readStorage('registeredSchoolBaseName') || profile.schoolName || ''
+  ).trim();
+  const stage = String(
+    readStorage('registeredSchoolStage') ||
+    profile.schoolStage ||
+    profile.stage ||
+    ''
+  ).trim();
+  const storedDisplayName = readStorage('registeredSchoolName').trim();
+  const displayName = storedDisplayName ||
+    (baseName && stage ? `${stage} ${baseName}` : baseName);
+  const educationDepartment = String(profile.educationDepartment || '').trim();
+  const hasStoredSchool = Boolean(displayName || profile.publicId);
+
+  storedState.hidden = !hasStoredSchool;
+  emptyState.hidden = hasStoredSchool;
+
+  if(hasStoredSchool){
+    const schoolNameTarget = document.getElementById('storedSchoolName');
+    if(schoolNameTarget){
+      schoolNameTarget.textContent = displayName || 'مدرسة محفوظة';
+    }
+    setOptionalText('storedSchoolStageRow', 'storedSchoolStage', stage);
+    setOptionalText(
+      'storedSchoolDepartmentRow',
+      'storedSchoolDepartment',
+      educationDepartment
+    );
+  }
+
+  document.getElementById('enterRegisteredSchool')?.addEventListener('click', () => {
+    localStorage.removeItem('schoolGuestMode');
+    window.location.href = 'index.html';
+  });
+}
+
+applyPreferredTheme();
+bindGuestEntry('guestEntry');
+bindGuestEntry('emptyGuestEntry');
+setupRegistrationForm();
+setupLoginPage();

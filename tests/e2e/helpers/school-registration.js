@@ -15,4 +15,12 @@ async function mockSchoolRegistrationApi(page){
   });
 }
 
-module.exports = { mockSchoolRegistrationApi };
+async function completeRegistrationContact(page){
+  await page.fill('#registrationContactPhone', '0500000000');
+  await page.check('#registrationConsent');
+}
+
+module.exports = {
+  completeRegistrationContact,
+  mockSchoolRegistrationApi
+};

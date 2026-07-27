@@ -44,6 +44,13 @@ const auditMigration = await readFile(
   ),
   'utf8'
 );
+const registrationContactMigration = await readFile(
+  new globalThis.URL(
+    '../migrations/platform/0004_add_school_registration_contact.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
 
 const TOKEN = 'test-admin-token';
 const BASE_URL = 'https://example.test';
@@ -57,6 +64,8 @@ function createDatabase(){
       school_name: 'مدرسة الاختبار الثانية',
       school_stage: 'متوسطة',
       education_department: 'الإدارة العامة للتعليم بمنطقة المدينة المنورة',
+      registration_contact_name: 'مسؤول التسجيل الثاني',
+      registration_contact_phone: '+966512345678',
       verification_status: 'verified',
       created_at: '2026-07-21 15:09:26',
       updated_at: '2026-07-21 15:09:26'
@@ -67,6 +76,8 @@ function createDatabase(){
       school_name: 'مدرسة الاختبار الأولى',
       school_stage: 'ابتدائية',
       education_department: 'الإدارة العامة للتعليم بمنطقة المدينة المنورة',
+      registration_contact_name: null,
+      registration_contact_phone: null,
       verification_status: 'unverified',
       created_at: '2026-07-21 15:06:50',
       updated_at: '2026-07-21 15:06:50'
@@ -223,6 +234,8 @@ function createRegistrationDatabase(){
                   const schoolName = values[2];
                   const schoolStage = values[3];
                   const educationDepartment = values[4];
+                  const registrationContactName = values[5];
+                  const registrationContactPhone = values[6];
                   const duplicate = rows.some((row) => (
                     normalizeIdentityPart(row.school_name) === normalizeIdentityPart(schoolName) &&
                     row.school_stage === schoolStage &&
@@ -238,7 +251,9 @@ function createRegistrationDatabase(){
                     public_id: publicId,
                     school_name: schoolName,
                     school_stage: schoolStage,
-                    education_department: educationDepartment
+                    education_department: educationDepartment,
+                    registration_contact_name: registrationContactName,
+                    registration_contact_phone: registrationContactPhone
                   });
                   inserted += 1;
                   return { success: true, meta: { changes: 1 } };
@@ -359,6 +374,8 @@ test('lists schools with filters, sorting, and pagination metadata', async () =>
   assert.equal(body.pagination.page, 1);
   assert.equal(body.pagination.limit, 25);
   assert.doesNotMatch(JSON.stringify(body), /edit_token_hash/);
+  assert.equal(body.items[0].registration_contact_name, 'مسؤول التسجيل الثاني');
+  assert.equal(body.items[0].registration_contact_phone, '+966512345678');
 
   const listStatement = database.statements.find((item) => item.sql.includes('SELECT id, public_id'));
   assert.ok(listStatement);
@@ -450,6 +467,9 @@ test('defines school identity uniqueness and admin audit migrations safely', () 
   assert.match(auditMigration, /trg_audit_school_delete/);
   assert.match(auditMigration, /school_deleted/);
   assert.doesNotMatch(auditMigration, /ADMIN_API_TOKEN|edit_token|school_name/i);
+
+  assert.match(registrationContactMigration, /ADD COLUMN registration_contact_name TEXT/);
+  assert.match(registrationContactMigration, /ADD COLUMN registration_contact_phone TEXT/);
 });
 
 test('protects the admin page from caching and indexing', async () => {
@@ -475,13 +495,20 @@ test('prevents only duplicate normalized school identities', async () => {
   const baseSchool = {
     schoolName: 'اختبار 2',
     schoolStage: 'متوسطة',
-    educationDepartment: 'إدارة التعليم بمنطقة المدينة المنورة'
+    educationDepartment: 'إدارة التعليم بمنطقة المدينة المنورة',
+    registrationContactName: 'مسؤول التسجيل',
+    registrationContactPhone: '0512345678',
+    registrationContactConsent: true
   };
 
   const first = await registerSchool(database, baseSchool);
   assert.equal(first.response.status, 201);
   assert.equal(first.body.ok, true);
+  assert.equal(Object.hasOwn(first.body.school, 'registrationContactName'), false);
+  assert.equal(Object.hasOwn(first.body.school, 'registrationContactPhone'), false);
   assert.equal(database.inserted, 1);
+  assert.equal(database.rows[0].registration_contact_name, 'مسؤول التسجيل');
+  assert.equal(database.rows[0].registration_contact_phone, '+966512345678');
   const identityQuery = database.statements.find((item) =>
     item.sql.startsWith('SELECT 1 AS found')
   );
@@ -510,9 +537,9 @@ test('prevents only duplicate normalized school identities', async () => {
   assert.equal(database.inserted, 2);
 
   const differentStage = await registerSchool(database, {
-    schoolName: baseSchool.schoolName,
+    ...baseSchool,
     stage: 'ابتدائية',
-    educationDepartment: baseSchool.educationDepartment
+    schoolStage: undefined
   });
   assert.equal(differentStage.response.status, 201);
   assert.equal(database.inserted, 3);
@@ -531,4 +558,42 @@ test('prevents only duplicate normalized school identities', async () => {
   assert.equal(spacedDuplicate.response.status, 409);
   assert.equal(spacedDuplicate.body.code, 'duplicate_school');
   assert.equal(database.inserted, 4);
+});
+
+test('requires contact consent and a valid Saudi mobile number', async () => {
+  const database = createRegistrationDatabase();
+  const baseSchool = {
+    schoolName: 'مدرسة التواصل',
+    schoolStage: 'ابتدائية',
+    educationDepartment: 'إدارة التعليم بمنطقة الرياض',
+    registrationContactName: '',
+    registrationContactConsent: true
+  };
+
+  const invalidPhone = await registerSchool(database, {
+    ...baseSchool,
+    registrationContactPhone: '12345'
+  });
+  assert.equal(invalidPhone.response.status, 400);
+  assert.equal(invalidPhone.body.code, 'invalid_registration_contact_phone');
+
+  const missingConsent = await registerSchool(database, {
+    ...baseSchool,
+    registrationContactPhone: '+966512345678',
+    registrationContactConsent: false
+  });
+  assert.equal(missingConsent.response.status, 400);
+  assert.equal(missingConsent.body.code, 'registration_contact_consent_required');
+  assert.equal(database.inserted, 0);
+
+  for(const [index, phone] of ['966512345678', '+966512345678'].entries()){
+    const acceptedDatabase = createRegistrationDatabase();
+    const accepted = await registerSchool(acceptedDatabase, {
+      ...baseSchool,
+      schoolName: `مدرسة التواصل ${index + 2}`,
+      registrationContactPhone: phone
+    });
+    assert.equal(accepted.response.status, 201);
+    assert.equal(acceptedDatabase.rows[0].registration_contact_phone, '+966512345678');
+  }
 });

@@ -264,19 +264,19 @@ test('preview performs no embedding, upload, or delete operation', async () => {
   assert.equal(result.cloudMutation, false);
   assert.equal(embeddingCalled, false);
   assert.equal(wranglerCalled, false);
-  assert.equal(result.sourceCount, 23);
-  assert.equal(result.vectorCount, 641);
+  assert.equal(result.sourceCount, 24);
+  assert.equal(result.vectorCount, 668);
 });
 
 test('keeps the current knowledge source and chunk counts', () => {
   const sources = getKnowledgeSources();
   const state = prepareKnowledgeState();
 
-  assert.equal(sources.length, 23);
-  assert.equal(state.sources.length, 23);
-  assert.equal(state.chunks.length, 641);
-  assert.equal(state.candidateManifest.vectorCount, 641);
-  assert.equal(state.candidateManifest.sourceCount, 23);
+  assert.equal(sources.length, 24);
+  assert.equal(state.sources.length, 24);
+  assert.equal(state.chunks.length, 668);
+  assert.equal(state.candidateManifest.vectorCount, 668);
+  assert.equal(state.candidateManifest.sourceCount, 24);
 });
 
 test('requires an explicit account and environment for sensitive lifecycle modes', async () => {

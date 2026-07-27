@@ -1,6 +1,9 @@
 ﻿const { test, expect } = require("@playwright/test");
 
-const { mockSchoolRegistrationApi } = require('./helpers/school-registration');
+const {
+  completeRegistrationContact,
+  mockSchoolRegistrationApi
+} = require('./helpers/school-registration');
 
 test("تسجيل المدرسة وحفظ البيانات والانتقال للرئيسية", async ({ page }) => {
   test.setTimeout(15000);
@@ -21,6 +24,7 @@ test("تسجيل المدرسة وحفظ البيانات والانتقال ل�
     "#educationDepartment",
     "إدارة التعليم بمنطقة المدينة المنورة"
   );
+  await completeRegistrationContact(page);
 
   await Promise.all([
     page.waitForURL("**/index.html", {
@@ -81,6 +85,7 @@ test("عرض رسالة واضحة عند تكرار هوية المدرسة د�
     "#educationDepartment",
     "إدارة التعليم بمنطقة المدينة المنورة"
   );
+  await completeRegistrationContact(page);
 
   const dialogMessage = new Promise(resolve => {
     page.once('dialog', async dialog => {

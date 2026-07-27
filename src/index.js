@@ -1014,6 +1014,21 @@ function normalizeSchoolField(value) {
     .replace(/\s+/g, ' ');
 }
 
+function normalizeSaudiMobile(value) {
+  const compact = String(value ?? '')
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+    .replace(/[\s().-]/g, '');
+
+  if (/^05\d{8}$/.test(compact)) {
+    return `+966${compact.slice(1)}`;
+  }
+  if (/^9665\d{8}$/.test(compact)) {
+    return `+${compact}`;
+  }
+  return /^\+9665\d{8}$/.test(compact) ? compact : '';
+}
+
 function duplicateSchoolError() {
   return new SchoolRegistrationError(
     'duplicate_school',
@@ -1131,6 +1146,12 @@ async function handleSchoolRegistration(request, env) {
     );
     const educationDepartment =
       normalizeSchoolField(body.educationDepartment);
+    const registrationContactName =
+      normalizeSchoolField(body.registrationContactName);
+    const registrationContactPhone =
+      normalizeSaudiMobile(body.registrationContactPhone);
+    const registrationContactConsent =
+      body.registrationContactConsent === true;
 
     if (schoolName.length < 2 || schoolName.length > 120) {
       throw new SchoolRegistrationError(
@@ -1159,6 +1180,30 @@ async function handleSchoolRegistration(request, env) {
       );
     }
 
+    if (registrationContactName.length > 120) {
+      throw new SchoolRegistrationError(
+        'invalid_registration_contact_name',
+        400,
+        'Registration contact name must not exceed 120 characters.'
+      );
+    }
+
+    if (!registrationContactPhone) {
+      throw new SchoolRegistrationError(
+        'invalid_registration_contact_phone',
+        400,
+        'A valid Saudi mobile number is required.'
+      );
+    }
+
+    if (!registrationContactConsent) {
+      throw new SchoolRegistrationError(
+        'registration_contact_consent_required',
+        400,
+        'Registration contact consent is required.'
+      );
+    }
+
     if (await schoolIdentityExists(
       env.PLATFORM_DB,
       schoolName,
@@ -1181,8 +1226,9 @@ async function handleSchoolRegistration(request, env) {
 
     const result = await env.PLATFORM_DB.prepare(
       'INSERT INTO schools ' +
-      '(public_id, edit_token_hash, school_name, school_stage, education_department) ' +
-      'SELECT ?1, ?2, ?3, ?4, ?5 ' +
+      '(public_id, edit_token_hash, school_name, school_stage, education_department, ' +
+      'registration_contact_name, registration_contact_phone) ' +
+      'SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 ' +
       'WHERE NOT EXISTS (' +
       'SELECT 1 FROM schools ' +
       'WHERE lower(trim(school_name)) = lower(trim(?3)) ' +
@@ -1196,7 +1242,9 @@ async function handleSchoolRegistration(request, env) {
         editTokenHash,
         schoolName,
         schoolStage,
-        educationDepartment
+        educationDepartment,
+        registrationContactName || null,
+        registrationContactPhone
       )
       .run();
 

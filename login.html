@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>الدخول إلى المدرسة المسجلة</title>
+<meta name="description" content="فتح ملف مدرسة محفوظ على هذا الجهاز أو بدء تسجيل مدرسة جديدة.">
+<link rel="canonical" href="https://mazen.zb-store.com/login.html">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32x32.png">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/register.css">
+</head>
+<body class="login-view">
+<main class="register-page login-page">
+  <section class="form-panel">
+    <div class="form-shell login-shell">
+      <div class="brand">
+        <img class="brand-logo" src="assets/images/site-logo-mark.webp" width="460" height="345" alt="منصة التنظيم المدرسي والموارد التعليمية" decoding="async">
+      </div>
+      <header class="page-intro">
+        <span class="page-kicker login-kicker">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3a5 5 0 0 0-4.58 7.01L3 16.43V21h4.57l1.5-1.5H12V17h2.5l1.49-1.49A5 5 0 1 0 14 3Zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z"/></svg>
+          عودة إلى المنصة
+        </span>
+        <h1 class="welcome">الدخول إلى المدرسة المسجلة</h1>
+        <p>افتح ملف المدرسة المحفوظ على هذا الجهاز دون إنشاء تسجيل جديد.</p>
+      </header>
+
+      <section class="stored-school-card" id="storedSchoolState" aria-labelledby="storedSchoolGreeting" hidden>
+        <div class="stored-school-heading">
+          <span class="stored-school-icon" aria-hidden="true">✓</span>
+          <div>
+            <p id="storedSchoolGreeting">مرحبًا بعودتك</p>
+            <h2 id="storedSchoolName"></h2>
+          </div>
+        </div>
+        <dl class="stored-school-details">
+          <div id="storedSchoolStageRow"><dt>المرحلة</dt><dd id="storedSchoolStage"></dd></div>
+          <div id="storedSchoolDepartmentRow"><dt>إدارة التعليم</dt><dd id="storedSchoolDepartment"></dd></div>
+        </dl>
+        <div class="login-actions">
+          <button id="enterRegisteredSchool" type="button">الدخول إلى المنصة</button>
+          <a href="register.html?new=1">تسجيل مدرسة أخرى</a>
+          <button class="text-action" id="guestEntry" type="button">الدخول كضيف</button>
+        </div>
+      </section>
+
+      <section class="empty-school-state" id="emptySchoolState" aria-labelledby="emptySchoolTitle" hidden>
+        <span class="empty-school-icon" aria-hidden="true">⌂</span>
+        <h2 id="emptySchoolTitle">لا توجد مدرسة مسجلة على هذا الجهاز</h2>
+        <p>يمكنك إنشاء ملف مدرسة جديد، أو استعراض المنصة مؤقتًا بصفة ضيف.</p>
+        <div class="login-actions">
+          <a class="primary-link" href="register.html?new=1">تسجيل مدرسة جديدة</a>
+          <button class="text-action" id="emptyGuestEntry" type="button">الدخول كضيف</button>
+        </div>
+      </section>
+
+      <p class="device-note">تعتمد هذه الصفحة على بيانات المدرسة المحفوظة في هذا المتصفح فقط، ولا تمثل نظام دخول مستقلًا.</p>
+    </div>
+  </section>
+
+  <section class="visual-panel login-visual" aria-label="فتح ملف المدرسة">
+    <span class="corner top" aria-hidden="true"></span>
+    <span class="corner bottom" aria-hidden="true"></span>
+    <div class="visual-copy">
+      <span>وصول سريع</span>
+      <h2>مرحبًا بعودتك</h2>
+      <p>تابع استخدام أدوات المدرسة من البيانات المحفوظة على جهازك.</p>
+    </div>
+  </section>
+</main>
+<script src="assets/js/register.js"></script>
+</body>
+</html>

@@ -1,6 +1,9 @@
 ﻿const { test, expect } = require("@playwright/test");
 
-const { mockSchoolRegistrationApi } = require('./helpers/school-registration');
+const {
+  completeRegistrationContact,
+  mockSchoolRegistrationApi
+} = require('./helpers/school-registration');
 
 test("ظهور بيانات المدرسة في الصفحة الرئيسية بعد التسجيل", async ({ page }) => {
   test.setTimeout(15000);
@@ -21,6 +24,7 @@ test("ظهور بيانات المدرسة في الصفحة الرئيسية ب
     "#educationDepartment",
     "إدارة التعليم بمنطقة المدينة المنورة"
   );
+  await completeRegistrationContact(page);
 
   await Promise.all([
     page.waitForURL("**/index.html", {

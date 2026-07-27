@@ -3,40 +3,52 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>تسجيل المدرسة</title>
-<meta name="description" content="تهيئة بيانات المدرسة محليًا لعرضها داخل منصة التنظيم المدرسي والموارد التعليمية.">
+<title>تسجيل مدرسة جديدة</title>
+<meta name="description" content="إنشاء ملف مدرسة جديد للوصول إلى أدوات التنظيم المدرسي والموارد التعليمية.">
 <link rel="canonical" href="https://mazen.zb-store.com/register.html">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32x32.png">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/register.css">
 </head>
-<body>
+<body class="registration-view">
 <main class="register-page">
   <section class="form-panel">
     <div class="form-shell">
       <div class="brand">
         <img class="brand-logo" src="assets/images/site-logo-mark.webp" width="460" height="345" alt="منصة التنظيم المدرسي والموارد التعليمية" decoding="async">
       </div>
-      <h1 class="welcome">مرحبًا بك</h1>
+      <header class="page-intro">
+        <span class="page-kicker"><span aria-hidden="true">+</span> بدء استخدام جديد</span>
+        <h1 class="welcome">تسجيل مدرسة جديدة</h1>
+        <p>أنشئ ملفًا لمدرستك للوصول إلى أدوات التنظيم المدرسي والموارد التعليمية. ستُستخدم بعض بيانات المدرسة في النماذج والتقارير التي يتم توليدها من المنصة.</p>
+      </header>
       <form class="register-form" id="schoolRegisterForm">
-        <div class="registration-fields">
-          <div class="field">
+        <section class="school-data-section" aria-labelledby="schoolDataSectionTitle">
+          <div class="school-data-heading">
+            <span class="school-data-icon" aria-hidden="true">▦</span>
+            <div>
+              <h2 id="schoolDataSectionTitle">بيانات المدرسة والتقارير</h2>
+              <p>البيانات الأساسية لتعريف المدرسة وتخصيص النماذج والتقارير.</p>
+            </div>
+          </div>
+          <div class="registration-fields">
+            <div class="field">
             <label for="schoolName">اسم المدرسة</label>
             <input id="schoolName" name="schoolName" type="text" placeholder="مثال: مازن" autocomplete="organization" inputmode="text" required>
             <p class="field-error" id="schoolNameError" aria-live="polite"></p>
-          </div>
-          <div class="field">
-            <label for="schoolStage">المرحلة</label>
-            <select id="schoolStage" name="schoolStage" required>
-              <option value="" selected disabled>اختر المرحلة</option>
-              <option value="ابتدائية">ابتدائي</option>
-              <option value="متوسطة">متوسطة</option>
-              <option value="ثانوية">ثانوي</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="educationDepartment">إدارة التعليم</label>
-            <select id="educationDepartment" name="educationDepartment" required>
+            </div>
+            <div class="field">
+              <label for="schoolStage">المرحلة</label>
+              <select id="schoolStage" name="schoolStage" required>
+                <option value="" selected disabled>اختر المرحلة</option>
+                <option value="ابتدائية">ابتدائي</option>
+                <option value="متوسطة">متوسطة</option>
+                <option value="ثانوية">ثانوي</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="educationDepartment">إدارة التعليم</label>
+              <select id="educationDepartment" name="educationDepartment" required>
               <option value="" selected disabled>اختر إدارة التعليم</option>
               <option value="إدارة التعليم بمنطقة الرياض">إدارة التعليم بمنطقة الرياض</option>
               <option value="إدارة التعليم بمنطقة مكة المكرمة">إدارة التعليم بمنطقة مكة المكرمة</option>
@@ -54,26 +66,65 @@
               <option value="إدارة التعليم بمحافظة جدة">إدارة التعليم بمحافظة جدة</option>
               <option value="إدارة التعليم بمحافظة الطائف">إدارة التعليم بمحافظة الطائف</option>
               <option value="إدارة التعليم بمحافظة الأحساء">إدارة التعليم بمحافظة الأحساء</option>
-            </select>
+              </select>
+            </div>
           </div>
-        </div>
-        <div class="preview" aria-label="معاينة الهيدر">
-          <img src="assets/images/school-header-base.png" alt="">
-          <div class="preview-name" id="schoolPreview">سيظهر الاسم في الهيدر هنا</div>
-        </div>
+          <aside class="data-use-note" role="note" aria-label="تنبيه استخدام بيانات المدرسة">
+            <span class="data-use-note-icon" aria-hidden="true">i</span>
+            <p><strong>تنبيه:</strong> اسم المدرسة، المرحلة، وإدارة التعليم قد تظهر في التقارير والملفات التي تطبعها المدرسة.</p>
+          </aside>
+        </section>
+        <section class="report-preview-section" aria-labelledby="reportPreviewTitle">
+          <h2 id="reportPreviewTitle">معاينة ظهور اسم المدرسة في التقارير</h2>
+          <div class="preview" aria-label="معاينة الهيدر">
+            <img src="assets/images/school-header-base.png" alt="">
+            <div class="preview-name" id="schoolPreview">سيظهر الاسم في الهيدر هنا</div>
+          </div>
+        </section>
+        <section class="contact-section" aria-labelledby="contactSectionTitle">
+          <div class="contact-section-heading">
+            <span class="contact-section-icon" aria-hidden="true">☎</span>
+            <div>
+              <h2 id="contactSectionTitle">بيانات التواصل للمراجعة</h2>
+            </div>
+          </div>
+          <div class="contact-fields">
+            <div class="field">
+              <label for="registrationContactName">اسم مسؤول التسجيل <span class="optional-label">اختياري</span></label>
+              <input id="registrationContactName" name="registrationContactName" type="text" maxlength="120" placeholder="مثال: محمد أحمد" autocomplete="name">
+            </div>
+            <div class="field">
+              <label for="registrationContactPhone">رقم الجوال للتواصل <span class="required-label" aria-label="مطلوب">*</span></label>
+              <input id="registrationContactPhone" name="registrationContactPhone" type="tel" inputmode="tel" autocomplete="tel" dir="ltr" placeholder="05xxxxxxxx" aria-describedby="registrationContactPhoneHint registrationContactPhoneError" required>
+              <p class="field-hint" id="registrationContactPhoneHint">يقبل الرقم بصيغة 05xxxxxxxx أو +9665xxxxxxxx أو 9665xxxxxxxx.</p>
+              <p class="field-error" id="registrationContactPhoneError" aria-live="polite"></p>
+            </div>
+          </div>
+          <p class="contact-privacy-note">تُستخدم بيانات التواصل فقط عند الحاجة لمراجعة طلب التسجيل، ولا تظهر في التقارير المطبوعة.</p>
+        </section>
+        <label class="registration-consent" for="registrationConsent">
+          <input id="registrationConsent" name="registrationConsent" type="checkbox" required>
+          <span>أقر بأن بيانات المدرسة صحيحة، وأوافق على استخدام رقم الجوال للتواصل بخصوص طلب التسجيل فقط.</span>
+        </label>
         <div class="actions">
-          <button type="submit">حفظ وعرض الصفحة</button>
+          <button type="submit">إنشاء ملف المدرسة</button>
           <button class="guest-btn" id="guestEntry" type="button">الدخول كزائر</button>
         </div>
+        <a class="alternate-entry" href="login.html">لديك مدرسة مسجلة؟ الدخول إلى المدرسة المسجلة</a>
       </form>
       <p class="subscription-note">تنبيه: التقارير ستكون باشتراك وليست مجانية.</p>
-      <p class="hint">سيتم استخدام هذه البيانات لتخصيص واجهة المنصة والتقارير، ويمكن تعديلها لاحقًا.</p>
+      <p class="hint">يمكن تعديل بيانات المدرسة لاحقًا من صفحة التسجيل.</p>
     </div>
   </section>
 
   <section class="visual-panel" aria-label="صورة المدرسة">
     <span class="corner top" aria-hidden="true"></span>
     <span class="corner bottom" aria-hidden="true"></span>
+    <div class="visual-copy">
+      <span>بداية منظمة</span>
+      <h2>ملف مدرستك في مكان واحد</h2>
+      <p>هيّئ بيانات المدرسة مرة واحدة لتخصيص الواجهة وتجهيز النماذج والتقارير.</p>
+    </div>
   </section>
 </main>
 <script src="assets/js/register.js"></script>
