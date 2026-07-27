@@ -58,9 +58,9 @@ node tools/check-links.js index.html about.html privacy.html
 - لا تضف `.env` أو `.wrangler` أو tokens أو ملفات أسرار.
 - لا تنفذ commit أو push أو deploy دون موافقة صريحة.
 
-## ملاحظات الإصدار المحلي v1.7.7
+## ملاحظات الإصدار المحلي v1.7.8
 
-- الإصدار المنشور الحالي هو `v1.7.7`.
+- الإصدار المنشور الحالي هو `v1.7.8`.
 - البنود التالية توثق قرارات تقنية مستمرة من النسخة السابقة.
 
 - أُبقيت قوالب DOCX في `assets/report-templates/manager-reports/` ضمن Static Assets بواسطة استثناء `.assetsignore` الحالي.
