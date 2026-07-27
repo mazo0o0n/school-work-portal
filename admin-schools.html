@@ -136,7 +136,60 @@
         <button id="nextPageBtn" class="secondary-btn" type="button">التالي</button>
       </div>
     </section>
+
+    <section class="admin-content audit-panel" hidden aria-labelledby="auditTitle">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">المراجعة التشغيلية</p>
+          <h2 id="auditTitle">سجل العمليات الإدارية</h2>
+          <p class="section-note">آخر 50 عملية مسجلة لتغيير حالة المدارس أو حذفها، دون عرض بيانات حساسة.</p>
+        </div>
+        <button id="auditRefreshBtn" class="secondary-btn" type="button">تحديث السجل</button>
+      </div>
+      <div class="table-wrap">
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th scope="col">الوقت</th>
+              <th scope="col">العملية</th>
+              <th scope="col">نوع الكيان</th>
+              <th scope="col">المعرّف</th>
+              <th scope="col">النتيجة</th>
+              <th scope="col">تفاصيل مختصرة</th>
+            </tr>
+          </thead>
+          <tbody id="auditTableBody"></tbody>
+        </table>
+      </div>
+      <div id="auditEmptyState" class="empty-state" hidden>
+        <strong>لا توجد عمليات مسجلة</strong>
+        <span>ستظهر هنا عمليات تحديث الحالة والحذف بعد تسجيلها.</span>
+      </div>
+    </section>
   </main>
+
+  <dialog id="deleteSchoolDialog" class="confirmation-dialog" aria-labelledby="deleteDialogTitle" aria-describedby="deleteDialogDescription">
+    <form id="deleteSchoolForm" method="dialog">
+      <div class="dialog-heading">
+        <p class="eyebrow">إجراء نهائي</p>
+        <h2 id="deleteDialogTitle">تأكيد حذف المدرسة</h2>
+      </div>
+      <p id="deleteDialogDescription" class="dialog-warning">سيُحذف السجل نهائيًا. راجع بيانات المدرسة ثم اكتب كلمة «حذف» للمتابعة.</p>
+      <dl class="delete-school-summary">
+        <div><dt>اسم المدرسة</dt><dd id="deleteSchoolName">—</dd></div>
+        <div><dt>المرحلة</dt><dd id="deleteSchoolStage">—</dd></div>
+        <div><dt>إدارة التعليم</dt><dd id="deleteSchoolDepartment">—</dd></div>
+      </dl>
+      <label class="confirmation-label" for="deleteConfirmationInput">
+        <span>اكتب كلمة <strong>حذف</strong> للتأكيد</span>
+        <input id="deleteConfirmationInput" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="dialog-actions">
+        <button id="cancelDeleteBtn" class="secondary-btn" type="button">إلغاء</button>
+        <button id="confirmDeleteBtn" class="danger-btn" type="submit" disabled>حذف المدرسة نهائيًا</button>
+      </div>
+    </form>
+  </dialog>
 
   <template id="schoolRowTemplate">
     <tr>
@@ -160,6 +213,17 @@
           <button class="delete-btn" type="button">حذف</button>
         </div>
       </td>
+    </tr>
+  </template>
+
+  <template id="auditRowTemplate">
+    <tr>
+      <td data-label="الوقت" class="audit-created-at"></td>
+      <td data-label="العملية"><span class="audit-action"></span></td>
+      <td data-label="نوع الكيان" class="audit-entity-type"></td>
+      <td data-label="المعرّف" class="audit-entity-id"></td>
+      <td data-label="النتيجة"><span class="audit-result"></span></td>
+      <td data-label="تفاصيل مختصرة" class="audit-metadata"></td>
     </tr>
   </template>
 </body>

@@ -1,6 +1,6 @@
 {
   "name": "school-work-portal",
-  "version": "1.7.5",
+  "version": "1.7.7",
   "private": true,
   "description": "Local tooling for linting and testing the school work portal",
   "scripts": {

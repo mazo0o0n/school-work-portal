@@ -6,6 +6,8 @@ const SCHOOL_STAGES = new Set(['ابتدائية', 'متوسطة', 'ثانوية
 const SCHOOL_SORTS = new Set(['newest', 'oldest', 'name']);
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 50;
+const DEFAULT_AUDIT_LIMIT = 25;
+const MAX_AUDIT_LIMIT = 50;
 const MAX_ADMIN_BODY_BYTES = 4 * 1024;
 const RATE_LIMIT_WINDOW_SECONDS = 60;
 const TOKEN_ENCODER = new TextEncoder();
@@ -130,6 +132,76 @@ function parsePositiveInteger(value, fallback, maximum){
   const parsed = Number.parseInt(String(value || ''), 10);
   if(!Number.isInteger(parsed) || parsed < 1) return fallback;
   return Math.min(parsed, maximum);
+}
+
+function compactAuditMetadata(action, rawMetadata){
+  if(!rawMetadata) return {};
+
+  let metadata;
+  try{
+    metadata = JSON.parse(rawMetadata);
+  }catch{
+    return {};
+  }
+  if(!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return {};
+
+  const safeValue = (value) => String(value || '').trim().slice(0, 80);
+  if(action === 'school_status_changed'){
+    return {
+      previous_status: safeValue(metadata.previous_status),
+      new_status: safeValue(metadata.new_status)
+    };
+  }
+  if(action === 'school_deleted'){
+    return {
+      verification_status: safeValue(metadata.verification_status)
+    };
+  }
+  return {};
+}
+
+async function handleAuditLogs(request, env){
+  const auth = await authorizeAdmin(request, env);
+  if(!auth.ok) return auth.response;
+  if(request.method !== 'GET'){
+    return adminErrorResponse('Method not allowed', 405, 'method_not_allowed');
+  }
+
+  const url = new URL(request.url);
+  const limit = parsePositiveInteger(
+    url.searchParams.get('limit'),
+    DEFAULT_AUDIT_LIMIT,
+    MAX_AUDIT_LIMIT
+  );
+
+  try{
+    const result = await env.PLATFORM_DB.prepare([
+      'SELECT id, action, entity_type, entity_id, result, metadata_json, created_at',
+      'FROM audit_logs',
+      'ORDER BY id DESC',
+      'LIMIT ?1'
+    ].join(' ')).bind(limit).all();
+
+    const items = (result?.results || []).map((item) => ({
+      id: Number(item.id || 0),
+      action: String(item.action || ''),
+      entity_type: String(item.entity_type || ''),
+      entity_id: item.entity_id === null || item.entity_id === undefined
+        ? ''
+        : String(item.entity_id),
+      result: String(item.result || ''),
+      metadata: compactAuditMetadata(String(item.action || ''), item.metadata_json),
+      created_at: String(item.created_at || '')
+    }));
+
+    return jsonResponse({ items, limit });
+  }catch{
+    return adminErrorResponse(
+      'تعذر تحميل سجل العمليات مؤقتًا.',
+      503,
+      'audit_unavailable'
+    );
+  }
 }
 
 function buildSchoolFilters(url){
@@ -385,6 +457,10 @@ export default {
         return adminErrorResponse('Method not allowed', 405, 'method_not_allowed');
       }
       return fetchAdminPage(request, env);
+    }
+
+    if(url.pathname === '/api/admin/audit-logs'){
+      return handleAuditLogs(request, env);
     }
 
     if(url.pathname.startsWith('/api/admin/schools/')){

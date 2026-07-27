@@ -17,6 +17,18 @@ const previousPageBtn = document.getElementById('previousPageBtn');
 const nextPageBtn = document.getElementById('nextPageBtn');
 const pageIndicator = document.getElementById('pageIndicator');
 const schoolRowTemplate = document.getElementById('schoolRowTemplate');
+const auditRefreshBtn = document.getElementById('auditRefreshBtn');
+const auditTableBody = document.getElementById('auditTableBody');
+const auditEmptyState = document.getElementById('auditEmptyState');
+const auditRowTemplate = document.getElementById('auditRowTemplate');
+const deleteSchoolDialog = document.getElementById('deleteSchoolDialog');
+const deleteSchoolForm = document.getElementById('deleteSchoolForm');
+const deleteSchoolName = document.getElementById('deleteSchoolName');
+const deleteSchoolStage = document.getElementById('deleteSchoolStage');
+const deleteSchoolDepartment = document.getElementById('deleteSchoolDepartment');
+const deleteConfirmationInput = document.getElementById('deleteConfirmationInput');
+const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
 const adminContent = [...document.querySelectorAll('.admin-content')];
 
 const countElements = {
@@ -40,15 +52,26 @@ const statusLabels = {
   suspended: 'موقوفة'
 };
 
+const auditActionLabels = {
+  school_status_changed: 'تغيير حالة مدرسة',
+  school_deleted: 'حذف مدرسة'
+};
+
+const auditResultLabels = {
+  success: 'ناجحة'
+};
+
 let adminToken = '';
 let currentPage = 1;
 let totalPages = 1;
 let busy = false;
 let searchTimer = 0;
 let autoRefreshTimer = 0;
-let refreshInFlight = false;
+let refreshInFlightSession = 0;
 let knownSchoolTotal = null;
 let lastAutomaticRefreshAt = 0;
+let pendingDeleteSchool = null;
+let adminSessionId = 0;
 const pageSize = 25;
 const autoRefreshIntervalMs = 15000;
 const automaticRefreshCooldownMs = 1000;
@@ -94,12 +117,16 @@ function resetCounts(){
 
 function resetSession(message = 'تم تسجيل الخروج ومسح رمز الإدارة من الذاكرة.', type = 'success'){
   stopAutoRefresh();
+  closeDeleteDialog();
+  adminSessionId += 1;
   adminToken = '';
   adminTokenInput.value = '';
   currentPage = 1;
   totalPages = 1;
   knownSchoolTotal = null;
   schoolsTableBody.replaceChildren();
+  auditTableBody.replaceChildren();
+  auditEmptyState.hidden = true;
   resetCounts();
   setAdminVisible(false);
   updatePagination();
@@ -159,6 +186,41 @@ function formatDate(value){
   });
 }
 
+function auditMetadataText(item){
+  const metadata = item?.metadata || {};
+  if(item?.action === 'school_status_changed'){
+    const previous = statusLabels[metadata.previous_status] || metadata.previous_status;
+    const next = statusLabels[metadata.new_status] || metadata.new_status;
+    if(previous && next) return `من «${previous}» إلى «${next}»`;
+  }
+  if(item?.action === 'school_deleted'){
+    const status = statusLabels[metadata.verification_status] || metadata.verification_status;
+    if(status) return `الحالة قبل الحذف: ${status}`;
+  }
+  return '—';
+}
+
+function createAuditRow(item){
+  const fragment = auditRowTemplate.content.cloneNode(true);
+  fragment.querySelector('.audit-created-at').textContent = formatDate(item.created_at);
+  fragment.querySelector('.audit-action').textContent = auditActionLabels[item.action] || 'عملية إدارية';
+  fragment.querySelector('.audit-entity-type').textContent = item.entity_type === 'school' ? 'مدرسة' : '—';
+  fragment.querySelector('.audit-entity-id').textContent = item.entity_id || '—';
+  const result = fragment.querySelector('.audit-result');
+  result.textContent = auditResultLabels[item.result] || 'مسجلة';
+  result.classList.toggle('success', item.result === 'success');
+  fragment.querySelector('.audit-metadata').textContent = auditMetadataText(item);
+  return fragment;
+}
+
+function renderAuditLogs(data){
+  const items = Array.isArray(data?.items) ? data.items : [];
+  auditTableBody.replaceChildren(...items.map(createAuditRow));
+  auditEmptyState.hidden = items.length > 0;
+  const message = auditEmptyState.querySelector('span');
+  if(message) message.textContent = 'ستظهر هنا عمليات تحديث الحالة والحذف بعد تسجيلها.';
+}
+
 function renderSummary(data){
   const statusCounts = data?.status_counts || {};
   const stageCounts = data?.stage_counts || {};
@@ -203,8 +265,8 @@ function createSchoolRow(school){
     await updateSchoolStatus(school, select.value);
   });
 
-  deleteButton.addEventListener('click', async () => {
-    await deleteSchool(school);
+  deleteButton.addEventListener('click', () => {
+    requestSchoolDeletion(school);
   });
 
   return fragment;
@@ -244,33 +306,54 @@ function buildSchoolsUrl(){
   return `/api/admin/schools?${params.toString()}`;
 }
 
-async function loadSummary(){
+async function loadSummary(sessionId = adminSessionId){
   const data = await apiRequest('/api/admin/schools?summary=1');
+  if(!adminToken || sessionId !== adminSessionId) return null;
   renderSummary(data);
   knownSchoolTotal = Number(data?.status_counts?.all || 0);
   return knownSchoolTotal;
 }
 
-async function loadSchools(){
+async function loadSchools(sessionId = adminSessionId){
   let data = await apiRequest(buildSchoolsUrl());
+  if(!adminToken || sessionId !== adminSessionId) return;
   const availablePages = Math.max(1, Number(data?.pagination?.pages || 1));
 
   if(currentPage > availablePages){
     currentPage = availablePages;
     data = await apiRequest(buildSchoolsUrl());
+    if(!adminToken || sessionId !== adminSessionId) return;
   }
 
   renderSchools(data);
+}
+
+async function loadAuditLogs({ optional = false, sessionId = adminSessionId } = {}){
+  try{
+    const data = await apiRequest('/api/admin/audit-logs?limit=50');
+    if(!adminToken || sessionId !== adminSessionId) return false;
+    renderAuditLogs(data);
+    return true;
+  }catch(error){
+    if(!adminToken || sessionId !== adminSessionId) return false;
+    auditTableBody.replaceChildren();
+    auditEmptyState.hidden = false;
+    const message = auditEmptyState.querySelector('span');
+    if(message) message.textContent = 'تعذر تحميل سجل العمليات مؤقتًا. يمكن إعادة المحاولة لاحقًا.';
+    if(!optional) throw error;
+    return false;
+  }
 }
 
 async function refreshAll(
   successMessage = 'تم تحديث بيانات المدارس.',
   { automatic = false } = {}
 ){
-  if(!adminToken || busy || refreshInFlight) return false;
+  if(!adminToken || busy || refreshInFlightSession === adminSessionId) return false;
 
   const previousTotal = knownSchoolTotal;
-  refreshInFlight = true;
+  const sessionId = adminSessionId;
+  refreshInFlightSession = sessionId;
 
   if(!automatic){
     setBusy(true);
@@ -278,7 +361,10 @@ async function refreshAll(
   }
 
   try{
-    const [newTotal] = await Promise.all([loadSummary(), loadSchools()]);
+    const [newTotal] = await Promise.all([loadSummary(sessionId), loadSchools(sessionId)]);
+    if(!adminToken || sessionId !== adminSessionId) return false;
+    if(!automatic) await loadAuditLogs({ optional: true, sessionId });
+    if(!adminToken || sessionId !== adminSessionId) return false;
     setAdminVisible(true);
 
     if(automatic){
@@ -296,7 +382,7 @@ async function refreshAll(
     }
     return false;
   }finally{
-    refreshInFlight = false;
+    if(refreshInFlightSession === sessionId) refreshInFlightSession = 0;
     if(!automatic) setBusy(false);
   }
 }
@@ -341,6 +427,7 @@ async function connect(){
   }
 
   adminToken = token;
+  adminSessionId += 1;
   currentPage = 1;
   const connected = await refreshAll('تم الدخول وتحميل المدارس المسجلة.');
   if(connected && adminToken) startAutoRefresh();
@@ -358,7 +445,7 @@ async function updateSchoolStatus(school, status){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ verificationStatus: status })
     });
-    await Promise.all([loadSummary(), loadSchools()]);
+    await Promise.all([loadSummary(), loadSchools(), loadAuditLogs({ optional: true })]);
     setStatus(`تم تحديث حالة المدرسة إلى «${label}».`, 'success');
   }catch(error){
     if(adminToken){
@@ -369,12 +456,27 @@ async function updateSchoolStatus(school, status){
   }
 }
 
-async function deleteSchool(school){
+function closeDeleteDialog(){
+  pendingDeleteSchool = null;
+  deleteConfirmationInput.value = '';
+  confirmDeleteBtn.disabled = true;
+  if(deleteSchoolDialog.open) deleteSchoolDialog.close();
+}
+
+function requestSchoolDeletion(school){
   if(busy) return;
-  const confirmed = window.confirm(
-    `سيتم حذف سجل «${school.school_name}» نهائيًا من قاعدة البيانات. هل تريد المتابعة؟`
-  );
-  if(!confirmed) return;
+  pendingDeleteSchool = school;
+  deleteSchoolName.textContent = school.school_name || '—';
+  deleteSchoolStage.textContent = school.school_stage || '—';
+  deleteSchoolDepartment.textContent = school.education_department || '—';
+  deleteConfirmationInput.value = '';
+  confirmDeleteBtn.disabled = true;
+  deleteSchoolDialog.showModal();
+  deleteConfirmationInput.focus();
+}
+
+async function deleteSchool(school){
+  if(busy || !school) return;
 
   setBusy(true);
   setStatus(`جارٍ حذف سجل ${school.school_name}...`);
@@ -382,7 +484,7 @@ async function deleteSchool(school){
     await apiRequest(`/api/admin/schools/${school.id}`, { method: 'DELETE' });
     const remainingOnPage = schoolsTableBody.children.length - 1;
     if(remainingOnPage === 0 && currentPage > 1) currentPage -= 1;
-    await Promise.all([loadSummary(), loadSchools()]);
+    await Promise.all([loadSummary(), loadSchools(), loadAuditLogs({ optional: true })]);
     setStatus('تم حذف سجل المدرسة.', 'success');
   }catch(error){
     if(adminToken){
@@ -401,6 +503,21 @@ function resetAndReload(){
 connectBtn.addEventListener('click', connect);
 logoutBtn.addEventListener('click', () => resetSession());
 refreshBtn.addEventListener('click', () => refreshAll());
+auditRefreshBtn.addEventListener('click', async () => {
+  if(busy || !adminToken) return;
+  setBusy(true);
+  setStatus('جارٍ تحديث سجل العمليات...');
+  try{
+    await loadAuditLogs();
+    setStatus('تم تحديث سجل العمليات.', 'success');
+  }catch(error){
+    if(adminToken){
+      setStatus(error instanceof Error ? error.message : 'تعذر تحديث سجل العمليات.', 'error');
+    }
+  }finally{
+    setBusy(false);
+  }
+});
 adminTokenInput.addEventListener('keydown', (event) => {
   if(event.key === 'Enter') connect();
 });
@@ -421,6 +538,22 @@ nextPageBtn.addEventListener('click', () => {
   if(currentPage >= totalPages || busy) return;
   currentPage += 1;
   refreshAll();
+});
+
+deleteConfirmationInput.addEventListener('input', () => {
+  confirmDeleteBtn.disabled = deleteConfirmationInput.value.trim() !== 'حذف';
+});
+cancelDeleteBtn.addEventListener('click', closeDeleteDialog);
+deleteSchoolDialog.addEventListener('cancel', (event) => {
+  event.preventDefault();
+  closeDeleteDialog();
+});
+deleteSchoolForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if(deleteConfirmationInput.value.trim() !== 'حذف' || !pendingDeleteSchool) return;
+  const school = pendingDeleteSchool;
+  closeDeleteDialog();
+  await deleteSchool(school);
 });
 
 window.addEventListener('focus', requestAutomaticRefresh);

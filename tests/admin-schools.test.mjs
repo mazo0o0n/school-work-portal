@@ -72,10 +72,37 @@ function createDatabase(){
       updated_at: '2026-07-21 15:06:50'
     }
   ];
+  const auditLogs = [
+    {
+      id: 3,
+      action: 'school_status_changed',
+      entity_type: 'school',
+      entity_id: '2',
+      result: 'success',
+      metadata_json: JSON.stringify({
+        previous_status: 'pending',
+        new_status: 'verified',
+        ADMIN_API_TOKEN: 'must-not-leak'
+      }),
+      created_at: '2026-07-26 10:00:00'
+    },
+    {
+      id: 2,
+      action: 'school_deleted',
+      entity_type: 'school',
+      entity_id: '1',
+      result: 'success',
+      metadata_json: JSON.stringify({ verification_status: 'suspended' }),
+      created_at: '2026-07-25 10:00:00'
+    }
+  ];
 
   function execute(sql, values, method){
     if(method === 'first' && sql.includes('COUNT(*) AS count')){
       return { count: schools.length };
+    }
+    if(method === 'all' && sql.includes('FROM audit_logs')){
+      return { results: auditLogs.slice(0, Number(values[0] || auditLogs.length)) };
     }
     if(method === 'all' && sql.includes('FROM schools')){
       return { results: schools };
@@ -361,6 +388,55 @@ test('updates verification status and deletes a school', async () => {
   const deleteBody = await deleteResponse.json();
   assert.equal(deleteResponse.status, 200);
   assert.equal(deleteBody.deleted, 1);
+});
+
+test('protects audit logs and returns only compact allowlisted metadata', async () => {
+  const unauthorizedDatabase = createDatabase();
+  const unauthorizedResponse = await worker.fetch(new globalThis.Request(
+    `${BASE_URL}/api/admin/audit-logs?limit=50`,
+    {
+      headers: {
+        'X-Admin-Token': 'wrong-token',
+        'CF-Connecting-IP': '198.51.100.33'
+      }
+    }
+  ), createEnv(unauthorizedDatabase.binding));
+
+  assert.equal(unauthorizedResponse.status, 403);
+  assert.equal(unauthorizedDatabase.statements.length, 0);
+
+  const database = createDatabase();
+  const response = await worker.fetch(
+    adminRequest('/api/admin/audit-logs?limit=999'),
+    createEnv(database.binding)
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.limit, 50);
+  assert.equal(body.items.length, 2);
+  assert.deepEqual(body.items[0].metadata, {
+    previous_status: 'pending',
+    new_status: 'verified'
+  });
+  assert.deepEqual(body.items[1].metadata, {
+    verification_status: 'suspended'
+  });
+  assert.doesNotMatch(JSON.stringify(body), /must-not-leak|ADMIN_API_TOKEN/i);
+  const auditStatement = database.statements.find((item) => item.sql.includes('FROM audit_logs'));
+  assert.ok(auditStatement);
+  assert.match(auditStatement.sql, /ORDER BY id DESC LIMIT \?1/);
+  assert.deepEqual(auditStatement.values, [50]);
+});
+
+test('rejects non-GET audit requests before reading audit data', async () => {
+  const database = createDatabase();
+  const response = await worker.fetch(adminRequest('/api/admin/audit-logs', {
+    method: 'POST'
+  }), createEnv(database.binding));
+
+  assert.equal(response.status, 405);
+  assert.equal(database.statements.length, 0);
 });
 
 test('defines school identity uniqueness and admin audit migrations safely', () => {
