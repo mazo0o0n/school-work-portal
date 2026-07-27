@@ -68,3 +68,17 @@
 2. تحديد وجهة معتمدة لاستقبال البلاغات.
 3. تجهيز صور PNG لمعاينة التقارير.
 4. إنشاء tag للإصدار بعد اعتماد المراجعة النهائية.
+
+## Phase 2C — الجاهزية التجارية والتخطيط لـSaaS
+
+أضيفت حزمة توثيق داخلية لتقييم قابلية العرض والبيع، وتحديد فجوات الخصوصية والملكية، ورسم مسار SaaS تدريجي دون تنفيذ تغييرات برمجية:
+
+- `docs/commercial-readiness.md`
+- `docs/saas-foundation-roadmap.md`
+- `docs/legal-privacy-checklist.md`
+- `docs/template-asset-ownership-register.md`
+- `docs/metrics-cost-plan.md`
+- `docs/buyer-demo-checklist.md`
+- `docs/claude-report-closure-summary.md`
+
+القرار الحالي: المنصة قابلة لديمو وتجربة محدودة ببيانات تركيبية، لكنها ليست SaaS متعددة المؤسسات بعد. يجب إغلاق حقوق الأصول، ومواءمة الخصوصية، وإثبات الاستخدام والتكلفة قبل توسع تجاري.

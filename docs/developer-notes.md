@@ -68,3 +68,17 @@ node tools/check-links.js index.html about.html privacy.html
 - `2.html` يعرض البنود بلا ملف كعناصر معطلة، و`10.html` يحمل تنبيهًا أرشيفيًا ولا يرتبط بالواجهة العامة.
 - `feedback.html` لا يحتوي نموذجًا أو وجهة إرسال إلى أن تعتمد قناة البلاغات.
 - بعد اعتماد النسخة: اختبرها مع ثلاثة مستخدمين، ونفّذ قائمة فحص الجوال، واعتمد وجهة البلاغات، وجهّز صور معاينة التقارير.
+
+## وثائق Phase 2C
+
+راجع وثائق الجاهزية بهذا الترتيب قبل اقتراح تغييرات SaaS أو تجارية:
+
+1. `docs/commercial-readiness.md`
+2. `docs/legal-privacy-checklist.md`
+3. `docs/template-asset-ownership-register.md`
+4. `docs/metrics-cost-plan.md`
+5. `docs/buyer-demo-checklist.md`
+6. `docs/saas-foundation-roadmap.md`
+7. `docs/claude-report-closure-summary.md`
+
+لا تبدأ migration أو تتبعًا تحليليًا أو دفعًا أو تخزينًا خاصًا اعتمادًا على هذه الوثائق وحدها؛ يلزم أولًا قرار مالك المنتج ومراجعة قانونية وتقنية مستقلة للنطاق المعتمد.
