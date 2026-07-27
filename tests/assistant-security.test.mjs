@@ -59,7 +59,7 @@ function jsonRequest(payload, headers = {}) {
 
 function createRagEnv({ matches, answer = 'إجابة موثوقة من معرفة المنصة.' } = {}) {
   const embeddingInputs = [];
-  const vectorMatches = matches ?? [{
+  const defaultVectorMatches = [{
     id: 'known-1',
     score: 0.92,
     metadata: {
@@ -68,6 +68,9 @@ function createRagEnv({ matches, answer = 'إجابة موثوقة من معرف
       section: 'برنامج فرص'
     }
   }];
+  const resolveMatches = typeof matches === 'function'
+    ? matches
+    : () => matches ?? defaultVectorMatches;
 
   return {
     embeddingInputs,
@@ -82,14 +85,15 @@ function createRagEnv({ matches, answer = 'إجابة موثوقة من معرف
         async run(_model, payload) {
           if(typeof payload.text === 'string') {
             embeddingInputs.push(payload.text);
-            return { data: [[0.1, 0.2, 0.3]] };
+            return { data: [[embeddingInputs.length, 0.2, 0.3]] };
           }
           return { response: answer };
         }
       },
       VECTORIZE: {
-        async query() {
-          return { matches: vectorMatches };
+        async query(queryEmbedding) {
+          const queryIndex = Math.max(0, Number(queryEmbedding?.[0] || 1) - 1);
+          return { matches: resolveMatches(embeddingInputs[queryIndex] || '') };
         }
       }
     }
@@ -371,6 +375,68 @@ test('uses the original question for search and only the redacted copy for D1', 
   ), false);
   assert.match(insert.values[0], /\[EMAIL_REDACTED\].*\[PHONE_REDACTED\].*\[NUMBER_REDACTED\].*\[SECRET_REDACTED\]/);
   assert.doesNotMatch(insert.values.slice(0, 2).join(' '), /qa\.user@example\.com|0551234567|123456789012|sample-token-value-123/);
+});
+
+test('expands colloquial education questions and retrieves the intended source', async (t) => {
+  const cases = [
+    ['وش سالفة عقود المعلمين؟', /تحويل المعلمين إلى نظام التعاقد/],
+    ['هل بيحولون المعلمين عقود؟', /تحويل المعلمين إلى نظام التعاقد/],
+    ['المدارس الأهلية وش وضعها؟', /المؤسسات التعليمية الخاصة/],
+    ['ذوي الإعاقة لهم شيء؟', /الطلبة ذوو الإعاقة/],
+    ['المجلس وش يسوي؟', /مجلس شؤون التعليم العام/],
+    ['العقوبات على المدارس المخالفة؟', /مخالفات المدارس العقوبات والجزاءات/],
+    ['وش التقويم السنة الجاية؟', /التقويم الدراسي الخطة الزمنية/]
+  ];
+
+  for(const [question, expandedQueryPattern] of cases) {
+    await t.test(question, async () => {
+      const intendedMatch = {
+        id: `match-${Buffer.from(question).toString('hex').slice(0, 16)}`,
+        score: 0.86,
+        metadata: {
+          text: 'معلومة موثقة مرتبطة بالسؤال من ملفات المنصة.',
+          source: 'general-education-system-faq.md',
+          section: 'نظام التعليم العام'
+        }
+      };
+      const { env, embeddingInputs } = createRagEnv({
+        matches(query) {
+          return expandedQueryPattern.test(query) ? [intendedMatch] : [];
+        }
+      });
+
+      const { body } = await responseJson(jsonRequest({ question }), env);
+
+      assert.equal(body.notFound, false);
+      assert.equal(body.source, intendedMatch.metadata.source);
+      assert.ok(embeddingInputs.some((query) => expandedQueryPattern.test(query)));
+      assert.ok(embeddingInputs.length >= 3 && embeddingInputs.length <= 5);
+    });
+  }
+});
+
+test('asks one short clarification for weak in-domain retrieval', async () => {
+  const { env } = createRagEnv({
+    matches: [{
+      id: 'weak-council-match',
+      score: 0.31,
+      metadata: {
+        text: 'إشارة عامة غير كافية للإجابة.',
+        source: 'ملف معرفة معتمد',
+        section: 'مجلس التعليم'
+      }
+    }]
+  });
+
+  const { body } = await responseJson(
+    jsonRequest({ question: 'المجلس وش يسوي؟' }),
+    env
+  );
+
+  assert.equal(body.notFound, true);
+  assert.equal(body.clarification, true);
+  assert.equal(body.answer, 'تقصد اختصاصات مجلس شؤون التعليم العام؟');
+  assert.ok(body.answer.length < 80);
 });
 
 test('does not expose debug metadata in production', async () => {

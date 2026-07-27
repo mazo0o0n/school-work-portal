@@ -13,6 +13,7 @@ const EMBEDDING_MODEL = '@cf/qwen/qwen3-embedding-0.6b';
 const CHAT_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
 const MIN_SCORE = 0.55;
 const TOP_K = 4;
+const MAX_ASSISTANT_SEARCH_QUERIES = 5;
 const UNANSWERED_STATUSES = new Set(['new', 'reviewed', 'added_to_knowledge', 'ignored']);
 const UNANSWERED_DEFAULT_PAGE_SIZE = 50;
 const UNANSWERED_MAX_PAGE_SIZE = 50;
@@ -343,11 +344,12 @@ function extractGeneratedText(payload){
   ).trim();
 }
 
-function getMatchesWithText(vectorizeResult){
+function getMatchesWithText(vectorizeResult, queryIndex = 0){
   return (vectorizeResult?.matches || [])
     .map((match) => ({
       id: match.id,
       score: Number(match.score || 0),
+      queryIndex,
       text: String(match.metadata?.text || '').trim(),
       source: String(match.metadata?.source || 'قاعدة معرفة المنصة'),
       section: String(match.metadata?.section || 'قاعدة المعرفة')
@@ -405,6 +407,125 @@ function normalizeArabicQuestion(value){
     .trim();
 }
 
+const ASSISTANT_QUERY_SYNONYMS = Object.freeze([
+  {
+    pattern: /(?:^|\s)(?:عقود|تعاقد)(?:\s|$)|بيحولون\s+المعلمين/,
+    query: 'عقود المعلمين تحويل المعلمين إلى نظام التعاقد',
+    clarification: 'تقصد عقود المعلمين، أو تحويل المعلمين إلى نظام التعاقد؟'
+  },
+  {
+    pattern: /(?:^|\s)(?:اهلي|اهلية|الاهلي|الاهلية)(?:\s|$)/,
+    query: 'المدارس الأهلية المؤسسات التعليمية الخاصة',
+    clarification: 'تقصد تنظيم المدارس الأهلية، أو وضع العاملين فيها؟'
+  },
+  {
+    pattern: /ذوي\s+الاعاقة|ذوو\s+الاعاقة|الطلاب\s+ذوو\s+الاعاقة|الطلبة\s+ذوو\s+الاعاقة/,
+    query: 'الطلبة ذوو الإعاقة الطلاب ذوو الإعاقة',
+    clarification: 'تقصد خدمات الطلبة ذوي الإعاقة، أو الأنظمة المرتبطة بهم؟'
+  },
+  {
+    pattern: /(?:^|\s)(?:العقوبات|عقوبات|المخالفات|مخالفات|الجزاءات|جزاءات)(?:\s|$)/,
+    query: 'مخالفات المدارس العقوبات والجزاءات',
+    clarification: 'تقصد مخالفات المدارس، أو الجزاءات المترتبة عليها؟'
+  },
+  {
+    pattern: /(?:^|\s)(?:المجلس|مجلس)(?:\s|$)/,
+    query: 'مجلس شؤون التعليم العام اختصاصات المجلس',
+    clarification: 'تقصد اختصاصات مجلس شؤون التعليم العام؟'
+  },
+  {
+    pattern: /(?:^|\s)(?:النقل|نقل)(?:\s|$)/,
+    query: 'النقل المدرسي',
+    clarification: 'تقصد النقل المدرسي، أو حركة نقل المعلمين؟'
+  },
+  {
+    pattern: /(?:^|\s)(?:التقويم|تقويم)(?:\s|$)/,
+    query: 'التقويم الدراسي الخطة الزمنية للعام الدراسي',
+    clarification: 'تقصد التقويم الدراسي، أو الخطة الزمنية للعام؟'
+  },
+  {
+    pattern: /(?:^|\s)(?:المدير|مدير)(?:\s|$)|قائد\s+المدرسة/,
+    query: 'مدير المدرسة قائد المدرسة',
+    clarification: 'تقصد مهام مدير المدرسة، أو أحد إجراءاته الإدارية؟'
+  },
+  {
+    pattern: /(?:^|\s)(?:الوكيل|وكيل)(?:\s|$)/,
+    query: 'وكيل المدرسة',
+    clarification: 'تقصد مهام وكيل المدرسة، أو أحد اختصاصاته؟'
+  },
+  {
+    pattern: /(?:^|\s)(?:الترقية|ترقية|الترقيات|ترقيات)(?:\s|$)/,
+    query: 'ترقيات المعلمين ترقية المعلمين',
+    clarification: 'تقصد ترقيات المعلمين، أو متطلبات الترقية؟'
+  }
+]);
+
+const ASSISTANT_QUERY_STOP_WORDS = new Set([
+  'ما', 'هو', 'هي', 'هل', 'عن', 'في', 'على', 'الى', 'سالفة', 'وضعها',
+  'يسوي', 'شيء', 'شي', 'لهم', 'لي', 'ابي', 'ابغى', 'اريد'
+]);
+
+function buildCondensedAssistantQuery(question){
+  return normalizeArabicQuestion(question)
+    .replace(/[؟?!،,.:;؛]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length > 1 && !ASSISTANT_QUERY_STOP_WORDS.has(word))
+    .join(' ')
+    .trim();
+}
+
+function getAssistantQueryConcepts(question){
+  const normalized = normalizeArabicQuestion(question)
+    .replace(/[؟?!،,.:;؛]/g, ' ')
+    .trim();
+  return ASSISTANT_QUERY_SYNONYMS.filter((entry) => entry.pattern.test(normalized));
+}
+
+function buildAssistantSearchQueries(question){
+  const original = String(question || '').trim();
+  const normalized = normalizeArabicQuestion(original);
+  const condensed = buildCondensedAssistantQuery(original);
+  const concepts = getAssistantQueryConcepts(original);
+  const queries = [];
+
+  const addQuery = (value) => {
+    const query = String(value || '').trim().replace(/\s+/g, ' ');
+    if(query && !queries.includes(query) && queries.length < MAX_ASSISTANT_SEARCH_QUERIES){
+      queries.push(query);
+    }
+  };
+
+  addQuery(original);
+  addQuery(normalized);
+  addQuery(condensed);
+  if(normalized.includes('التطوير المهني التعليمي')){
+    addQuery('استفسارات شائعة حول احتساب نقاط التطوير المهني للترقية');
+  }
+  concepts.forEach((concept) => addQuery(concept.query));
+  if(concepts.length){
+    addQuery(`${condensed || normalized} ${concepts.map((concept) => concept.query).join(' ')}`);
+  }
+
+  // Keep at least three deterministic retrieval angles without an extra LLM call.
+  addQuery(`${condensed || normalized} معلومات تعليمية رسمية`);
+  addQuery(`الأنظمة والخدمات التعليمية ${condensed || normalized}`);
+
+  return queries.slice(0, MAX_ASSISTANT_SEARCH_QUERIES);
+}
+
+function getAssistantClarification(question){
+  const concepts = getAssistantQueryConcepts(question);
+  if(concepts.length){
+    return concepts[0].clarification;
+  }
+
+  const normalized = normalizeArabicQuestion(question);
+  const looksEducational = /مدرس|تعليم|معلم|طالب|نظام|لائحة|اختبار|منهج|وزارة/.test(normalized);
+  return looksEducational
+    ? 'تقصد نظام التعليم العام، أو التقويم الدراسي، أو الترقيات؟'
+    : '';
+}
+
 const ACADEMIC_CALENDAR_IMAGE = Object.freeze({
   src: '/assets/knowledge-images/academic-calendar-1448-1449-2026-2027.jpg',
   alt: 'التقويم الدراسي 1448 / 1449 هـ - 2026 / 2027 م',
@@ -431,25 +552,6 @@ function isAcademicCalendarQuestion(question){
   );
 }
 
-function buildSearchQueries(question){
-  const normalized = normalizeArabicQuestion(question);
-  const queries = [question];
-
-  if(normalized && normalized !== question){
-    queries.push(normalized);
-  }
-
-  if(normalized.includes('التطوير المهني التعليمي')){
-    queries.push('استفسارات شائعة حول احتساب نقاط التطوير المهني للترقية');
-  }
-
-  if(normalized && !/منصة التنظيم المدرسي/.test(normalized)){
-    queries.push(`${normalized} في منصة التنظيم المدرسي`);
-  }
-
-  return [...new Set(queries)].slice(0, 2);
-}
-
 function isExternalPlatformDefinitionQuestion(question){
   const normalized = normalizeArabicQuestion(question);
   const original = String(question || '').trim();
@@ -467,15 +569,37 @@ function isExternalPlatformDefinitionQuestion(question){
     /\b(عرفني على|اشرح)\s+منصة\s+\S+/.test(combined);
 }
 
-function mergeMatches(matchGroups){
+function getLexicalMatchRatio(question, match){
+  const questionTokens = new Set(buildCondensedAssistantQuery(question).split(/\s+/).filter(Boolean));
+  if(!questionTokens.size) return 0;
+
+  const matchText = normalizeArabicQuestion(
+    `${match.section || ''} ${match.source || ''} ${match.text || ''}`
+  );
+  let matched = 0;
+  questionTokens.forEach((token) => {
+    if(matchText.includes(token)) matched += 1;
+  });
+  return matched / questionTokens.size;
+}
+
+function mergeMatches(matchGroups, question){
   const byId = new Map();
   matchGroups.flat().forEach((match) => {
+    const queryBonus = Math.max(0, 0.03 - (match.queryIndex * 0.0075));
+    const lexicalBonus = getLexicalMatchRatio(question, match) * 0.025;
+    const rankedMatch = {
+      ...match,
+      rankScore: match.score + queryBonus + lexicalBonus
+    };
     const current = byId.get(match.id);
-    if(!current || match.score > current.score){
-      byId.set(match.id, match);
+    if(!current || rankedMatch.rankScore > current.rankScore){
+      byId.set(match.id, rankedMatch);
     }
   });
-  return [...byId.values()].sort((a, b) => b.score - a.score).slice(0, TOP_K);
+  return [...byId.values()]
+    .sort((a, b) => b.rankScore - a.rankScore)
+    .slice(0, TOP_K);
 }
 
 async function handleChat(request, env){
@@ -518,10 +642,8 @@ async function handleChat(request, env){
       );
     }
 
-    const searchQueries = buildSearchQueries(question);
-    const matchGroups = [];
-
-    for(const query of searchQueries){
+    const searchQueries = buildAssistantSearchQueries(question);
+    const matchGroups = await Promise.all(searchQueries.map(async (query, queryIndex) => {
       const embeddingResult = await env.AI.run(EMBEDDING_MODEL, {
         text: query
       });
@@ -532,11 +654,11 @@ async function handleChat(request, env){
         returnMetadata: true
       });
 
-      matchGroups.push(getMatchesWithText(vectorizeResult));
-    }
+      return getMatchesWithText(vectorizeResult, queryIndex);
+    }));
 
-    const matches = mergeMatches(matchGroups);
-    const topScore = matches[0]?.score || 0;
+    const matches = mergeMatches(matchGroups, question);
+    const topScore = matches.reduce((highest, match) => Math.max(highest, match.score), 0);
     const usableMatches = matches.filter((match) => match.score >= MIN_SCORE);
 
     if(!usableMatches.length || topScore < MIN_SCORE){
@@ -545,8 +667,18 @@ async function handleChat(request, env){
         pagePath,
         reason: usableMatches.length ? 'low_score' : 'no_matches'
       });
-      return jsonResponse(withDebug(env, fallbackBody(), {
+      const clarification = getAssistantClarification(question);
+      const responseBody = clarification
+        ? {
+            answer: clarification,
+            source: 'مساعد المنصة',
+            notFound: true,
+            clarification: true
+          }
+        : fallbackBody();
+      return jsonResponse(withDebug(env, responseBody, {
         type: 'no_retrieved_context',
+        searchQueryCount: searchQueries.length,
         minScore: MIN_SCORE,
         topScore,
         matches: matches.map((match) => ({
@@ -614,6 +746,7 @@ async function handleChat(request, env){
       type: 'strict_rag_answer',
       model: CHAT_MODEL,
       embeddingModel: EMBEDDING_MODEL,
+      searchQueryCount: searchQueries.length,
       minScore: MIN_SCORE,
       topScore,
       usedMatches: usableMatches.map((match) => ({
