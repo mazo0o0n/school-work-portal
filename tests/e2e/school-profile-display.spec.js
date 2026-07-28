@@ -29,12 +29,13 @@ test("ظهور بيانات المدرسة في الصفحة الرئيسية ب
   await Promise.all([
     page.waitForURL("**/index.html", {
       timeout: 5000,
-      waitUntil: "domcontentloaded"
+      waitUntil: "commit"
     }),
     page
       .locator('#schoolRegisterForm button[type="submit"]')
       .click()
   ]);
+  await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
 
   await expect(page.locator("body")).toContainText(schoolName);
   await expect(page.locator("body")).toContainText(selectedStage);

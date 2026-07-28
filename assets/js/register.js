@@ -8,10 +8,22 @@ const contactNameInput = document.getElementById('registrationContactName');
 const contactPhoneInput = document.getElementById('registrationContactPhone');
 const contactPhoneError = document.getElementById('registrationContactPhoneError');
 const registrationConsent = document.getElementById('registrationConsent');
+const phoneVerification = document.getElementById('phoneVerification');
+const sendWhatsAppCodeButton = document.getElementById('sendWhatsAppCode');
+const phoneVerificationPanel = document.getElementById('phoneVerificationPanel');
+const phoneVerificationCodeInput = document.getElementById('phoneVerificationCode');
+const verifyWhatsAppCodeButton = document.getElementById('verifyWhatsAppCode');
+const phoneVerificationStatus = document.getElementById('phoneVerificationStatus');
+const registrationSubmitButton = document.getElementById('registrationSubmit');
 const englishLettersPattern = /[A-Za-z]/;
 const schoolProfileStorageKey = 'registeredSchoolProfile';
 const duplicateSchoolMessage =
   'هذه المدرسة مسجلة مسبقًا بنفس المرحلة وإدارة التعليم.';
+let phoneVerificationToken = '';
+let verifiedPhone = '';
+let requestedPhone = '';
+let resendTimer = null;
+let phoneVerificationRequired = null;
 
 function readStorage(key){
   try{
@@ -93,6 +105,208 @@ function validateContactPhone(){
   }
   setContactPhoneError('');
   return normalizedPhone;
+}
+
+function setPhoneVerificationStatus(state, message){
+  if(!phoneVerificationStatus) return;
+  phoneVerificationStatus.className = `verification-status is-${state}`;
+  phoneVerificationStatus.textContent = message;
+}
+
+function updateRegistrationAvailability(){
+  if(!registrationSubmitButton || !contactPhoneInput) return;
+  if(phoneVerificationRequired === false){
+    registrationSubmitButton.disabled = false;
+    registrationSubmitButton.setAttribute('aria-disabled', 'false');
+    return;
+  }
+  const currentPhone = normalizeSaudiMobile(contactPhoneInput.value);
+  const isVerified = Boolean(
+    phoneVerificationToken && verifiedPhone && currentPhone === verifiedPhone
+  );
+  registrationSubmitButton.disabled = !isVerified;
+  registrationSubmitButton.setAttribute('aria-disabled', String(!isVerified));
+}
+
+function applyPhoneVerificationConfig(required){
+  phoneVerificationRequired = required === true;
+  resetPhoneVerification();
+  if(phoneVerification) phoneVerification.hidden = !phoneVerificationRequired;
+  if(sendWhatsAppCodeButton) sendWhatsAppCodeButton.disabled = !phoneVerificationRequired;
+  if(phoneVerificationCodeInput) phoneVerificationCodeInput.disabled = !phoneVerificationRequired;
+  if(verifyWhatsAppCodeButton) verifyWhatsAppCodeButton.disabled = !phoneVerificationRequired;
+  updateRegistrationAvailability();
+}
+
+async function loadPhoneVerificationConfig(){
+  if(!schoolRegisterForm) return;
+
+  try{
+    const response = await fetch('/api/register/verification-config', {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store'
+    });
+    const result = await readJsonResponse(response);
+    if(!response.ok || typeof result.phoneVerificationRequired !== 'boolean'){
+      throw new Error('تعذر تحميل إعداد التحقق من رقم الجوال.');
+    }
+    applyPhoneVerificationConfig(result.phoneVerificationRequired);
+  }catch(error){
+    phoneVerificationRequired = null;
+    if(phoneVerification) phoneVerification.hidden = false;
+    if(sendWhatsAppCodeButton) sendWhatsAppCodeButton.disabled = true;
+    if(phoneVerificationCodeInput) phoneVerificationCodeInput.disabled = true;
+    if(verifyWhatsAppCodeButton) verifyWhatsAppCodeButton.disabled = true;
+    setPhoneVerificationStatus(
+      'unverified',
+      error instanceof Error
+        ? error.message
+        : 'تعذر تحميل إعداد التحقق من رقم الجوال.'
+    );
+    updateRegistrationAvailability();
+  }
+}
+
+function resetPhoneVerification(){
+  if(resendTimer){
+    window.clearInterval(resendTimer);
+    resendTimer = null;
+  }
+  phoneVerificationToken = '';
+  verifiedPhone = '';
+  requestedPhone = '';
+  if(phoneVerificationCodeInput){
+    phoneVerificationCodeInput.value = '';
+    phoneVerificationCodeInput.disabled = false;
+  }
+  if(verifyWhatsAppCodeButton) verifyWhatsAppCodeButton.disabled = false;
+  if(sendWhatsAppCodeButton){
+    sendWhatsAppCodeButton.disabled = false;
+    sendWhatsAppCodeButton.textContent = 'إرسال رمز التحقق عبر واتساب';
+  }
+  if(phoneVerificationPanel) phoneVerificationPanel.hidden = true;
+  setPhoneVerificationStatus('unverified', 'لم يتم التحقق');
+  updateRegistrationAvailability();
+}
+
+function startResendCooldown(seconds){
+  if(!sendWhatsAppCodeButton) return;
+  if(resendTimer) window.clearInterval(resendTimer);
+  let remaining = Math.max(1, Number(seconds) || 60);
+  sendWhatsAppCodeButton.disabled = true;
+  sendWhatsAppCodeButton.textContent = `إعادة الإرسال بعد ${remaining}ث`;
+  resendTimer = window.setInterval(() => {
+    remaining -= 1;
+    if(remaining <= 0){
+      window.clearInterval(resendTimer);
+      resendTimer = null;
+      sendWhatsAppCodeButton.disabled = Boolean(phoneVerificationToken);
+      sendWhatsAppCodeButton.textContent = phoneVerificationToken
+        ? 'تم التحقق من الرقم'
+        : 'إرسال رمز جديد عبر واتساب';
+      return;
+    }
+    sendWhatsAppCodeButton.textContent = `إعادة الإرسال بعد ${remaining}ث`;
+  }, 1000);
+}
+
+async function readJsonResponse(response){
+  const responseText = await response.text();
+  try{
+    return responseText ? JSON.parse(responseText) : {};
+  }catch{
+    return {};
+  }
+}
+
+async function requestWhatsAppCode(){
+  if(phoneVerificationRequired !== true) return;
+  const phone = validateContactPhone();
+  if(!phone){
+    contactPhoneInput?.focus();
+    return;
+  }
+
+  const originalText = sendWhatsAppCodeButton.textContent;
+  sendWhatsAppCodeButton.disabled = true;
+  sendWhatsAppCodeButton.textContent = 'جارٍ إرسال الرمز...';
+  try{
+    const response = await fetch('/api/register/send-whatsapp-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ phone })
+    });
+    const result = await readJsonResponse(response);
+    if(!response.ok || !result.ok){
+      throw new Error(result.error || 'تعذر إرسال رمز التحقق حاليًا.');
+    }
+
+    requestedPhone = phone;
+    phoneVerificationToken = '';
+    verifiedPhone = '';
+    if(phoneVerificationCodeInput) phoneVerificationCodeInput.value = '';
+    if(phoneVerificationPanel) phoneVerificationPanel.hidden = false;
+    setPhoneVerificationStatus('sent', 'تم إرسال الرمز');
+    startResendCooldown(result.retryAfterSeconds);
+    phoneVerificationCodeInput?.focus();
+    updateRegistrationAvailability();
+  }catch(error){
+    sendWhatsAppCodeButton.disabled = false;
+    sendWhatsAppCodeButton.textContent = originalText;
+    setPhoneVerificationStatus(
+      'unverified',
+      error instanceof Error ? error.message : 'تعذر إرسال رمز التحقق حاليًا.'
+    );
+  }
+}
+
+async function verifyWhatsAppCode(){
+  if(phoneVerificationRequired !== true) return;
+  const phone = normalizeSaudiMobile(contactPhoneInput?.value);
+  const code = normalizeDigits(phoneVerificationCodeInput?.value)
+    .replace(/\s+/g, '');
+  if(!phone || phone !== requestedPhone){
+    resetPhoneVerification();
+    setPhoneVerificationStatus('unverified', 'أرسل رمزًا للرقم الحالي أولًا');
+    return;
+  }
+  if(!/^\d{6}$/.test(code)){
+    setPhoneVerificationStatus('sent', 'أدخل رمزًا صحيحًا من 6 أرقام');
+    phoneVerificationCodeInput?.focus();
+    return;
+  }
+
+  const originalText = verifyWhatsAppCodeButton.textContent;
+  verifyWhatsAppCodeButton.disabled = true;
+  verifyWhatsAppCodeButton.textContent = 'جارٍ التحقق...';
+  try{
+    const response = await fetch('/api/register/verify-whatsapp-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ phone, code })
+    });
+    const result = await readJsonResponse(response);
+    if(!response.ok || !result.ok || !result.verificationToken){
+      throw new Error(result.error || 'تعذر التحقق من الرمز.');
+    }
+
+    phoneVerificationToken = result.verificationToken;
+    verifiedPhone = phone;
+    phoneVerificationCodeInput.disabled = true;
+    verifyWhatsAppCodeButton.textContent = 'تم التحقق';
+    sendWhatsAppCodeButton.disabled = true;
+    sendWhatsAppCodeButton.textContent = 'تم التحقق من الرقم';
+    setPhoneVerificationStatus('verified', 'تم التحقق من الرقم');
+    updateRegistrationAvailability();
+  }catch(error){
+    verifyWhatsAppCodeButton.disabled = false;
+    verifyWhatsAppCodeButton.textContent = originalText;
+    setPhoneVerificationStatus(
+      'sent',
+      error instanceof Error ? error.message : 'تعذر التحقق من الرمز.'
+    );
+  }
 }
 
 function getDisplayName(){
@@ -178,11 +392,17 @@ function setupRegistrationForm(){
   stageSelect.addEventListener('change', updatePreview);
 
   contactPhoneInput.addEventListener('input', () => {
+    if(phoneVerificationRequired && (requestedPhone || verifiedPhone || phoneVerificationToken)){
+      resetPhoneVerification();
+    }
     if(contactPhoneError?.textContent){
       validateContactPhone();
     }
   });
   contactPhoneInput.addEventListener('blur', validateContactPhone);
+  sendWhatsAppCodeButton?.addEventListener('click', requestWhatsAppCode);
+  verifyWhatsAppCodeButton?.addEventListener('click', verifyWhatsAppCode);
+  updateRegistrationAvailability();
 
   schoolRegisterForm.addEventListener('submit', async event => {
     event.preventDefault();
@@ -225,6 +445,17 @@ function setupRegistrationForm(){
       return;
     }
 
+    if(
+      phoneVerificationRequired === true && (
+      !phoneVerificationToken ||
+      registrationContactPhone !== verifiedPhone
+      )
+    ){
+      setPhoneVerificationStatus('unverified', 'تحقق من رقم الجوال قبل إنشاء ملف المدرسة');
+      sendWhatsAppCodeButton.focus();
+      return;
+    }
+
     const submitButton =
       event.submitter ||
       event.currentTarget.querySelector('button[type="submit"]');
@@ -237,19 +468,24 @@ function setupRegistrationForm(){
         submitButton.textContent = 'جارٍ تسجيل المدرسة...';
       }
 
+      const registrationPayload = {
+        schoolName: name,
+        schoolStage: stage,
+        educationDepartment,
+        registrationContactName,
+        registrationContactPhone,
+        registrationContactConsent: true
+      };
+      if(phoneVerificationRequired === true){
+        registrationPayload.phoneVerificationToken = phoneVerificationToken;
+      }
+
       const response = await fetch('/api/schools/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json; charset=utf-8'
         },
-        body: JSON.stringify({
-          schoolName: name,
-          schoolStage: stage,
-          educationDepartment,
-          registrationContactName,
-          registrationContactPhone,
-          registrationContactConsent: true
-        })
+        body: JSON.stringify(registrationPayload)
       });
 
       const responseText = await response.text();
@@ -273,7 +509,13 @@ function setupRegistrationForm(){
             ? duplicateSchoolMessage
             : result.error === 'Too many requests'
             ? 'تم تجاوز عدد محاولات التسجيل المسموح بها. حاول بعد قليل.'
+            : result.code === 'phone_verification_required'
+            ? 'انتهت صلاحية التحقق. أرسل رمزًا جديدًا ثم حاول مرة أخرى.'
             : result.error || 'تعذر تسجيل المدرسة حاليًا. حاول مرة أخرى.';
+
+        if(result.code === 'phone_verification_required'){
+          resetPhoneVerification();
+        }
 
         throw new Error(message);
       }
@@ -317,9 +559,9 @@ function setupRegistrationForm(){
       );
     } finally {
       if (submitButton) {
-        submitButton.disabled = false;
         submitButton.textContent = originalButtonText;
       }
+      updateRegistrationAvailability();
     }
   });
 }
@@ -384,4 +626,5 @@ applyPreferredTheme();
 bindGuestEntry('guestEntry');
 bindGuestEntry('emptyGuestEntry');
 setupRegistrationForm();
+loadPhoneVerificationConfig();
 setupLoginPage();

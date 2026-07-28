@@ -23,10 +23,16 @@ const chatSecurityModuleUrl = new globalThis.URL(
   '../src/chat-security.mjs',
   import.meta.url
 ).href;
-const loadableRegistrationSource = registrationSource.replace(
-  "'./chat-security.mjs'",
-  JSON.stringify(chatSecurityModuleUrl)
-);
+const registrationVerificationModuleUrl = new globalThis.URL(
+  '../src/registration-verification.mjs',
+  import.meta.url
+).href;
+const loadableRegistrationSource = registrationSource
+  .replace("'./chat-security.mjs'", JSON.stringify(chatSecurityModuleUrl))
+  .replace(
+    "'./registration-verification.mjs'",
+    JSON.stringify(registrationVerificationModuleUrl)
+  );
 const registrationWorkerModule =
   `data:text/javascript;base64,${Buffer.from(loadableRegistrationSource).toString('base64')}`;
 const { default: registrationWorker } = await import(registrationWorkerModule);
@@ -51,9 +57,17 @@ const registrationContactMigration = await readFile(
   ),
   'utf8'
 );
+const phoneVerificationMigration = await readFile(
+  new globalThis.URL(
+    '../migrations/platform/0005_create_phone_verifications.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
 
 const TOKEN = 'test-admin-token';
 const BASE_URL = 'https://example.test';
+const PHONE_VERIFICATION_SECRET = 'test-only-phone-verification-secret';
 
 function createDatabase(){
   const statements = [];
@@ -192,6 +206,7 @@ function createEnv(database = createDatabase().binding){
 
 function createRegistrationDatabase(){
   const rows = [];
+  const verifications = [];
   const statements = [];
   let inserted = 0;
 
@@ -202,11 +217,19 @@ function createRegistrationDatabase(){
 
   return {
     rows,
+    verifications,
     statements,
     get inserted(){
       return inserted;
     },
     binding: {
+      async batch(preparedStatements){
+        const results = [];
+        for(const preparedStatement of preparedStatements){
+          results.push(await preparedStatement.run());
+        }
+        return results;
+      },
       prepare(sql){
         const statement = { sql, values: [] };
         statements.push(statement);
@@ -227,6 +250,125 @@ function createRegistrationDatabase(){
               };
             }
 
+            if(sql.startsWith('INSERT INTO phone_verifications')){
+              return {
+                async run(){
+                  const [phone, codeHash, purpose, expiresAt, sentAt, cooldownElapsed] = values;
+                  const existing = verifications.find((row) => (
+                    row.phone === phone && row.purpose === purpose
+                  ));
+                  if(existing && existing.last_sent_at > cooldownElapsed){
+                    return { success: true, meta: { changes: 0 } };
+                  }
+                  const next = existing || {
+                    id: verifications.length + 1,
+                    phone,
+                    purpose,
+                    created_at: sentAt
+                  };
+                  Object.assign(next, {
+                    code_hash: codeHash,
+                    expires_at: expiresAt,
+                    attempts: 0,
+                    last_sent_at: sentAt,
+                    verified_at: null,
+                    verification_token_hash: null,
+                    token_expires_at: null,
+                    consumed_at: null,
+                    updated_at: sentAt
+                  });
+                  if(!existing) verifications.push(next);
+                  return { success: true, meta: { changes: 1 } };
+                }
+              };
+            }
+
+            if(sql.startsWith('SELECT id, code_hash, expires_at, attempts')){
+              return {
+                async first(){
+                  const [phone, purpose] = values;
+                  return verifications.find((row) => (
+                    row.phone === phone && row.purpose === purpose
+                  )) || null;
+                }
+              };
+            }
+
+            if(sql.startsWith('UPDATE phone_verifications SET code_hash')){
+              return {
+                async run(){
+                  const [codeHash, expiresAt, lastSentAt, phone, purpose, previousHash] = values;
+                  const row = verifications.find((item) => (
+                    item.phone === phone &&
+                    item.purpose === purpose &&
+                    item.code_hash === previousHash
+                  ));
+                  if(!row) return { success: true, meta: { changes: 0 } };
+                  Object.assign(row, {
+                    code_hash: codeHash,
+                    expires_at: expiresAt,
+                    last_sent_at: lastSentAt,
+                    updated_at: expiresAt
+                  });
+                  return { success: true, meta: { changes: 1 } };
+                }
+              };
+            }
+
+            if(sql.startsWith('UPDATE phone_verifications SET attempts')){
+              return {
+                async first(){
+                  const [updatedAt, id, maximumAttempts] = values;
+                  const row = verifications.find((item) => (
+                    item.id === id && item.attempts < maximumAttempts
+                  ));
+                  if(!row) return null;
+                  row.attempts += 1;
+                  row.updated_at = updatedAt;
+                  return { attempts: row.attempts };
+                }
+              };
+            }
+
+            if(sql.startsWith('UPDATE phone_verifications SET verified_at')){
+              return {
+                async run(){
+                  const [verifiedAt, tokenHash, tokenExpiresAt, id] = values;
+                  const row = verifications.find((item) => item.id === id);
+                  if(!row) return { success: true, meta: { changes: 0 } };
+                  Object.assign(row, {
+                    verified_at: verifiedAt,
+                    verification_token_hash: tokenHash,
+                    token_expires_at: tokenExpiresAt,
+                    consumed_at: null,
+                    updated_at: verifiedAt
+                  });
+                  return { success: true, meta: { changes: 1 } };
+                }
+              };
+            }
+
+            if(sql.startsWith('UPDATE phone_verifications SET consumed_at')){
+              return {
+                async run(){
+                  const [now, phone, purpose, tokenHash, publicId] = values;
+                  const row = verifications.find((item) => (
+                    item.phone === phone &&
+                    item.purpose === purpose &&
+                    item.verification_token_hash === tokenHash &&
+                    item.verified_at &&
+                    item.token_expires_at > now &&
+                    !item.consumed_at &&
+                    (!publicId || rows.some((school) => school.public_id === publicId))
+                  ));
+                  if(!row) return { success: true, meta: { changes: 0 } };
+                  row.consumed_at = now;
+                  row.updated_at = now;
+                  return { success: true, meta: { changes: 1 } };
+                }
+              };
+            }
+
             if(sql.startsWith('INSERT INTO schools')){
               return {
                 async run(){
@@ -236,6 +378,17 @@ function createRegistrationDatabase(){
                   const educationDepartment = values[4];
                   const registrationContactName = values[5];
                   const registrationContactPhone = values[6];
+                  const requiresVerification = values.length > 7;
+                  const verification = requiresVerification
+                    ? verifications.find((row) => (
+                      row.phone === values[7] &&
+                      row.purpose === values[8] &&
+                      row.verification_token_hash === values[9] &&
+                      row.verified_at &&
+                      row.token_expires_at > values[10] &&
+                      !row.consumed_at
+                    ))
+                    : true;
                   const duplicate = rows.some((row) => (
                     normalizeIdentityPart(row.school_name) === normalizeIdentityPart(schoolName) &&
                     row.school_stage === schoolStage &&
@@ -243,7 +396,7 @@ function createRegistrationDatabase(){
                       normalizeIdentityPart(educationDepartment)
                   ));
 
-                  if(duplicate){
+                  if(duplicate || !verification){
                     return { success: true, meta: { changes: 0 } };
                   }
 
@@ -269,9 +422,30 @@ function createRegistrationDatabase(){
   };
 }
 
-async function registerSchool(database, payload){
+function createRegistrationEnv(database, { phoneVerificationRequired = true } = {}){
+  const sentCodes = [];
+  return {
+    sentCodes,
+    env: {
+      PLATFORM_DB: database.binding,
+      PHONE_VERIFICATION_REQUIRED: phoneVerificationRequired ? 'true' : 'false',
+      PHONE_VERIFICATION_SECRET,
+      WHATSAPP_OTP_SENDER: async ({ phone, code }) => {
+        sentCodes.push({ phone, code });
+      },
+      RATE_LIMIT_SALT: 'test-rate-limit-salt',
+      CHAT_RATE_LIMITER: {
+        async limit(){
+          return { success: true };
+        }
+      }
+    }
+  };
+}
+
+async function registrationRequest(env, path, payload){
   const response = await registrationWorker.fetch(new globalThis.Request(
-    `${BASE_URL}/api/schools/register`,
+    `${BASE_URL}${path}`,
     {
       method: 'POST',
       headers: {
@@ -280,20 +454,54 @@ async function registerSchool(database, payload){
       },
       body: JSON.stringify(payload)
     }
-  ), {
-    PLATFORM_DB: database.binding,
-    RATE_LIMIT_SALT: 'test-rate-limit-salt',
-    CHAT_RATE_LIMITER: {
-      async limit(){
-        return { success: true };
-      }
-    }
-  });
+  ), env);
 
   return {
     response,
     body: await response.json()
   };
+}
+
+async function registrationConfigRequest(env){
+  const response = await registrationWorker.fetch(new globalThis.Request(
+    `${BASE_URL}/api/register/verification-config`
+  ), env);
+  return { response, body: await response.json() };
+}
+
+async function verifyRegistrationPhone(database, phone){
+  const session = createRegistrationEnv(database);
+  const digits = String(phone).replace(/\D/g, '');
+  const normalizedPhone = digits.startsWith('05')
+    ? `+966${digits.slice(1)}`
+    : `+${digits}`;
+  const existing = database.verifications.find((row) => row.phone === normalizedPhone);
+  if(existing){
+    existing.last_sent_at = new Date(Date.now() - 61000).toISOString();
+  }
+  const sent = await registrationRequest(
+    session.env,
+    '/api/register/send-whatsapp-code',
+    { phone }
+  );
+  assert.equal(sent.response.status, 200);
+  const code = session.sentCodes.at(-1)?.code;
+  assert.match(code, /^\d{6}$/);
+  const verified = await registrationRequest(
+    session.env,
+    '/api/register/verify-whatsapp-code',
+    { phone, code }
+  );
+  assert.equal(verified.response.status, 200);
+  return verified.body.verificationToken;
+}
+
+async function registerSchool(database, payload, phoneVerificationToken = ''){
+  const session = createRegistrationEnv(database);
+  return registrationRequest(session.env, '/api/schools/register', {
+    ...payload,
+    phoneVerificationToken
+  });
 }
 
 function adminRequest(path, options = {}){
@@ -470,6 +678,12 @@ test('defines school identity uniqueness and admin audit migrations safely', () 
 
   assert.match(registrationContactMigration, /ADD COLUMN registration_contact_name TEXT/);
   assert.match(registrationContactMigration, /ADD COLUMN registration_contact_phone TEXT/);
+
+  assert.match(phoneVerificationMigration, /CREATE TABLE IF NOT EXISTS phone_verifications/);
+  assert.match(phoneVerificationMigration, /code_hash TEXT NOT NULL/);
+  assert.match(phoneVerificationMigration, /verification_token_hash TEXT/);
+  assert.match(phoneVerificationMigration, /consumed_at TEXT/);
+  assert.doesNotMatch(phoneVerificationMigration, /otp_code|plain_code/i);
 });
 
 test('protects the admin page from caching and indexing', async () => {
@@ -501,7 +715,11 @@ test('prevents only duplicate normalized school identities', async () => {
     registrationContactConsent: true
   };
 
-  const first = await registerSchool(database, baseSchool);
+  const firstToken = await verifyRegistrationPhone(
+    database,
+    baseSchool.registrationContactPhone
+  );
+  const first = await registerSchool(database, baseSchool, firstToken);
   assert.equal(first.response.status, 201);
   assert.equal(first.body.ok, true);
   assert.equal(Object.hasOwn(first.body.school, 'registrationContactName'), false);
@@ -532,7 +750,7 @@ test('prevents only duplicate normalized school identities', async () => {
   const differentDepartment = await registerSchool(database, {
     ...baseSchool,
     educationDepartment: 'إدارة التعليم بمنطقة الحدود الشمالية'
-  });
+  }, await verifyRegistrationPhone(database, baseSchool.registrationContactPhone));
   assert.equal(differentDepartment.response.status, 201);
   assert.equal(database.inserted, 2);
 
@@ -540,14 +758,14 @@ test('prevents only duplicate normalized school identities', async () => {
     ...baseSchool,
     stage: 'ابتدائية',
     schoolStage: undefined
-  });
+  }, await verifyRegistrationPhone(database, baseSchool.registrationContactPhone));
   assert.equal(differentStage.response.status, 201);
   assert.equal(database.inserted, 3);
 
   const differentName = await registerSchool(database, {
     ...baseSchool,
     schoolName: 'اختبار 3'
-  });
+  }, await verifyRegistrationPhone(database, baseSchool.registrationContactPhone));
   assert.equal(differentName.response.status, 201);
   assert.equal(database.inserted, 4);
 
@@ -586,14 +804,201 @@ test('requires contact consent and a valid Saudi mobile number', async () => {
   assert.equal(missingConsent.body.code, 'registration_contact_consent_required');
   assert.equal(database.inserted, 0);
 
+  const unverifiedPhone = await registerSchool(database, {
+    ...baseSchool,
+    registrationContactPhone: '+966512345678'
+  });
+  assert.equal(unverifiedPhone.response.status, 403);
+  assert.equal(unverifiedPhone.body.code, 'phone_verification_required');
+
   for(const [index, phone] of ['966512345678', '+966512345678'].entries()){
     const acceptedDatabase = createRegistrationDatabase();
+    const verificationToken = await verifyRegistrationPhone(acceptedDatabase, phone);
     const accepted = await registerSchool(acceptedDatabase, {
       ...baseSchool,
       schoolName: `مدرسة التواصل ${index + 2}`,
       registrationContactPhone: phone
-    });
+    }, verificationToken);
     assert.equal(accepted.response.status, 201);
     assert.equal(acceptedDatabase.rows[0].registration_contact_phone, '+966512345678');
   }
+});
+
+test('keeps phone verification disabled by default without querying its table', async () => {
+  const baseSchool = {
+    schoolName: 'مدرسة التسجيل دون واتساب',
+    schoolStage: 'ابتدائية',
+    educationDepartment: 'إدارة التعليم بمنطقة الرياض',
+    registrationContactName: '',
+    registrationContactPhone: '0500000000',
+    registrationContactConsent: true
+  };
+
+  for(const flagValue of [undefined, 'false', '', 'TRUE']){
+    const database = createRegistrationDatabase();
+    const session = createRegistrationEnv(database, { phoneVerificationRequired: false });
+    if(flagValue === undefined){
+      delete session.env.PHONE_VERIFICATION_REQUIRED;
+    }else{
+      session.env.PHONE_VERIFICATION_REQUIRED = flagValue;
+    }
+    delete session.env.PHONE_VERIFICATION_SECRET;
+    delete session.env.WHATSAPP_OTP_SENDER;
+
+    const config = await registrationConfigRequest(session.env);
+    assert.equal(config.response.status, 200);
+    assert.equal(config.body.phoneVerificationRequired, false);
+
+    const disabledOtp = await registrationRequest(
+      session.env,
+      '/api/register/send-whatsapp-code',
+      { phone: baseSchool.registrationContactPhone }
+    );
+    assert.equal(disabledOtp.response.status, 409);
+    assert.equal(disabledOtp.body.code, 'phone_verification_not_required');
+    const disabledVerification = await registrationRequest(
+      session.env,
+      '/api/register/verify-whatsapp-code',
+      { phone: baseSchool.registrationContactPhone, code: '123456' }
+    );
+    assert.equal(disabledVerification.response.status, 409);
+    assert.equal(disabledVerification.body.code, 'phone_verification_not_required');
+
+    const registered = await registrationRequest(
+      session.env,
+      '/api/schools/register',
+      baseSchool
+    );
+    assert.equal(registered.response.status, 201);
+    assert.equal(registered.body.ok, true);
+    assert.equal(
+      database.statements.some(({ sql }) => sql.includes('phone_verifications')),
+      false
+    );
+  }
+});
+
+test('reports phone verification as enabled only for the exact true flag', async () => {
+  const database = createRegistrationDatabase();
+  const session = createRegistrationEnv(database);
+  const config = await registrationConfigRequest(session.env);
+
+  assert.equal(config.response.status, 200);
+  assert.equal(config.body.phoneVerificationRequired, true);
+  assert.equal(config.response.headers.get('Cache-Control'), 'no-store');
+  assert.deepEqual(Object.keys(config.body), ['phoneVerificationRequired']);
+});
+
+test('secures the WhatsApp verification lifecycle without real provider secrets', async () => {
+  const database = createRegistrationDatabase();
+  const session = createRegistrationEnv(database);
+  const phone = '0512345678';
+
+  const invalidPhone = await registrationRequest(
+    session.env,
+    '/api/register/send-whatsapp-code',
+    { phone: '12345' }
+  );
+  assert.equal(invalidPhone.response.status, 400);
+  assert.equal(invalidPhone.body.code, 'invalid_registration_contact_phone');
+
+  const unconfiguredEnv = createRegistrationEnv(database).env;
+  delete unconfiguredEnv.WHATSAPP_OTP_SENDER;
+  const unconfigured = await registrationRequest(
+    unconfiguredEnv,
+    '/api/register/send-whatsapp-code',
+    { phone }
+  );
+  assert.equal(unconfigured.response.status, 503);
+  assert.equal(unconfigured.body.code, 'whatsapp_verification_unavailable');
+
+  const sent = await registrationRequest(
+    session.env,
+    '/api/register/send-whatsapp-code',
+    { phone }
+  );
+  assert.equal(sent.response.status, 200);
+  assert.equal(sent.body.status, 'code_sent');
+  const code = session.sentCodes.at(-1).code;
+  assert.match(code, /^\d{6}$/);
+  assert.notEqual(database.verifications[0].code_hash, code);
+  assert.match(database.verifications[0].code_hash, /^[a-f0-9]{64}$/);
+
+  const cooldown = await registrationRequest(
+    session.env,
+    '/api/register/send-whatsapp-code',
+    { phone }
+  );
+  assert.equal(cooldown.response.status, 429);
+  assert.equal(cooldown.body.code, 'verification_code_cooldown');
+
+  const wrongCode = code === '999999' ? '888888' : '999999';
+  for(let attempt = 1; attempt <= 5; attempt += 1){
+    const wrong = await registrationRequest(
+      session.env,
+      '/api/register/verify-whatsapp-code',
+      { phone, code: wrongCode }
+    );
+    assert.equal(wrong.response.status, attempt === 5 ? 429 : 400);
+  }
+  const locked = await registrationRequest(
+    session.env,
+    '/api/register/verify-whatsapp-code',
+    { phone, code }
+  );
+  assert.equal(locked.response.status, 429);
+  assert.equal(locked.body.code, 'verification_attempts_exceeded');
+
+  database.verifications[0].last_sent_at = new Date(Date.now() - 61000).toISOString();
+  await registrationRequest(session.env, '/api/register/send-whatsapp-code', { phone });
+  const expiringCode = session.sentCodes.at(-1).code;
+  database.verifications[0].expires_at = new Date(Date.now() - 1000).toISOString();
+  const expired = await registrationRequest(
+    session.env,
+    '/api/register/verify-whatsapp-code',
+    { phone, code: expiringCode }
+  );
+  assert.equal(expired.response.status, 410);
+  assert.equal(expired.body.code, 'verification_code_expired');
+
+  database.verifications[0].last_sent_at = new Date(Date.now() - 61000).toISOString();
+  await registrationRequest(session.env, '/api/register/send-whatsapp-code', { phone });
+  const validCode = session.sentCodes.at(-1).code;
+  const verified = await registrationRequest(
+    session.env,
+    '/api/register/verify-whatsapp-code',
+    { phone, code: validCode }
+  );
+  assert.equal(verified.response.status, 200);
+  assert.equal(verified.body.status, 'verified');
+  assert.ok(verified.body.verificationToken);
+  assert.notEqual(
+    database.verifications[0].verification_token_hash,
+    verified.body.verificationToken
+  );
+
+  const registrationPayload = {
+    schoolName: 'مدرسة التحقق الأحادي',
+    schoolStage: 'ابتدائية',
+    educationDepartment: 'إدارة التعليم بمنطقة الرياض',
+    registrationContactName: '',
+    registrationContactPhone: phone,
+    registrationContactConsent: true,
+    phoneVerificationToken: verified.body.verificationToken
+  };
+  const registered = await registrationRequest(
+    session.env,
+    '/api/schools/register',
+    registrationPayload
+  );
+  assert.equal(registered.response.status, 201);
+  assert.ok(database.verifications[0].consumed_at);
+
+  const reused = await registrationRequest(
+    session.env,
+    '/api/schools/register',
+    { ...registrationPayload, schoolName: 'مدرسة إعادة استخدام الرمز' }
+  );
+  assert.equal(reused.response.status, 403);
+  assert.equal(reused.body.code, 'phone_verification_required');
 });

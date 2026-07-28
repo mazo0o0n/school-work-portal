@@ -99,6 +99,21 @@
               <p class="field-hint" id="registrationContactPhoneHint">يقبل الرقم بصيغة 05xxxxxxxx أو +9665xxxxxxxx أو 9665xxxxxxxx.</p>
               <p class="field-error" id="registrationContactPhoneError" aria-live="polite"></p>
             </div>
+            <div class="phone-verification" id="phoneVerification" aria-labelledby="phoneVerificationTitle" hidden>
+              <div class="phone-verification-heading">
+                <strong id="phoneVerificationTitle">التحقق من رقم الجوال</strong>
+                <span id="phoneVerificationStatus" class="verification-status is-unverified" role="status" aria-live="polite">لم يتم التحقق</span>
+              </div>
+              <button class="verification-action" id="sendWhatsAppCode" type="button">إرسال رمز التحقق عبر واتساب</button>
+              <div class="verification-code-panel" id="phoneVerificationPanel" hidden>
+                <label for="phoneVerificationCode">رمز التحقق</label>
+                <div class="verification-code-actions">
+                  <input id="phoneVerificationCode" name="phoneVerificationCode" type="text" inputmode="numeric" autocomplete="one-time-code" dir="ltr" pattern="[0-9]{6}" maxlength="6" placeholder="000000">
+                  <button class="verification-action secondary" id="verifyWhatsAppCode" type="button">تحقق من الرمز</button>
+                </div>
+                <p class="field-hint">صلاحية الرمز 10 دقائق، وبحد أقصى 5 محاولات.</p>
+              </div>
+            </div>
           </div>
           <p class="contact-privacy-note">تُستخدم بيانات التواصل فقط عند الحاجة لمراجعة طلب التسجيل، ولا تظهر في التقارير المطبوعة.</p>
         </section>
@@ -107,7 +122,7 @@
           <span>أقر بأن بيانات المدرسة صحيحة، وأوافق على استخدام رقم الجوال للتواصل بخصوص طلب التسجيل فقط.</span>
         </label>
         <div class="actions">
-          <button type="submit">إنشاء ملف المدرسة</button>
+          <button id="registrationSubmit" type="submit" disabled>إنشاء ملف المدرسة</button>
           <button class="guest-btn" id="guestEntry" type="button">الدخول كزائر</button>
         </div>
         <a class="alternate-entry" href="login.html">لديك مدرسة مسجلة؟ الدخول إلى المدرسة المسجلة</a>

@@ -318,6 +318,74 @@ select:focus{
   outline:2px solid rgba(13,169,166,.24);
   outline-offset:1px;
 }
+.phone-verification{
+  display:grid;
+  gap:11px;
+  padding:13px;
+  border:1px solid rgba(13,169,166,.2);
+  border-radius:13px;
+  background:rgba(255,255,255,.72);
+}
+.phone-verification[hidden]{
+  display:none;
+}
+.phone-verification-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  color:#163746;
+  font-size:13px;
+}
+.verification-status{
+  display:inline-flex;
+  align-items:center;
+  min-height:28px;
+  padding:3px 10px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.verification-status.is-unverified{
+  color:#8a3d1d;
+  background:#fff0e8;
+}
+.verification-status.is-sent{
+  color:#075c79;
+  background:#e8f6fb;
+}
+.verification-status.is-verified{
+  color:#087249;
+  background:#e7f8ef;
+}
+.verification-action{
+  min-height:46px;
+  padding-inline:15px;
+  box-shadow:none;
+  font-size:13px;
+}
+.verification-action.secondary{
+  color:#075d6a;
+  border:1px solid rgba(13,169,166,.28);
+  background:#eaf8f6;
+}
+.verification-code-panel{
+  display:grid;
+  gap:8px;
+  padding-top:11px;
+  border-top:1px solid rgba(13,169,166,.14);
+}
+.verification-code-actions{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+}
+.verification-code-actions input{
+  min-height:46px;
+  text-align:center;
+  letter-spacing:.18em;
+}
 .registration-consent{
   display:flex;
   align-items:flex-start;
@@ -454,6 +522,14 @@ button:hover,
 .primary-link:hover{
   transform:translateY(-1px);
   filter:brightness(1.03);
+}
+button:disabled,
+button:disabled:hover{
+  cursor:not-allowed;
+  opacity:.56;
+  transform:none;
+  filter:none;
+  box-shadow:none;
 }
 button:focus-visible,
 a:focus-visible,
@@ -745,6 +821,13 @@ select:focus-visible{
     padding:10px 11px;
     font-size:12px;
   }
+  .phone-verification-heading{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+  .verification-code-actions{
+    grid-template-columns:1fr;
+  }
   .stored-school-card,
   .empty-school-state{
     padding:18px 14px;
@@ -791,6 +874,30 @@ html[data-theme="dark"] .data-use-note{
 html[data-theme="dark"] .contact-section{
   border-color:#254959;
   background:linear-gradient(145deg,#0d202d,#102631);
+}
+html[data-theme="dark"] .phone-verification{
+  border-color:#285565;
+  background:rgba(7,25,35,.62);
+}
+html[data-theme="dark"] .phone-verification-heading{
+  color:#eef8fa;
+}
+html[data-theme="dark"] .verification-status.is-unverified{
+  color:#ffc4a8;
+  background:#43291f;
+}
+html[data-theme="dark"] .verification-status.is-sent{
+  color:#a9e5f7;
+  background:#153746;
+}
+html[data-theme="dark"] .verification-status.is-verified{
+  color:#9ee6c3;
+  background:#153b2d;
+}
+html[data-theme="dark"] .verification-action.secondary{
+  color:#bcefed;
+  border-color:#285565;
+  background:#12323a;
 }
 html[data-theme="dark"] .school-data-section{
   border-color:#276f78;

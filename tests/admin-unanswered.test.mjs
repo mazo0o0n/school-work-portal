@@ -5,10 +5,16 @@ import test from 'node:test';
 
 const workerSource = await readFile(new globalThis.URL('../src/index.js', import.meta.url), 'utf8');
 const securityModuleUrl = new globalThis.URL('../src/chat-security.mjs', import.meta.url).href;
-const loadableWorkerSource = workerSource.replace(
-  "'./chat-security.mjs'",
-  JSON.stringify(securityModuleUrl)
-);
+const registrationVerificationModuleUrl = new globalThis.URL(
+  '../src/registration-verification.mjs',
+  import.meta.url
+).href;
+const loadableWorkerSource = workerSource
+  .replace("'./chat-security.mjs'", JSON.stringify(securityModuleUrl))
+  .replace(
+    "'./registration-verification.mjs'",
+    JSON.stringify(registrationVerificationModuleUrl)
+  );
 const workerModuleUrl = `data:text/javascript;base64,${Buffer.from(loadableWorkerSource).toString('base64')}`;
 const { default: worker } = await import(workerModuleUrl);
 const wranglerSource = await readFile(

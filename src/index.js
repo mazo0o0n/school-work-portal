@@ -7,6 +7,23 @@ import {
   parseChatRequest,
   sanitizeQuestionForStorage
 } from './chat-security.mjs';
+import {
+  PHONE_OTP_COOLDOWN_MS,
+  PHONE_OTP_MAX_ATTEMPTS,
+  PHONE_OTP_TTL_MS,
+  PHONE_VERIFICATION_PURPOSE,
+  PHONE_VERIFICATION_TOKEN_TTL_MS,
+  WhatsAppOtpError,
+  generateOtpCode,
+  generateVerificationToken,
+  hashOtpCode,
+  hashVerificationToken,
+  isOtpCode,
+  isPhoneVerificationRequired,
+  isWhatsappOtpConfigured,
+  normalizeSaudiMobile,
+  sendWhatsAppOtp
+} from './registration-verification.mjs';
 
 const FALLBACK_ANSWER = CHAT_FALLBACK_ANSWER;
 const EMBEDDING_MODEL = '@cf/qwen/qwen3-embedding-0.6b';
@@ -1147,21 +1164,6 @@ function normalizeSchoolField(value) {
     .replace(/\s+/g, ' ');
 }
 
-function normalizeSaudiMobile(value) {
-  const compact = String(value ?? '')
-    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
-    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
-    .replace(/[\s().-]/g, '');
-
-  if (/^05\d{8}$/.test(compact)) {
-    return `+966${compact.slice(1)}`;
-  }
-  if (/^9665\d{8}$/.test(compact)) {
-    return `+${compact}`;
-  }
-  return /^\+9665\d{8}$/.test(compact) ? compact : '';
-}
-
 function duplicateSchoolError() {
   return new SchoolRegistrationError(
     'duplicate_school',
@@ -1262,6 +1264,246 @@ async function readSchoolRegistrationBody(request) {
   }
 }
 
+function phoneVerificationUnavailableResponse() {
+  return jsonResponse({
+    error: 'خدمة التحقق غير مفعلة حاليًا.',
+    code: 'whatsapp_verification_unavailable'
+  }, 503);
+}
+
+function phoneVerificationDisabledResponse() {
+  return jsonResponse({
+    error: 'التحقق من رقم الجوال عبر واتساب غير مفعّل حاليًا.',
+    code: 'phone_verification_not_required'
+  }, 409);
+}
+
+function phoneVerificationConfigResponse(env) {
+  return jsonResponse({
+    phoneVerificationRequired: isPhoneVerificationRequired(env)
+  }, 200, { 'Cache-Control': 'no-store' });
+}
+
+function getPhoneVerificationSecret(env) {
+  return String(env.PHONE_VERIFICATION_SECRET || '').trim();
+}
+
+async function invalidateUnsentOtp(database, phone, codeHash) {
+  const now = new Date().toISOString();
+  const cooldownElapsed = new Date(Date.now() - PHONE_OTP_COOLDOWN_MS).toISOString();
+  await database.prepare(
+    'UPDATE phone_verifications ' +
+    'SET code_hash = ?1, expires_at = ?2, last_sent_at = ?3, updated_at = ?2 ' +
+    'WHERE phone = ?4 AND purpose = ?5 AND code_hash = ?6'
+  ).bind('', now, cooldownElapsed, phone, PHONE_VERIFICATION_PURPOSE, codeHash).run();
+}
+
+async function handleSendWhatsAppCode(request, env) {
+  if (!isPhoneVerificationRequired(env)) {
+    return phoneVerificationDisabledResponse();
+  }
+
+  if (!env.PLATFORM_DB || typeof env.PLATFORM_DB.prepare !== 'function') {
+    return jsonResponse({
+      error: 'خدمة التحقق غير متاحة حاليًا.',
+      code: 'verification_database_unavailable'
+    }, 503);
+  }
+
+  const secret = getPhoneVerificationSecret(env);
+  if (!secret || !isWhatsappOtpConfigured(env)) {
+    return phoneVerificationUnavailableResponse();
+  }
+
+  try {
+    const body = await readSchoolRegistrationBody(request);
+    const phone = normalizeSaudiMobile(body.phone);
+    if (!phone) {
+      throw new SchoolRegistrationError(
+        'invalid_registration_contact_phone',
+        400,
+        'أدخل رقم جوال سعودي صحيحًا.'
+      );
+    }
+
+    const code = generateOtpCode();
+    const codeHash = await hashOtpCode(secret, phone, code);
+    const now = new Date();
+    const sentAt = now.toISOString();
+    const expiresAt = new Date(now.getTime() + PHONE_OTP_TTL_MS).toISOString();
+    const cooldownElapsed = new Date(now.getTime() - PHONE_OTP_COOLDOWN_MS).toISOString();
+    const reservation = await env.PLATFORM_DB.prepare(
+      'INSERT INTO phone_verifications ' +
+      '(phone, code_hash, purpose, expires_at, attempts, last_sent_at, verified_at, ' +
+      'verification_token_hash, token_expires_at, consumed_at, created_at, updated_at) ' +
+      'VALUES (?1, ?2, ?3, ?4, 0, ?5, NULL, NULL, NULL, NULL, ?5, ?5) ' +
+      'ON CONFLICT(phone, purpose) DO UPDATE SET ' +
+      'code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0, ' +
+      'last_sent_at = excluded.last_sent_at, verified_at = NULL, ' +
+      'verification_token_hash = NULL, token_expires_at = NULL, consumed_at = NULL, ' +
+      'updated_at = excluded.updated_at ' +
+      'WHERE phone_verifications.last_sent_at <= ?6'
+    ).bind(
+      phone,
+      codeHash,
+      PHONE_VERIFICATION_PURPOSE,
+      expiresAt,
+      sentAt,
+      cooldownElapsed
+    ).run();
+
+    if (Number(reservation?.meta?.changes || 0) !== 1) {
+      return jsonResponse({
+        error: 'انتظر 60 ثانية قبل طلب رمز جديد.',
+        code: 'verification_code_cooldown'
+      }, 429, { 'Retry-After': '60' });
+    }
+
+    try {
+      await sendWhatsAppOtp(env, phone, code);
+    } catch (error) {
+      await invalidateUnsentOtp(env.PLATFORM_DB, phone, codeHash);
+      if (error instanceof WhatsAppOtpError) {
+        return jsonResponse({ error: error.message, code: error.code }, error.status);
+      }
+      return jsonResponse({
+        error: 'تعذر إرسال رمز التحقق حاليًا. حاول مرة أخرى لاحقًا.',
+        code: 'whatsapp_send_failed'
+      }, 502);
+    }
+
+    return jsonResponse({
+      ok: true,
+      status: 'code_sent',
+      expiresInSeconds: PHONE_OTP_TTL_MS / 1000,
+      retryAfterSeconds: PHONE_OTP_COOLDOWN_MS / 1000
+    });
+  } catch (error) {
+    if (error instanceof SchoolRegistrationError) {
+      return jsonResponse({ error: error.message, code: error.code }, error.status);
+    }
+    return jsonResponse({
+      error: 'تعذر تجهيز رمز التحقق حاليًا.',
+      code: 'verification_request_failed'
+    }, 500);
+  }
+}
+
+async function handleVerifyWhatsAppCode(request, env) {
+  if (!isPhoneVerificationRequired(env)) {
+    return phoneVerificationDisabledResponse();
+  }
+
+  if (!env.PLATFORM_DB || typeof env.PLATFORM_DB.prepare !== 'function') {
+    return jsonResponse({
+      error: 'خدمة التحقق غير متاحة حاليًا.',
+      code: 'verification_database_unavailable'
+    }, 503);
+  }
+
+  const secret = getPhoneVerificationSecret(env);
+  if (!secret) return phoneVerificationUnavailableResponse();
+
+  try {
+    const body = await readSchoolRegistrationBody(request);
+    const phone = normalizeSaudiMobile(body.phone);
+    const code = String(body.code || '').trim();
+    if (!phone) {
+      throw new SchoolRegistrationError(
+        'invalid_registration_contact_phone',
+        400,
+        'أدخل رقم جوال سعودي صحيحًا.'
+      );
+    }
+    if (!isOtpCode(code)) {
+      throw new SchoolRegistrationError(
+        'invalid_verification_code',
+        400,
+        'أدخل رمز تحقق صحيحًا من 6 أرقام.'
+      );
+    }
+
+    const row = await env.PLATFORM_DB.prepare(
+      'SELECT id, code_hash, expires_at, attempts FROM phone_verifications ' +
+      'WHERE phone = ?1 AND purpose = ?2 LIMIT 1'
+    ).bind(phone, PHONE_VERIFICATION_PURPOSE).first();
+
+    if (!row) {
+      throw new SchoolRegistrationError(
+        'verification_code_not_requested',
+        404,
+        'اطلب رمز تحقق جديدًا أولًا.'
+      );
+    }
+
+    const attempts = Number(row.attempts || 0);
+    if (attempts >= PHONE_OTP_MAX_ATTEMPTS) {
+      throw new SchoolRegistrationError(
+        'verification_attempts_exceeded',
+        429,
+        'تم تجاوز عدد محاولات التحقق. اطلب رمزًا جديدًا.'
+      );
+    }
+    if (!row.expires_at || Date.parse(row.expires_at) <= Date.now()) {
+      throw new SchoolRegistrationError(
+        'verification_code_expired',
+        410,
+        'انتهت صلاحية رمز التحقق. اطلب رمزًا جديدًا.'
+      );
+    }
+
+    const submittedHash = await hashOtpCode(secret, phone, code);
+    const matches = await timingSafeTokenEqual(submittedHash, row.code_hash);
+    if (!matches) {
+      const attemptResult = await env.PLATFORM_DB.prepare(
+        'UPDATE phone_verifications SET attempts = attempts + 1, updated_at = ?1 ' +
+        'WHERE id = ?2 AND attempts < ?3 RETURNING attempts'
+      ).bind(
+        new Date().toISOString(),
+        row.id,
+        PHONE_OTP_MAX_ATTEMPTS
+      ).first();
+      const nextAttempts = Number(
+        attemptResult?.attempts ?? PHONE_OTP_MAX_ATTEMPTS
+      );
+      const exhausted = nextAttempts >= PHONE_OTP_MAX_ATTEMPTS;
+      return jsonResponse({
+        error: exhausted
+          ? 'تم تجاوز عدد محاولات التحقق. اطلب رمزًا جديدًا.'
+          : 'رمز التحقق غير صحيح.',
+        code: exhausted ? 'verification_attempts_exceeded' : 'invalid_verification_code',
+        attemptsRemaining: Math.max(0, PHONE_OTP_MAX_ATTEMPTS - nextAttempts)
+      }, exhausted ? 429 : 400);
+    }
+
+    const verificationToken = generateVerificationToken();
+    const tokenHash = await hashVerificationToken(verificationToken);
+    const verifiedAt = new Date();
+    const tokenExpiresAt = new Date(
+      verifiedAt.getTime() + PHONE_VERIFICATION_TOKEN_TTL_MS
+    ).toISOString();
+    await env.PLATFORM_DB.prepare(
+      'UPDATE phone_verifications SET verified_at = ?1, verification_token_hash = ?2, ' +
+      'token_expires_at = ?3, consumed_at = NULL, updated_at = ?1 WHERE id = ?4'
+    ).bind(verifiedAt.toISOString(), tokenHash, tokenExpiresAt, row.id).run();
+
+    return jsonResponse({
+      ok: true,
+      status: 'verified',
+      verificationToken,
+      expiresInSeconds: PHONE_VERIFICATION_TOKEN_TTL_MS / 1000
+    });
+  } catch (error) {
+    if (error instanceof SchoolRegistrationError) {
+      return jsonResponse({ error: error.message, code: error.code }, error.status);
+    }
+    return jsonResponse({
+      error: 'تعذر التحقق من الرمز حاليًا.',
+      code: 'verification_failed'
+    }, 500);
+  }
+}
+
 async function handleSchoolRegistration(request, env) {
   if (!env.PLATFORM_DB || typeof env.PLATFORM_DB.prepare !== 'function') {
     return jsonResponse({
@@ -1285,6 +1527,7 @@ async function handleSchoolRegistration(request, env) {
       normalizeSaudiMobile(body.registrationContactPhone);
     const registrationContactConsent =
       body.registrationContactConsent === true;
+    const phoneVerificationToken = String(body.phoneVerificationToken || '').trim();
 
     if (schoolName.length < 2 || schoolName.length > 120) {
       throw new SchoolRegistrationError(
@@ -1346,6 +1589,18 @@ async function handleSchoolRegistration(request, env) {
       throw duplicateSchoolError();
     }
 
+    const phoneVerificationRequired = isPhoneVerificationRequired(env);
+    if (
+      phoneVerificationRequired &&
+      (!phoneVerificationToken || phoneVerificationToken.length > 200)
+    ) {
+      throw new SchoolRegistrationError(
+        'phone_verification_required',
+        403,
+        'يجب التحقق من رقم الجوال قبل إنشاء ملف المدرسة.'
+      );
+    }
+
     const publicIdBytes = new Uint8Array(16);
     crypto.getRandomValues(publicIdBytes);
     const publicId = 'school_' + bytesToBase64Url(publicIdBytes);
@@ -1357,7 +1612,18 @@ async function handleSchoolRegistration(request, env) {
     const editToken = bytesToBase64Url(editTokenBytes);
     const editTokenHash = await hashSchoolEditToken(editToken);
 
-    const result = await env.PLATFORM_DB.prepare(
+    const verificationTokenHash = phoneVerificationRequired
+      ? await hashVerificationToken(phoneVerificationToken)
+      : '';
+    const verificationClaimedAt = new Date().toISOString();
+    const verificationCondition = phoneVerificationRequired
+      ? 'AND EXISTS (' +
+        'SELECT 1 FROM phone_verifications ' +
+        'WHERE phone = ?8 AND purpose = ?9 AND verification_token_hash = ?10 ' +
+        'AND verified_at IS NOT NULL AND token_expires_at > ?11 AND consumed_at IS NULL' +
+        ') '
+      : '';
+    const insertSchoolStatement = env.PLATFORM_DB.prepare(
       'INSERT INTO schools ' +
       '(public_id, edit_token_hash, school_name, school_stage, education_department, ' +
       'registration_contact_name, registration_contact_phone) ' +
@@ -1368,7 +1634,8 @@ async function handleSchoolRegistration(request, env) {
       'AND school_stage = ?4 ' +
       'AND lower(trim(education_department)) = lower(trim(?5)) ' +
       'LIMIT 1' +
-      ')'
+      ') ' +
+      verificationCondition
     )
       .bind(
         publicId,
@@ -1377,16 +1644,65 @@ async function handleSchoolRegistration(request, env) {
         schoolStage,
         educationDepartment,
         registrationContactName || null,
-        registrationContactPhone
-      )
-      .run();
+        registrationContactPhone,
+        ...(phoneVerificationRequired ? [
+          registrationContactPhone,
+          PHONE_VERIFICATION_PURPOSE,
+          verificationTokenHash,
+          verificationClaimedAt
+        ] : [])
+      );
+
+    let result;
+    let claimResult = null;
+    if (phoneVerificationRequired) {
+      const consumeVerificationStatement = env.PLATFORM_DB.prepare(
+        'UPDATE phone_verifications SET consumed_at = ?1, updated_at = ?1 ' +
+        'WHERE phone = ?2 AND purpose = ?3 AND verification_token_hash = ?4 ' +
+        'AND verified_at IS NOT NULL AND token_expires_at > ?1 AND consumed_at IS NULL ' +
+        'AND EXISTS (SELECT 1 FROM schools WHERE public_id = ?5)'
+      ).bind(
+        verificationClaimedAt,
+        registrationContactPhone,
+        PHONE_VERIFICATION_PURPOSE,
+        verificationTokenHash,
+        publicId
+      );
+      [result, claimResult] = await env.PLATFORM_DB.batch([
+        insertSchoolStatement,
+        consumeVerificationStatement
+      ]);
+    } else {
+      result = await insertSchoolStatement.run();
+    }
 
     if (result?.success === false) {
       throw new Error('D1 insert failed.');
     }
 
     if (Number(result?.meta?.changes || 0) === 0) {
+      if (phoneVerificationRequired && Number(claimResult?.meta?.changes || 0) === 0) {
+        if (!await schoolIdentityExists(
+          env.PLATFORM_DB,
+          schoolName,
+          schoolStage,
+          educationDepartment
+        )) {
+          throw new SchoolRegistrationError(
+            'phone_verification_required',
+            403,
+            'يجب التحقق من رقم الجوال قبل إنشاء ملف المدرسة.'
+          );
+        }
+      }
       throw duplicateSchoolError();
+    }
+
+    if (
+      phoneVerificationRequired &&
+      Number(claimResult?.meta?.changes || 0) !== 1
+    ) {
+      throw new Error('Phone verification claim failed.');
     }
 
     return jsonResponse({
@@ -1442,6 +1758,58 @@ export default {
       return handleAdminUnanswered(request, env);
     }
 
+    if(url.pathname === '/api/register/verification-config'){
+      if(request.method !== 'GET'){
+        return jsonResponse(
+          { error: 'Method not allowed' },
+          405,
+          { 'Allow': 'GET' }
+        );
+      }
+
+      return phoneVerificationConfigResponse(env);
+    }
+
+
+    if(
+      url.pathname === '/api/register/send-whatsapp-code' ||
+      url.pathname === '/api/register/verify-whatsapp-code'
+    ){
+      if(request.method !== 'POST'){
+        return jsonResponse(
+          { error: 'Method not allowed' },
+          405,
+          { 'Allow': 'POST' }
+        );
+      }
+
+      if(!isPhoneVerificationRequired(env)){
+        return phoneVerificationDisabledResponse();
+      }
+
+      const scope = url.pathname.endsWith('send-whatsapp-code')
+        ? 'whatsapp-code-send'
+        : 'whatsapp-code-verify';
+      const rateLimitStatus = await isRateLimitAllowed(
+        request,
+        env,
+        scope,
+        env.CHAT_RATE_LIMITER
+      );
+      if(rateLimitStatus === RATE_LIMIT_UNAVAILABLE){
+        return rateLimitUnavailableResponse(scope);
+      }
+      if(rateLimitStatus === RATE_LIMIT_DENIED){
+        return jsonResponse({
+          error: 'تم تجاوز الحد المسموح مؤقتًا. انتظر دقيقة ثم حاول مرة أخرى.',
+          code: 'rate_limited'
+        }, 429, { 'Retry-After': String(RATE_LIMIT_WINDOW_SECONDS) });
+      }
+
+      return url.pathname.endsWith('send-whatsapp-code')
+        ? handleSendWhatsAppCode(request, env)
+        : handleVerifyWhatsAppCode(request, env);
+    }
 
     if(url.pathname === '/api/schools/register'){
       if(request.method !== 'POST'){
