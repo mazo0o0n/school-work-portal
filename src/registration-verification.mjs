@@ -98,6 +98,21 @@ export function normalizeWhatsAppGraphApiVersion(value) {
   return /^v[1-9]\d{0,2}\.\d{1,2}$/.test(version) ? version : '';
 }
 
+export function normalizeWhatsAppPhoneNumberId(value) {
+  const phoneNumberId = String(value || '').trim();
+  return /^\d{5,30}$/.test(phoneNumberId) ? phoneNumberId : '';
+}
+
+export function normalizeWhatsAppTemplateName(value) {
+  const templateName = String(value || '').trim();
+  return /^[a-z0-9_]{1,512}$/.test(templateName) ? templateName : '';
+}
+
+export function normalizeWhatsAppTemplateLanguage(value) {
+  const language = String(value || '').trim();
+  return /^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(language) ? language : '';
+}
+
 function getWhatsAppTestAllowedPhones(env) {
   return String(env?.WHATSAPP_TEST_ALLOWED_PHONES || '')
     .split(/[\s,;]+/)
@@ -115,10 +130,9 @@ export function isWhatsAppTestRecipientAllowed(env, phone) {
 
 export function buildWhatsAppMessagesEndpoint(env) {
   const version = normalizeWhatsAppGraphApiVersion(env?.WHATSAPP_GRAPH_API_VERSION);
-  if (!version) return '';
-  return `https://graph.facebook.com/${version}/${encodeURIComponent(
-    String(env?.WHATSAPP_PHONE_NUMBER_ID || '').trim()
-  )}/messages`;
+  const phoneNumberId = normalizeWhatsAppPhoneNumberId(env?.WHATSAPP_PHONE_NUMBER_ID);
+  if (!version || !phoneNumberId) return '';
+  return `https://graph.facebook.com/${version}/${phoneNumberId}/messages`;
 }
 
 export function buildWhatsAppOtpTemplatePayload(env, phone, code) {
@@ -127,8 +141,10 @@ export function buildWhatsAppOtpTemplatePayload(env, phone, code) {
     to: phone.replace(/^\+/, ''),
     type: 'template',
     template: {
-      name: String(env.WHATSAPP_OTP_TEMPLATE_NAME),
-      language: { code: String(env.WHATSAPP_TEMPLATE_LANGUAGE) },
+      name: normalizeWhatsAppTemplateName(env.WHATSAPP_OTP_TEMPLATE_NAME),
+      language: {
+        code: normalizeWhatsAppTemplateLanguage(env.WHATSAPP_TEMPLATE_LANGUAGE)
+      },
       // Must match the approved Meta template before any real send is attempted.
       components: [{
         type: 'body',
@@ -147,11 +163,18 @@ export function isWhatsappOtpConfigured(env) {
   }
   if (typeof env.WHATSAPP_OTP_SENDER === 'function') return true;
   return Boolean(
-    env.WHATSAPP_ACCESS_TOKEN &&
-    env.WHATSAPP_PHONE_NUMBER_ID &&
-    env.WHATSAPP_OTP_TEMPLATE_NAME &&
-    env.WHATSAPP_TEMPLATE_LANGUAGE &&
+    String(env.WHATSAPP_ACCESS_TOKEN || '').trim() &&
+    normalizeWhatsAppPhoneNumberId(env.WHATSAPP_PHONE_NUMBER_ID) &&
+    normalizeWhatsAppTemplateName(env.WHATSAPP_OTP_TEMPLATE_NAME) &&
+    normalizeWhatsAppTemplateLanguage(env.WHATSAPP_TEMPLATE_LANGUAGE) &&
     normalizeWhatsAppGraphApiVersion(env.WHATSAPP_GRAPH_API_VERSION)
+  );
+}
+
+export function isPhoneVerificationFlowConfigured(env) {
+  return Boolean(
+    String(env?.PHONE_VERIFICATION_SECRET || '').trim() &&
+    isWhatsappOtpConfigured(env)
   );
 }
 

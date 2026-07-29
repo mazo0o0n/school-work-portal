@@ -19,9 +19,9 @@ import {
   hashOtpCode,
   hashVerificationToken,
   isOtpCode,
+  isPhoneVerificationFlowConfigured,
   isPhoneVerificationRequired,
   isWhatsAppTestRecipientAllowed,
-  isWhatsappOtpConfigured,
   normalizeSaudiMobile,
   sendWhatsAppOtp
 } from './registration-verification.mjs';
@@ -1361,7 +1361,7 @@ async function handleSendWhatsAppCode(request, env) {
   }
 
   const secret = getPhoneVerificationSecret(env);
-  if (!secret || !isWhatsappOtpConfigured(env)) {
+  if (!isPhoneVerificationFlowConfigured(env)) {
     return phoneVerificationUnavailableResponse();
   }
 

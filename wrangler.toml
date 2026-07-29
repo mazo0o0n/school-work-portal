@@ -47,3 +47,50 @@ binding = "PLATFORM_DB"
 database_name = "school-platform-db"
 database_id = "8b9e3fb9-ff59-4834-82e9-01c45409d484"
 migrations_dir = "migrations/platform"
+
+[env.preview]
+name = "snowy-mud-6e88-preview"
+workers_dev = true
+routes = []
+
+[env.preview.assets]
+directory = "."
+binding = "ASSETS"
+
+[env.preview.vars]
+PHONE_VERIFICATION_REQUIRED = "false"
+WHATSAPP_TEST_MODE = "true"
+WHATSAPP_GRAPH_API_VERSION = ""
+WHATSAPP_PHONE_NUMBER_ID = ""
+WHATSAPP_OTP_TEMPLATE_NAME = ""
+WHATSAPP_TEMPLATE_LANGUAGE = ""
+
+[env.preview.secrets]
+required = [
+  "PHONE_VERIFICATION_SECRET",
+  "WHATSAPP_ACCESS_TOKEN",
+  "WHATSAPP_TEST_ALLOWED_PHONES",
+  "RATE_LIMIT_SALT",
+  "ADMIN_API_TOKEN"
+]
+
+[[env.preview.ratelimits]]
+name = "CHAT_RATE_LIMITER"
+namespace_id = "251001"
+
+  [env.preview.ratelimits.simple]
+  limit = 20
+  period = 60
+
+[[env.preview.ratelimits]]
+name = "ADMIN_AUTH_RATE_LIMITER"
+namespace_id = "251002"
+
+  [env.preview.ratelimits.simple]
+  limit = 5
+  period = 60
+
+[[env.preview.d1_databases]]
+binding = "PLATFORM_DB"
+database_name = "school-platform-db-whatsapp-preview"
+migrations_dir = "migrations/platform"

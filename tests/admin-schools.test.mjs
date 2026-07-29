@@ -31,9 +31,13 @@ const {
   WHATSAPP_REQUEST_TIMEOUT_MS,
   buildWhatsAppMessagesEndpoint,
   buildWhatsAppOtpTemplatePayload,
+  isPhoneVerificationFlowConfigured,
   isWhatsAppTestRecipientAllowed,
   isWhatsappOtpConfigured,
   normalizeWhatsAppGraphApiVersion,
+  normalizeWhatsAppPhoneNumberId,
+  normalizeWhatsAppTemplateLanguage,
+  normalizeWhatsAppTemplateName,
   sendWhatsAppOtp
 } = await import(registrationVerificationModuleUrl);
 const loadableRegistrationSource = registrationSource
@@ -563,12 +567,38 @@ test('builds the versioned Meta endpoint and current one-parameter template payl
   for(const invalidVersion of ['', '99.0', 'v99', 'v99.0/messages', 'latest']){
     assert.equal(normalizeWhatsAppGraphApiVersion(invalidVersion), '');
   }
+  assert.equal(normalizeWhatsAppPhoneNumberId('123456789012345'), '123456789012345');
+  assert.equal(normalizeWhatsAppPhoneNumberId('phone-number-id'), '');
+  assert.equal(normalizeWhatsAppTemplateName('school_registration_test'), 'school_registration_test');
+  assert.equal(normalizeWhatsAppTemplateName('School Registration'), '');
+  assert.equal(normalizeWhatsAppTemplateLanguage('ar'), 'ar');
+  assert.equal(normalizeWhatsAppTemplateLanguage('ar_SA'), 'ar_SA');
+  assert.equal(normalizeWhatsAppTemplateLanguage('ar-SA'), '');
 
   assert.equal(
     buildWhatsAppMessagesEndpoint(META_TEST_ENV),
     'https://graph.facebook.com/v99.0/123456789012345/messages'
   );
   assert.equal(isWhatsappOtpConfigured(META_TEST_ENV), true);
+  assert.equal(isPhoneVerificationFlowConfigured(META_TEST_ENV), false);
+  assert.equal(isPhoneVerificationFlowConfigured({
+    ...META_TEST_ENV,
+    PHONE_VERIFICATION_SECRET
+  }), true);
+  for(const missingKey of [
+    'WHATSAPP_ACCESS_TOKEN',
+    'WHATSAPP_PHONE_NUMBER_ID',
+    'WHATSAPP_OTP_TEMPLATE_NAME',
+    'WHATSAPP_TEMPLATE_LANGUAGE',
+    'WHATSAPP_GRAPH_API_VERSION'
+  ]){
+    const incompleteEnv = {
+      ...META_TEST_ENV,
+      PHONE_VERIFICATION_SECRET
+    };
+    delete incompleteEnv[missingKey];
+    assert.equal(isPhoneVerificationFlowConfigured(incompleteEnv), false);
+  }
   assert.equal(isWhatsappOtpConfigured({
     ...META_TEST_ENV,
     WHATSAPP_GRAPH_API_VERSION: 'latest'

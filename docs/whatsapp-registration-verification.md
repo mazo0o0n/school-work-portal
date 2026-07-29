@@ -24,6 +24,7 @@
 - `WHATSAPP_ACCESS_TOKEN`: access token من Meta بصلاحيات WhatsApp اللازمة.
 - `WHATSAPP_TEST_ALLOWED_PHONES`: قائمة أرقام اختبار معتمدة، مفصولة بفواصل أو أسطر. تُعامل كبيانات خاصة بالبيئة ولا توضع في Git.
 - `RATE_LIMIT_SALT`: السر الحالي المستخدم لمفاتيح rate limiting.
+- `ADMIN_API_TOKEN`: رمز مستقل للوصول إلى لوحة الإدارة في Preview.
 
 ### إعدادات غير سرية
 
@@ -71,17 +72,63 @@
 
 هذه الاختبارات تثبت سلوك الكود فقط، ولا تثبت قبول القالب أو وصول رسالة WhatsApp.
 
-## خطة Preview المقترحة
+## البيئات الثلاث
 
-لا توجد بيئة Preview معرفة حاليًا. قبل أي اختبار حقيقي يلزم، بعد موافقة منفصلة:
+- **Local:** تشغيل واختبار على الجهاز فقط. يستخدم الاختبار التكاملي Worker الحقيقي وSQLite مؤقتة مطبقة عليها migrations المنصة، ويحاكي مزود Meta عند حد الإرسال فقط.
+- **Preview:** بيئة Cloudflare مستقبلية معزولة باسم `snowy-mud-6e88-preview` وقاعدة `school-platform-db-whatsapp-preview`. لا تملك custom domain ولا تستخدم قاعدة الإنتاج.
+- **Production:** Worker الإنتاج وbindings الحالية دون تغيير. يبقى WhatsApp معطلًا ما لم تكن قيمة `PHONE_VERIFICATION_REQUIRED` مساوية حرفيًا لـ`true`.
 
-1. تعريف Worker باسم بيئة مستقل.
-2. ربط قاعدة `PLATFORM_DB` اختبارية منفصلة وعدم استخدام قاعدة المدارس الإنتاجية.
-3. تعريف rate limiting وbindings والأسرار للبيئة صراحة.
-4. تطبيق migration جدول التحقق على قاعدة الاختبار فقط.
-5. ضبط `WHATSAPP_TEST_MODE=true` وقائمة سماح تحتوي أرقام الاختبار المعتمدة فقط.
-6. ضبط `PHONE_VERIFICATION_REQUIRED=true` في Preview وحده.
-7. إبقاء إنتاج المنصة معطّلًا حتى اكتمال الاختبار والموافقة.
+بيئة `preview` معرفة في `wrangler.toml` بالميزة معطلة وبوضع الاختبار مفعّل، لكن `database_id` غير موجود حتى إنشاء D1 بعد موافقة مستقلة. لا تحتوي البيئة على AI أو Vectorize أو قاعدة الأسئلة غير المجابة، لتجنب أي اتصال بعيد غير لازم أثناء اختبار التسجيل.
+
+### تصميم Preview
+
+- Worker: `snowy-mud-6e88-preview` عبر `workers.dev` دون route إنتاجي.
+- Static Assets: binding باسم `ASSETS`.
+- D1: binding باسم `PLATFORM_DB` وقاعدة مستقلة باسم `school-platform-db-whatsapp-preview`.
+- Rate limiting: bindings منفصلة للاختبار عن namespaces الإنتاج.
+- `PHONE_VERIFICATION_REQUIRED=false` في أول نشر.
+- `WHATSAPP_TEST_MODE=true` حتى لا يقبل الإرسال إلا أرقام قائمة السماح السرية.
+- حقول Meta غير السرية فارغة حتى اعتماد القالب والرقم والإصدار.
+- يحتوي `[env.preview.secrets]` على أسماء الأسرار المطلوبة فقط، وفق مخطط Wrangler 4 المحلي، دون أي قيم. القيم تضاف تفاعليًا ولا توضع في Git.
+
+## التشغيل المحلي الآمن
+
+يتطلب تشغيل أوامر Wrangler توفر Wrangler 4 محليًا. تستخدم scripts الخيار `--no-install` حتى لا تثبت حزمًا أو تتصل بالشبكة ضمن الفحص:
+
+```powershell
+npm run d1:whatsapp-preview:local:migrate
+npm run dev:whatsapp-preview:local
+npm run test:whatsapp-integration
+```
+
+الأمر الأول يطبق migrations على D1 المحلية فقط، والثاني يشغل Worker محليًا على المنفذ `8788`. اختبار التكامل لا يحتفظ ببيانات: ينشئ SQLite داخل الذاكرة، يطبق migrations الخمس، ثم يغلقها بعد كل حالة.
+
+## إنشاء Preview مستقبلًا — لا تنفذ دون موافقة
+
+الأوامر التالية خطة تشغيلية فقط، ولم تُنفذ أثناء إعداد هذه الوثيقة:
+
+```powershell
+npx wrangler d1 create school-platform-db-whatsapp-preview
+# أضف database_id الناتج إلى [[env.preview.d1_databases]] بعد مراجعته.
+
+npx wrangler secret put PHONE_VERIFICATION_SECRET --env preview
+npx wrangler secret put WHATSAPP_ACCESS_TOKEN --env preview
+npx wrangler secret put WHATSAPP_TEST_ALLOWED_PHONES --env preview
+npx wrangler secret put RATE_LIMIT_SALT --env preview
+npx wrangler secret put ADMIN_API_TOKEN --env preview
+
+npx wrangler d1 migrations apply PLATFORM_DB --env preview --remote
+npx wrangler deploy --env preview
+```
+
+قبل أول نشر، تبقى حقول Meta غير السرية فارغة والميزة معطلة. بعد الحصول على حساب Meta وقالب معتمد ورقم إرسال، تُحدّث فقط قيم Preview التالية ثم تراجع قبل نشر جديد:
+
+- `WHATSAPP_GRAPH_API_VERSION`
+- `WHATSAPP_PHONE_NUMBER_ID`
+- `WHATSAPP_OTP_TEMPLATE_NAME`
+- `WHATSAPP_TEMPLATE_LANGUAGE`
+
+بعد نجاح النشر المعطل، تُفعّل `PHONE_VERIFICATION_REQUIRED=true` في Preview وحده، ويضاف رقم الاختبار تفاعليًا إلى `WHATSAPP_TEST_ALLOWED_PHONES`. لا يُطلب إدخال أي سر في المحادثة أو في سطر أوامر ظاهر.
 
 ## التفعيل والتراجع
 
@@ -101,6 +148,13 @@
 3. إلغاء access token الخاص ببيئة الاختبار عند إنهائها.
 4. إزالة Worker وقاعدة وموارد Preview فقط بعد التأكد من عدم الحاجة إلى بياناتها.
 
+بعد موافقة مستقلة والتأكد من عدم وجود بيانات مطلوبة، تكون أوامر إزالة موارد الاختبار المستقبلية:
+
+```powershell
+npx wrangler delete --name snowy-mud-6e88-preview
+npx wrangler d1 delete school-platform-db-whatsapp-preview
+```
+
 ## ما لا يعد اختبارًا حقيقيًا
 
 - نجاح mock sender.
@@ -109,3 +163,9 @@
 - نجاح E2E مع اعتراض endpoints داخل المتصفح.
 
 الاختبار الحقيقي يبدأ فقط بعد إرسال رسالة من Preview المعزول إلى رقم اختبار معتمد، ثم إتمام التحقق والتسجيل ومراجعة المدرسة في لوحة الإدارة.
+
+## حالة الأيام 6–10
+
+مكتمل برمجيًا: توليد OTP آمن، تخزين hash، حدود الصلاحية والمحاولات، token أحادي الاستخدام، إبطال الرمز بعد فشل المزود، timeout، Graph API version، التحقق من إعدادات القالب، قائمة السماح، Feature Flag، حدود body، والاختبارات المحلية ذات SQL الفعلي.
+
+غير مكتمل تشغيليًا: إنشاء موارد Preview البعيدة، إضافة أسرارها، اعتماد قالب Meta، إضافة رقم الإرسال، إرسال رسالة حقيقية، والتحقق من وصولها. لذلك لا تعد الأيام 6–10 مغلقة تشغيليًا قبل هذا الاختبار الحقيقي والموافقة الصريحة.
