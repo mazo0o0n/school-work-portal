@@ -43,3 +43,5 @@ stylelint-report.*
 # Word templates: block DOCX by default, then allow approved manager reports
 *.docx
 !assets/report-templates/manager-reports/*.docx
+
+wrangler.toml
