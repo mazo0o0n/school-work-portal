@@ -5,9 +5,14 @@ export const PHONE_OTP_TTL_MS = 10 * 60 * 1000;
 export const PHONE_OTP_COOLDOWN_MS = 60 * 1000;
 export const PHONE_OTP_MAX_ATTEMPTS = 5;
 export const PHONE_VERIFICATION_TOKEN_TTL_MS = 10 * 60 * 1000;
+export const WHATSAPP_REQUEST_TIMEOUT_MS = 8 * 1000;
 
 export function isPhoneVerificationRequired(env) {
   return String(env?.PHONE_VERIFICATION_REQUIRED || '').trim() === 'true';
+}
+
+export function isWhatsAppTestMode(env) {
+  return String(env?.WHATSAPP_TEST_MODE || '').trim() === 'true';
 }
 
 export class WhatsAppOtpError extends Error {
@@ -88,17 +93,93 @@ export function isOtpCode(value) {
   return /^\d{6}$/.test(String(value || '').trim());
 }
 
+export function normalizeWhatsAppGraphApiVersion(value) {
+  const version = String(value || '').trim();
+  return /^v[1-9]\d{0,2}\.\d{1,2}$/.test(version) ? version : '';
+}
+
+function getWhatsAppTestAllowedPhones(env) {
+  return String(env?.WHATSAPP_TEST_ALLOWED_PHONES || '')
+    .split(/[\s,;]+/)
+    .map(normalizeSaudiMobile)
+    .filter(Boolean);
+}
+
+export function isWhatsAppTestRecipientAllowed(env, phone) {
+  if (!isWhatsAppTestMode(env)) return true;
+  const normalizedPhone = normalizeSaudiMobile(phone);
+  return Boolean(
+    normalizedPhone && getWhatsAppTestAllowedPhones(env).includes(normalizedPhone)
+  );
+}
+
+export function buildWhatsAppMessagesEndpoint(env) {
+  const version = normalizeWhatsAppGraphApiVersion(env?.WHATSAPP_GRAPH_API_VERSION);
+  if (!version) return '';
+  return `https://graph.facebook.com/${version}/${encodeURIComponent(
+    String(env?.WHATSAPP_PHONE_NUMBER_ID || '').trim()
+  )}/messages`;
+}
+
+export function buildWhatsAppOtpTemplatePayload(env, phone, code) {
+  return {
+    messaging_product: 'whatsapp',
+    to: phone.replace(/^\+/, ''),
+    type: 'template',
+    template: {
+      name: String(env.WHATSAPP_OTP_TEMPLATE_NAME),
+      language: { code: String(env.WHATSAPP_TEMPLATE_LANGUAGE) },
+      // Must match the approved Meta template before any real send is attempted.
+      components: [{
+        type: 'body',
+        parameters: [{ type: 'text', text: code }]
+      }]
+    }
+  };
+}
+
 export function isWhatsappOtpConfigured(env) {
+  if (
+    isWhatsAppTestMode(env) &&
+    getWhatsAppTestAllowedPhones(env).length === 0
+  ) {
+    return false;
+  }
   if (typeof env.WHATSAPP_OTP_SENDER === 'function') return true;
   return Boolean(
     env.WHATSAPP_ACCESS_TOKEN &&
     env.WHATSAPP_PHONE_NUMBER_ID &&
     env.WHATSAPP_OTP_TEMPLATE_NAME &&
-    env.WHATSAPP_TEMPLATE_LANGUAGE
+    env.WHATSAPP_TEMPLATE_LANGUAGE &&
+    normalizeWhatsAppGraphApiVersion(env.WHATSAPP_GRAPH_API_VERSION)
   );
 }
 
-export async function sendWhatsAppOtp(env, phone, code) {
+function whatsappSendFailedError() {
+  return new WhatsAppOtpError(
+    'whatsapp_send_failed',
+    502,
+    'تعذر إرسال رمز التحقق حاليًا. حاول مرة أخرى لاحقًا.'
+  );
+}
+
+export async function sendWhatsAppOtp(
+  env,
+  phone,
+  code,
+  {
+    fetchImpl = globalThis.fetch,
+    timeoutMs = WHATSAPP_REQUEST_TIMEOUT_MS
+  } = {}
+) {
+  if (!isWhatsAppTestRecipientAllowed(env, phone)) {
+    throw new WhatsAppOtpError(
+      'whatsapp_verification_unavailable',
+      503,
+      'خدمة التحقق غير مفعلة حاليًا.'
+    );
+  }
+
   if (typeof env.WHATSAPP_OTP_SENDER === 'function') {
     await env.WHATSAPP_OTP_SENDER({ phone, code });
     return;
@@ -112,35 +193,28 @@ export async function sendWhatsAppOtp(env, phone, code) {
     );
   }
 
-  const endpoint = `https://graph.facebook.com/${encodeURIComponent(
-    String(env.WHATSAPP_PHONE_NUMBER_ID)
-  )}/messages`;
-  const response = await globalThis.fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to: phone.replace(/^\+/, ''),
-      type: 'template',
-      template: {
-        name: String(env.WHATSAPP_OTP_TEMPLATE_NAME),
-        language: { code: String(env.WHATSAPP_TEMPLATE_LANGUAGE) },
-        components: [{
-          type: 'body',
-          parameters: [{ type: 'text', text: code }]
-        }]
-      }
-    })
-  });
+  const endpoint = buildWhatsAppMessagesEndpoint(env);
+  const controller = new globalThis.AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  let response;
+
+  try {
+    response = await fetchImpl(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(buildWhatsAppOtpTemplatePayload(env, phone, code)),
+      signal: controller.signal
+    });
+  } catch {
+    throw whatsappSendFailedError();
+  } finally {
+    globalThis.clearTimeout(timeout);
+  }
 
   if (!response.ok) {
-    throw new WhatsAppOtpError(
-      'whatsapp_send_failed',
-      502,
-      'تعذر إرسال رمز التحقق حاليًا. حاول مرة أخرى لاحقًا.'
-    );
+    throw whatsappSendFailedError();
   }
 }

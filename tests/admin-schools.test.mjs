@@ -27,6 +27,15 @@ const registrationVerificationModuleUrl = new globalThis.URL(
   '../src/registration-verification.mjs',
   import.meta.url
 ).href;
+const {
+  WHATSAPP_REQUEST_TIMEOUT_MS,
+  buildWhatsAppMessagesEndpoint,
+  buildWhatsAppOtpTemplatePayload,
+  isWhatsAppTestRecipientAllowed,
+  isWhatsappOtpConfigured,
+  normalizeWhatsAppGraphApiVersion,
+  sendWhatsAppOtp
+} = await import(registrationVerificationModuleUrl);
 const loadableRegistrationSource = registrationSource
   .replace("'./chat-security.mjs'", JSON.stringify(chatSecurityModuleUrl))
   .replace(
@@ -68,6 +77,17 @@ const phoneVerificationMigration = await readFile(
 const TOKEN = 'test-admin-token';
 const BASE_URL = 'https://example.test';
 const PHONE_VERIFICATION_SECRET = 'test-only-phone-verification-secret';
+const META_TEST_ENV = Object.freeze({
+  WHATSAPP_ACCESS_TOKEN: 'test-only-meta-access-token',
+  WHATSAPP_PHONE_NUMBER_ID: '123456789012345',
+  WHATSAPP_OTP_TEMPLATE_NAME: 'school_registration_test',
+  WHATSAPP_TEMPLATE_LANGUAGE: 'ar',
+  WHATSAPP_GRAPH_API_VERSION: 'v99.0'
+});
+const PUBLIC_VERIFICATION_FAILURE = Object.freeze({
+  error: 'تعذر التحقق من الرمز. اطلب رمزًا جديدًا ثم حاول مرة أخرى.',
+  code: 'verification_code_invalid_or_expired'
+});
 
 function createDatabase(){
   const statements = [];
@@ -333,14 +353,18 @@ function createRegistrationDatabase(){
             if(sql.startsWith('UPDATE phone_verifications SET verified_at')){
               return {
                 async run(){
-                  const [verifiedAt, tokenHash, tokenExpiresAt, id] = values;
-                  const row = verifications.find((item) => item.id === id);
+                  const [verifiedAt, tokenHash, tokenExpiresAt, id, submittedHash] = values;
+                  const row = verifications.find((item) => (
+                    item.id === id && item.code_hash === submittedHash
+                  ));
                   if(!row) return { success: true, meta: { changes: 0 } };
                   Object.assign(row, {
                     verified_at: verifiedAt,
                     verification_token_hash: tokenHash,
                     token_expires_at: tokenExpiresAt,
                     consumed_at: null,
+                    code_hash: '',
+                    expires_at: verifiedAt,
                     updated_at: verifiedAt
                   });
                   return { success: true, meta: { changes: 1 } };
@@ -462,6 +486,26 @@ async function registrationRequest(env, path, payload){
   };
 }
 
+async function rawRegistrationRequest(env, path, body, headers = {}){
+  const response = await registrationWorker.fetch(new globalThis.Request(
+    `${BASE_URL}${path}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '198.51.100.30',
+        ...headers
+      },
+      body
+    }
+  ), env);
+
+  return {
+    response,
+    body: await response.json()
+  };
+}
+
 async function registrationConfigRequest(env){
   const response = await registrationWorker.fetch(new globalThis.Request(
     `${BASE_URL}/api/register/verification-config`
@@ -513,6 +557,134 @@ function adminRequest(path, options = {}){
     }
   });
 }
+
+test('builds the versioned Meta endpoint and current one-parameter template payload', async () => {
+  assert.equal(normalizeWhatsAppGraphApiVersion('v99.0'), 'v99.0');
+  for(const invalidVersion of ['', '99.0', 'v99', 'v99.0/messages', 'latest']){
+    assert.equal(normalizeWhatsAppGraphApiVersion(invalidVersion), '');
+  }
+
+  assert.equal(
+    buildWhatsAppMessagesEndpoint(META_TEST_ENV),
+    'https://graph.facebook.com/v99.0/123456789012345/messages'
+  );
+  assert.equal(isWhatsappOtpConfigured(META_TEST_ENV), true);
+  assert.equal(isWhatsappOtpConfigured({
+    ...META_TEST_ENV,
+    WHATSAPP_GRAPH_API_VERSION: 'latest'
+  }), false);
+  assert.deepEqual(
+    buildWhatsAppOtpTemplatePayload(META_TEST_ENV, '+966500000000', '123456'),
+    {
+      messaging_product: 'whatsapp',
+      to: '966500000000',
+      type: 'template',
+      template: {
+        name: 'school_registration_test',
+        language: { code: 'ar' },
+        components: [{
+          type: 'body',
+          parameters: [{ type: 'text', text: '123456' }]
+        }]
+      }
+    }
+  );
+
+  let capturedRequest;
+  await sendWhatsAppOtp(META_TEST_ENV, '+966500000000', '123456', {
+    fetchImpl: async (url, init) => {
+      capturedRequest = { url, init };
+      return new globalThis.Response('{"messages":[{"id":"test-message-id"}]}', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  });
+  assert.equal(
+    capturedRequest.url,
+    'https://graph.facebook.com/v99.0/123456789012345/messages'
+  );
+  assert.equal(
+    capturedRequest.init.headers.Authorization,
+    `Bearer ${META_TEST_ENV.WHATSAPP_ACCESS_TOKEN}`
+  );
+  assert.deepEqual(
+    JSON.parse(capturedRequest.init.body),
+    buildWhatsAppOtpTemplatePayload(META_TEST_ENV, '+966500000000', '123456')
+  );
+});
+
+test('fails Meta timeout, network, and HTTP errors without provider detail leakage', async () => {
+  assert.ok(WHATSAPP_REQUEST_TIMEOUT_MS > 0 && WHATSAPP_REQUEST_TIMEOUT_MS <= 10000);
+
+  const expectSafeProviderFailure = async (promise) => {
+    await assert.rejects(promise, (error) => {
+      assert.equal(error.code, 'whatsapp_send_failed');
+      assert.equal(error.status, 502);
+      const serialized = JSON.stringify({
+        code: error.code,
+        message: error.message
+      });
+      assert.doesNotMatch(serialized, /123456|test-only-meta-access-token|500000000/);
+      return true;
+    });
+  };
+
+  await expectSafeProviderFailure(sendWhatsAppOtp(
+    META_TEST_ENV,
+    '+966500000000',
+    '123456',
+    {
+      timeoutMs: 5,
+      fetchImpl: async (_url, { signal }) => new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('provider timeout detail')), {
+          once: true
+        });
+      })
+    }
+  ));
+  await expectSafeProviderFailure(sendWhatsAppOtp(
+    META_TEST_ENV,
+    '+966500000000',
+    '123456',
+    { fetchImpl: async () => { throw new Error('provider network detail'); } }
+  ));
+  await expectSafeProviderFailure(sendWhatsAppOtp(
+    META_TEST_ENV,
+    '+966500000000',
+    '123456',
+    {
+      fetchImpl: async () => new globalThis.Response(
+        'provider failure with test-only-meta-access-token',
+        { status: 500 }
+      )
+    }
+  ));
+});
+
+test('restricts test-mode WhatsApp sends to a server-side allowlist', async () => {
+  let sends = 0;
+  const testEnv = {
+    WHATSAPP_TEST_MODE: 'true',
+    WHATSAPP_OTP_SENDER: async () => { sends += 1; }
+  };
+
+  assert.equal(isWhatsAppTestRecipientAllowed(testEnv, '+966500000000'), false);
+  await assert.rejects(
+    sendWhatsAppOtp(testEnv, '+966500000000', '123456'),
+    (error) => error.code === 'whatsapp_verification_unavailable'
+  );
+  assert.equal(sends, 0);
+
+  testEnv.WHATSAPP_TEST_ALLOWED_PHONES = '0500000000';
+  assert.equal(isWhatsAppTestRecipientAllowed(testEnv, '+966500000000'), true);
+  await sendWhatsAppOtp(testEnv, '+966500000000', '123456');
+  assert.equal(sends, 1);
+
+  delete testEnv.WHATSAPP_TEST_MODE;
+  delete testEnv.WHATSAPP_TEST_ALLOWED_PHONES;
+  assert.equal(isWhatsAppTestRecipientAllowed(testEnv, '+966511111111'), true);
+});
 
 test('rejects invalid admin tokens before querying the schools database', async () => {
   const database = createDatabase();
@@ -889,10 +1061,111 @@ test('reports phone verification as enabled only for the exact true flag', async
   assert.deepEqual(Object.keys(config.body), ['phoneVerificationRequired']);
 });
 
+test('limits registration JSON bodies and rejects malformed JSON', async () => {
+  const database = createRegistrationDatabase();
+  const session = createRegistrationEnv(database);
+
+  const malformed = await rawRegistrationRequest(
+    session.env,
+    '/api/register/send-whatsapp-code',
+    '{"phone":'
+  );
+  assert.equal(malformed.response.status, 400);
+  assert.equal(malformed.body.code, 'invalid_json');
+
+  const allowed = await registrationRequest(
+    session.env,
+    '/api/register/send-whatsapp-code',
+    { phone: '0500000000' }
+  );
+  assert.equal(allowed.response.status, 200);
+  assert.equal(allowed.body.status, 'code_sent');
+
+  const oversized = await rawRegistrationRequest(
+    session.env,
+    '/api/register/send-whatsapp-code',
+    JSON.stringify({ phone: '0500000000', padding: 'x'.repeat(5000) })
+  );
+  assert.equal(oversized.response.status, 413);
+  assert.equal(oversized.body.code, 'payload_too_large');
+
+  const declaredOversized = await rawRegistrationRequest(
+    session.env,
+    '/api/register/send-whatsapp-code',
+    '{}',
+    { 'Content-Length': '5000' }
+  );
+  assert.equal(declaredOversized.response.status, 413);
+  assert.equal(declaredOversized.body.code, 'payload_too_large');
+});
+
+test('invalidates a reserved OTP after provider failure without leaking secrets', async () => {
+  const database = createRegistrationDatabase();
+  const session = createRegistrationEnv(database);
+  session.env.WHATSAPP_OTP_SENDER = async () => {
+    throw new Error('provider detail with 123456 and test-only-access-token');
+  };
+
+  const failed = await registrationRequest(
+    session.env,
+    '/api/register/send-whatsapp-code',
+    { phone: '0500000000' }
+  );
+  assert.equal(failed.response.status, 502);
+  assert.equal(failed.body.code, 'whatsapp_send_failed');
+  assert.equal(database.verifications[0].code_hash, '');
+  assert.ok(Date.parse(database.verifications[0].expires_at) <= Date.now());
+  assert.doesNotMatch(
+    JSON.stringify(failed.body),
+    /123456|code_hash|verificationToken|test-only-access-token|500000000/
+  );
+});
+
+test('fails closed when test mode has no approved WhatsApp recipients', async () => {
+  const database = createRegistrationDatabase();
+  const session = createRegistrationEnv(database);
+  session.env.WHATSAPP_TEST_MODE = 'true';
+
+  const response = await registrationRequest(
+    session.env,
+    '/api/register/send-whatsapp-code',
+    { phone: '0500000000' }
+  );
+  assert.equal(response.response.status, 503);
+  assert.equal(response.body.code, 'whatsapp_verification_unavailable');
+  assert.equal(database.verifications.length, 0);
+
+  session.env.WHATSAPP_TEST_ALLOWED_PHONES = '0500000000';
+  const disallowed = await registrationRequest(
+    session.env,
+    '/api/register/send-whatsapp-code',
+    { phone: '0511111111' }
+  );
+  assert.equal(disallowed.response.status, 503);
+  assert.equal(disallowed.body.code, 'whatsapp_verification_unavailable');
+  assert.equal(database.verifications.length, 0);
+});
+
 test('secures the WhatsApp verification lifecycle without real provider secrets', async () => {
   const database = createRegistrationDatabase();
   const session = createRegistrationEnv(database);
   const phone = '0512345678';
+
+  const notRequested = await registrationRequest(
+    session.env,
+    '/api/register/verify-whatsapp-code',
+    { phone, code: '123456' }
+  );
+  assert.equal(notRequested.response.status, 400);
+  assert.deepEqual(notRequested.body, PUBLIC_VERIFICATION_FAILURE);
+
+  const malformedCode = await registrationRequest(
+    session.env,
+    '/api/register/verify-whatsapp-code',
+    { phone, code: '123' }
+  );
+  assert.equal(malformedCode.response.status, 400);
+  assert.deepEqual(malformedCode.body, PUBLIC_VERIFICATION_FAILURE);
 
   const invalidPhone = await registrationRequest(
     session.env,
@@ -939,27 +1212,41 @@ test('secures the WhatsApp verification lifecycle without real provider secrets'
       '/api/register/verify-whatsapp-code',
       { phone, code: wrongCode }
     );
-    assert.equal(wrong.response.status, attempt === 5 ? 429 : 400);
+    assert.equal(wrong.response.status, 400);
+    assert.deepEqual(wrong.body, PUBLIC_VERIFICATION_FAILURE);
+    assert.equal('attemptsRemaining' in wrong.body, false);
   }
   const locked = await registrationRequest(
     session.env,
     '/api/register/verify-whatsapp-code',
     { phone, code }
   );
-  assert.equal(locked.response.status, 429);
-  assert.equal(locked.body.code, 'verification_attempts_exceeded');
+  assert.equal(locked.response.status, 400);
+  assert.deepEqual(locked.body, PUBLIC_VERIFICATION_FAILURE);
 
   database.verifications[0].last_sent_at = new Date(Date.now() - 61000).toISOString();
   await registrationRequest(session.env, '/api/register/send-whatsapp-code', { phone });
-  const expiringCode = session.sentCodes.at(-1).code;
+  let expiringCode = session.sentCodes.at(-1).code;
+  while(expiringCode === code){
+    database.verifications[0].last_sent_at = new Date(Date.now() - 61000).toISOString();
+    await registrationRequest(session.env, '/api/register/send-whatsapp-code', { phone });
+    expiringCode = session.sentCodes.at(-1).code;
+  }
+  const oldCode = await registrationRequest(
+    session.env,
+    '/api/register/verify-whatsapp-code',
+    { phone, code }
+  );
+  assert.equal(oldCode.response.status, 400);
+  assert.deepEqual(oldCode.body, PUBLIC_VERIFICATION_FAILURE);
   database.verifications[0].expires_at = new Date(Date.now() - 1000).toISOString();
   const expired = await registrationRequest(
     session.env,
     '/api/register/verify-whatsapp-code',
     { phone, code: expiringCode }
   );
-  assert.equal(expired.response.status, 410);
-  assert.equal(expired.body.code, 'verification_code_expired');
+  assert.equal(expired.response.status, 400);
+  assert.deepEqual(expired.body, PUBLIC_VERIFICATION_FAILURE);
 
   database.verifications[0].last_sent_at = new Date(Date.now() - 61000).toISOString();
   await registrationRequest(session.env, '/api/register/send-whatsapp-code', { phone });
@@ -972,10 +1259,19 @@ test('secures the WhatsApp verification lifecycle without real provider secrets'
   assert.equal(verified.response.status, 200);
   assert.equal(verified.body.status, 'verified');
   assert.ok(verified.body.verificationToken);
+  assert.equal(database.verifications[0].code_hash, '');
   assert.notEqual(
     database.verifications[0].verification_token_hash,
     verified.body.verificationToken
   );
+
+  const reusedOtp = await registrationRequest(
+    session.env,
+    '/api/register/verify-whatsapp-code',
+    { phone, code: validCode }
+  );
+  assert.equal(reusedOtp.response.status, 400);
+  assert.deepEqual(reusedOtp.body, PUBLIC_VERIFICATION_FAILURE);
 
   const registrationPayload = {
     schoolName: 'مدرسة التحقق الأحادي',
