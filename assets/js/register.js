@@ -152,19 +152,10 @@ async function loadPhoneVerificationConfig(){
       throw new Error('تعذر تحميل إعداد التحقق من رقم الجوال.');
     }
     applyPhoneVerificationConfig(result.phoneVerificationRequired);
-  }catch(error){
-    phoneVerificationRequired = null;
-    if(phoneVerification) phoneVerification.hidden = false;
-    if(sendWhatsAppCodeButton) sendWhatsAppCodeButton.disabled = true;
-    if(phoneVerificationCodeInput) phoneVerificationCodeInput.disabled = true;
-    if(verifyWhatsAppCodeButton) verifyWhatsAppCodeButton.disabled = true;
-    setPhoneVerificationStatus(
-      'unverified',
-      error instanceof Error
-        ? error.message
-        : 'تعذر تحميل إعداد التحقق من رقم الجوال.'
-    );
-    updateRegistrationAvailability();
+  }catch{
+    // الخادم يبقى صاحب القرار عند الإرسال؛ محليًا لا نعطّل التسجيل التقليدي
+    // إذا لم يكن مسار إعداد التحقق متاحًا في خادم الملفات الثابتة.
+    applyPhoneVerificationConfig(false);
   }
 }
 

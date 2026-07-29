@@ -142,6 +142,22 @@ test("يخفي تحقق واتساب عندما يعطله الخادم ويسم
   expect(storage).not.toContain('0500000000');
 });
 
+test("يبقي التسجيل التقليدي متاحًا عند غياب مسار إعداد التحقق محليًا", async ({ page }) => {
+  await mockSchoolRegistrationApiWithoutVerification(page);
+  await page.goto("http://127.0.0.1:4173/register.html");
+
+  await expect(page.locator('#phoneVerification')).toBeHidden();
+  await page.fill('#schoolName', 'مدرسة اختبار محلي');
+  await page.selectOption('#schoolStage', 'ابتدائية');
+  await page.selectOption(
+    '#educationDepartment',
+    'إدارة التعليم بمنطقة المدينة المنورة'
+  );
+  await page.fill('#registrationContactPhone', '0500000000');
+  await page.check('#registrationConsent');
+  await expect(page.locator('#registrationSubmit')).toBeEnabled();
+});
+
 async function mockSchoolRegistrationApiWithoutVerification(page){
   await page.route('**/api/schools/register', async route => {
     await route.fulfill({
