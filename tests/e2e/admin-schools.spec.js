@@ -143,6 +143,9 @@ test('requires typed confirmation, shows audit entries, and clears the admin ses
 
   await expect(page.getByRole('heading', { name: 'جلسة الإدارة' })).toBeVisible();
   await expect(page.getByText('مدرسة الاختبار الإدارية')).toBeVisible();
+  await expect(page.getByPlaceholder(/اسم المدرسة/)).not.toHaveAttribute('placeholder', /الجوال/);
+  await expect(page.locator('.registration-contact-phone')).toHaveCount(0);
+  await expect(page.locator('#schoolsTableBody')).not.toContainText(/undefined|null/);
   await expect(page.getByRole('heading', { name: 'سجل العمليات الإدارية' })).toBeVisible();
   await expect(page.getByText('تغيير حالة مدرسة')).toBeVisible();
   await expect(page.getByLabel('رمز الإدارة')).toBeHidden();

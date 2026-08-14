@@ -154,7 +154,16 @@ function createDatabase(){
       return { results: auditLogs.slice(0, Number(values[0] || auditLogs.length)) };
     }
     if(method === 'all' && sql.includes('FROM schools')){
-      return { results: schools };
+      const selectsPhone = sql
+        .split('FROM schools', 1)[0]
+        .includes('registration_contact_phone');
+      return {
+        results: schools.map((school) => {
+          const item = { ...school };
+          if(!selectsPhone) delete item.registration_contact_phone;
+          return item;
+        })
+      };
     }
     if(method === 'run' && sql.startsWith('UPDATE schools')){
       return { meta: { changes: 1 } };
@@ -206,6 +215,67 @@ function createDatabase(){
   };
 
   return { binding, statements };
+}
+
+function createSchoolSearchDatabase(){
+  const statements = [];
+  const school = {
+    id: 9,
+    public_id: 'school_search_test',
+    school_name: 'مدرسة الخصوصية',
+    school_stage: 'ابتدائية',
+    education_department: 'إدارة التعليم بمنطقة الرياض',
+    registration_contact_name: 'مسؤول الخصوصية',
+    registration_contact_phone: '+966555123456',
+    verification_status: 'verified',
+    created_at: '2026-08-14 10:00:00',
+    updated_at: '2026-08-14 10:00:00'
+  };
+
+  function matches(sql, values){
+    const query = String(values[0] || '').toLowerCase();
+    if(!query) return true;
+    const searchableValues = [];
+    if(sql.includes('school_name')) searchableValues.push(school.school_name);
+    if(sql.includes('education_department')) searchableValues.push(school.education_department);
+    if(sql.includes('registration_contact_name')) searchableValues.push(school.registration_contact_name);
+    if(sql.includes('public_id')) searchableValues.push(school.public_id);
+    if(sql.includes('registration_contact_phone')) searchableValues.push(school.registration_contact_phone);
+    return searchableValues.some((value) => String(value).toLowerCase().includes(query));
+  }
+
+  return {
+    statements,
+    binding: {
+      prepare(sql){
+        const statement = { sql, values: [] };
+        statements.push(statement);
+        return {
+          bind(...values){
+            statement.values = values;
+            return {
+              first: async () => ({ count: matches(sql, values) ? 1 : 0 }),
+              all: async () => ({
+                results: matches(sql, values)
+                  ? [{
+                    id: school.id,
+                    public_id: school.public_id,
+                    school_name: school.school_name,
+                    school_stage: school.school_stage,
+                    education_department: school.education_department,
+                    registration_contact_name: school.registration_contact_name,
+                    verification_status: school.verification_status,
+                    created_at: school.created_at,
+                    updated_at: school.updated_at
+                  }]
+                  : []
+              })
+            };
+          }
+        };
+      }
+    }
+  };
 }
 
 function createEnv(database = createDatabase().binding){
@@ -785,14 +855,48 @@ test('lists schools with filters, sorting, and pagination metadata', async () =>
   assert.equal(body.pagination.limit, 25);
   assert.doesNotMatch(JSON.stringify(body), /edit_token_hash/);
   assert.equal(body.items[0].registration_contact_name, 'مسؤول التسجيل الثاني');
-  assert.equal(body.items[0].registration_contact_phone, '+966512345678');
+  assert.equal(Object.hasOwn(body.items[0], 'registration_contact_phone'), false);
 
   const listStatement = database.statements.find((item) => item.sql.includes('SELECT id, public_id'));
   assert.ok(listStatement);
+  assert.doesNotMatch(listStatement.sql, /registration_contact_phone/);
   assert.match(listStatement.sql, /ORDER BY school_name COLLATE NOCASE ASC, id ASC/);
   assert.ok(listStatement.values.includes('verified'));
   assert.ok(listStatement.values.includes('متوسطة'));
   assert.ok(listStatement.values.includes('اختبار'));
+});
+
+test('excludes phone data and phone matching from admin school search', async () => {
+  for(const query of ['+966555123456', '123456']){
+    const database = createSchoolSearchDatabase();
+    const response = await worker.fetch(
+      adminRequest(`/api/admin/schools?q=${encodeURIComponent(query)}`),
+      createEnv(database.binding)
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.total, 0);
+    assert.deepEqual(body.items, []);
+    assert.doesNotMatch(
+      database.statements.map((statement) => statement.sql).join('\n'),
+      /registration_contact_phone/
+    );
+  }
+
+  for(const query of ['مدرسة الخصوصية', 'إدارة التعليم بمنطقة الرياض']){
+    const database = createSchoolSearchDatabase();
+    const response = await worker.fetch(
+      adminRequest(`/api/admin/schools?q=${encodeURIComponent(query)}`),
+      createEnv(database.binding)
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.total, 1);
+    assert.equal(body.items.length, 1);
+    assert.equal(Object.hasOwn(body.items[0], 'registration_contact_phone'), false);
+  }
 });
 
 test('updates verification status and deletes a school', async () => {

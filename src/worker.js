@@ -231,7 +231,6 @@ function buildSchoolFilters(url){
       instr(lower(COALESCE(school_name, '')), lower(${searchBinding})) > 0 OR
       instr(lower(COALESCE(education_department, '')), lower(${searchBinding})) > 0 OR
       instr(lower(COALESCE(registration_contact_name, '')), lower(${searchBinding})) > 0 OR
-      instr(COALESCE(registration_contact_phone, ''), ${searchBinding}) > 0 OR
       instr(lower(COALESCE(public_id, '')), lower(${searchBinding})) > 0
     )`);
   }
@@ -324,7 +323,7 @@ async function handleSchoolList(request, env){
   const offsetPlaceholder = `?${filters.bindings.length + 2}`;
   const itemsResult = await env.PLATFORM_DB.prepare([
     'SELECT id, public_id, school_name, school_stage, education_department,',
-    'registration_contact_name, registration_contact_phone,',
+    'registration_contact_name,',
     'verification_status, created_at, updated_at',
     'FROM schools',
     filters.where,
