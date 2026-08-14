@@ -347,21 +347,6 @@ function setupRegistrationForm(){
     return;
   }
 
-  const storedSchoolProfile = getStoredSchoolProfile();
-  const isNewSchool = new URLSearchParams(window.location.search).get('new') === '1';
-  if(!isNewSchool){
-    nameInput.value = removeEnglishLetters(
-      readStorage('registeredSchoolBaseName') || storedSchoolProfile.schoolName || ''
-    );
-    stageSelect.value =
-      readStorage('registeredSchoolStage') ||
-      storedSchoolProfile.schoolStage ||
-      storedSchoolProfile.stage ||
-      '';
-    educationDepartmentInput.value = String(
-      storedSchoolProfile.educationDepartment || ''
-    );
-  }
   updatePreview();
 
   nameInput.addEventListener('beforeinput', (event) => {

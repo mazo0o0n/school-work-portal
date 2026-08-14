@@ -11,7 +11,7 @@ test("تسجيل المدرسة وحفظ البيانات والانتقال ل�
   test.setTimeout(15000);
 
   await mockSchoolRegistrationApi(page);
-  await page.goto("http://127.0.0.1:4173/register.html");
+  await page.goto("http://127.0.0.1:4173/register.html?new=1");
 
   const schoolName = "مدرسة اختبار المنصة";
 
