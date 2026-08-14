@@ -80,6 +80,7 @@ const phoneVerificationMigration = await readFile(
 
 const TOKEN = 'test-admin-token';
 const BASE_URL = 'https://example.test';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PHONE_VERIFICATION_SECRET = 'test-only-phone-verification-secret';
 const META_TEST_ENV = Object.freeze({
   WHATSAPP_ACCESS_TOKEN: 'test-only-meta-access-token',
@@ -145,13 +146,35 @@ function createDatabase(){
       created_at: '2026-07-25 10:00:00'
     }
   ];
+  let nextAuditId = 4;
+
+  function appendAuditLog(action, entityType, entityId, metadata){
+    const row = {
+      id: nextAuditId,
+      action,
+      entity_type: entityType,
+      entity_id: String(entityId),
+      result: 'success',
+      metadata_json: JSON.stringify(metadata),
+      created_at: '2026-08-14 12:00:00'
+    };
+    nextAuditId += 1;
+    auditLogs.push(row);
+    return row;
+  }
 
   function execute(sql, values, method){
+    const normalizedSql = sql.trim();
     if(method === 'first' && sql.includes('COUNT(*) AS count')){
       return { count: schools.length };
     }
     if(method === 'all' && sql.includes('FROM audit_logs')){
-      return { results: auditLogs.slice(0, Number(values[0] || auditLogs.length)) };
+      return {
+        results: auditLogs
+          .slice()
+          .sort((left, right) => right.id - left.id)
+          .slice(0, Number(values[0] || auditLogs.length))
+      };
     }
     if(method === 'all' && sql.includes('FROM schools')){
       const selectsPhone = sql
@@ -165,10 +188,64 @@ function createDatabase(){
         })
       };
     }
-    if(method === 'run' && sql.startsWith('UPDATE schools')){
+    if(method === 'run' && normalizedSql.startsWith('INSERT INTO audit_logs')){
+      appendAuditLog(values[0], values[1], values[2], {});
       return { meta: { changes: 1 } };
     }
-    if(method === 'run' && sql.startsWith('DELETE FROM schools')){
+    if(method === 'run' && normalizedSql.startsWith('UPDATE audit_logs')){
+      const [requestId, actorType, action, entityType, targetAction, targetType, targetId] = values;
+      const marker = auditLogs
+        .filter((row) => row.action === action
+          && row.entity_type === entityType
+          && row.entity_id === requestId)
+        .sort((left, right) => right.id - left.id)[0];
+      const target = auditLogs
+        .filter((row) => marker
+          && row.id > marker.id
+          && row.action === targetAction
+          && row.entity_type === targetType
+          && row.entity_id === targetId)
+        .sort((left, right) => left.id - right.id)[0];
+      if(!target) return { meta: { changes: 0 } };
+      target.metadata_json = JSON.stringify({
+        ...JSON.parse(target.metadata_json),
+        request_id: requestId,
+        actor_type: actorType
+      });
+      return { meta: { changes: 1 } };
+    }
+    if(method === 'run' && normalizedSql.startsWith('DELETE FROM audit_logs')){
+      let changes = 0;
+      for(let index = auditLogs.length - 1; index >= 0; index -= 1){
+        if(auditLogs[index].action === values[0]
+          && auditLogs[index].entity_type === values[1]
+          && auditLogs[index].entity_id === values[2]){
+          auditLogs.splice(index, 1);
+          changes += 1;
+        }
+      }
+      return { meta: { changes } };
+    }
+    if(method === 'run' && normalizedSql.startsWith('UPDATE schools')){
+      const school = schools.find((item) => item.id === values[1]);
+      if(!school) return { meta: { changes: 0 } };
+      const previousStatus = school.verification_status;
+      school.verification_status = values[0];
+      if(previousStatus !== values[0]){
+        appendAuditLog('school_status_changed', 'school', school.id, {
+          previous_status: previousStatus,
+          new_status: values[0]
+        });
+      }
+      return { meta: { changes: 1 } };
+    }
+    if(method === 'run' && normalizedSql.startsWith('DELETE FROM schools')){
+      const index = schools.findIndex((item) => item.id === values[0]);
+      if(index < 0) return { meta: { changes: 0 } };
+      appendAuditLog('school_deleted', 'school', schools[index].id, {
+        verification_status: schools[index].verification_status
+      });
+      schools.splice(index, 1);
       return { meta: { changes: 1 } };
     }
     return method === 'all' ? { results: [] } : { meta: { changes: 0 } };
@@ -185,7 +262,8 @@ function createDatabase(){
           return {
             first: async () => execute(sql, values, 'first'),
             all: async () => execute(sql, values, 'all'),
-            run: async () => execute(sql, values, 'run')
+            run: async () => execute(sql, values, 'run'),
+            executeBatch: async () => execute(sql, values, 'run')
           };
         },
         all: async () => {
@@ -210,11 +288,17 @@ function createDatabase(){
       };
     },
     async batch(preparedStatements){
-      return Promise.all(preparedStatements.map((statement) => statement.all()));
+      const results = [];
+      for(const statement of preparedStatements){
+        results.push(await (typeof statement.executeBatch === 'function'
+          ? statement.executeBatch()
+          : statement.all()));
+      }
+      return results;
     }
   };
 
-  return { binding, statements };
+  return { binding, statements, schools, auditLogs };
 }
 
 function createSchoolSearchDatabase(){
@@ -942,6 +1026,116 @@ test('updates verification status and deletes a school', async () => {
   const deleteBody = await deleteResponse.json();
   assert.equal(deleteResponse.status, 200);
   assert.equal(deleteBody.deleted, 1);
+});
+
+test('adds distinct server-generated request trace metadata to status audit records', async () => {
+  const database = createDatabase();
+  const firstResponse = await worker.fetch(adminRequest('/api/admin/schools/2', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Request-Id': 'client-controlled-request-id',
+      'X-Admin-Actor': 'claimed-person@example.test'
+    },
+    body: JSON.stringify({ verificationStatus: 'suspended' })
+  }), createEnv(database.binding));
+  const secondResponse = await worker.fetch(adminRequest('/api/admin/schools/1', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ verificationStatus: 'pending' })
+  }), createEnv(database.binding));
+
+  assert.equal(firstResponse.status, 200);
+  assert.equal(secondResponse.status, 200);
+  const records = database.auditLogs
+    .filter((row) => row.action === 'school_status_changed' && row.id >= 4)
+    .map((row) => ({ ...row, metadata: JSON.parse(row.metadata_json) }));
+  assert.equal(records.length, 2);
+  assert.match(records[0].metadata.request_id, UUID_PATTERN);
+  assert.match(records[1].metadata.request_id, UUID_PATTERN);
+  assert.notEqual(records[0].metadata.request_id, records[1].metadata.request_id);
+  assert.notEqual(records[0].metadata.request_id, 'client-controlled-request-id');
+  assert.equal(records[0].metadata.actor_type, 'shared_admin_credential');
+  assert.equal(records[1].metadata.actor_type, 'shared_admin_credential');
+  assert.doesNotMatch(
+    JSON.stringify(records),
+    /test-admin-token|claimed-person|registration_contact_phone|\+966512345678/i
+  );
+
+  const auditResponse = await worker.fetch(
+    adminRequest('/api/admin/audit-logs?limit=50'),
+    createEnv(database.binding)
+  );
+  const auditBody = await auditResponse.json();
+  const exposedRecord = auditBody.items.find(
+    (item) => item.metadata.request_id === records[0].metadata.request_id
+  );
+  assert.equal(auditResponse.status, 200);
+  assert.equal(exposedRecord.metadata.actor_type, 'shared_admin_credential');
+});
+
+test('adds request trace metadata to deletion audit without leaking school contact data', async () => {
+  const database = createDatabase();
+  const deleteResponse = await worker.fetch(adminRequest('/api/admin/schools/2', {
+    method: 'DELETE',
+    headers: {
+      'X-Request-Id': 'client-delete-request-id',
+      'X-Admin-Actor': 'claimed-delete-actor'
+    }
+  }), createEnv(database.binding));
+  const body = await deleteResponse.json();
+
+  assert.equal(deleteResponse.status, 200);
+  assert.deepEqual(body, { ok: true, id: 2, deleted: 1 });
+  const record = database.auditLogs.find((row) => row.action === 'school_deleted' && row.id >= 4);
+  const metadata = JSON.parse(record.metadata_json);
+  assert.match(metadata.request_id, UUID_PATTERN);
+  assert.notEqual(metadata.request_id, 'client-delete-request-id');
+  assert.equal(metadata.actor_type, 'shared_admin_credential');
+  assert.equal(metadata.verification_status, 'verified');
+  assert.doesNotMatch(
+    record.metadata_json,
+    /test-admin-token|claimed-delete-actor|registration_contact_phone|\+966512345678/i
+  );
+});
+
+test('does not attach request trace metadata to an older audit record on a no-change update', async () => {
+  const database = createDatabase();
+  const response = await worker.fetch(adminRequest('/api/admin/schools/2', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ verificationStatus: 'verified' })
+  }), createEnv(database.binding));
+
+  assert.equal(response.status, 200);
+  assert.equal(database.auditLogs.length, 2);
+  assert.deepEqual(JSON.parse(database.auditLogs[0].metadata_json), {
+    previous_status: 'pending',
+    new_status: 'verified',
+    ADMIN_API_TOKEN: 'must-not-leak'
+  });
+});
+
+test('does not create an audit record for an unauthorized school mutation', async () => {
+  const database = createDatabase();
+  const auditCount = database.auditLogs.length;
+  const status = database.schools[0].verification_status;
+  const response = await worker.fetch(new globalThis.Request(
+    `${BASE_URL}/api/admin/schools/2`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Token': 'wrong-token',
+        'CF-Connecting-IP': '198.51.100.34'
+      },
+      body: JSON.stringify({ verificationStatus: 'suspended' })
+    }
+  ), createEnv(database.binding));
+
+  assert.equal(response.status, 403);
+  assert.equal(database.auditLogs.length, auditCount);
+  assert.equal(database.schools[0].verification_status, status);
 });
 
 test('protects audit logs and returns only compact allowlisted metadata', async () => {

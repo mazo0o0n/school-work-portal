@@ -14,6 +14,10 @@ const TOKEN_ENCODER = new TextEncoder();
 const RATE_LIMIT_ALLOWED = 'allowed';
 const RATE_LIMIT_DENIED = 'denied';
 const RATE_LIMIT_UNAVAILABLE = 'unavailable';
+const ADMIN_AUDIT_ACTOR_TYPE = 'shared_admin_credential';
+const AUDIT_TRACE_MARKER_ACTION = 'request_trace_marker';
+const AUDIT_TRACE_MARKER_ENTITY = 'admin_request';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function jsonResponse(body, status = 200, extraHeaders = {}){
   return new Response(JSON.stringify(body), {
@@ -146,18 +150,73 @@ function compactAuditMetadata(action, rawMetadata){
   if(!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return {};
 
   const safeValue = (value) => String(value || '').trim().slice(0, 80);
+  const requestId = safeValue(metadata.request_id);
+  const traceMetadata = {
+    ...(UUID_PATTERN.test(requestId) ? { request_id: requestId } : {}),
+    ...(metadata.actor_type === ADMIN_AUDIT_ACTOR_TYPE
+      ? { actor_type: ADMIN_AUDIT_ACTOR_TYPE }
+      : {})
+  };
   if(action === 'school_status_changed'){
     return {
       previous_status: safeValue(metadata.previous_status),
-      new_status: safeValue(metadata.new_status)
+      new_status: safeValue(metadata.new_status),
+      ...traceMetadata
     };
   }
   if(action === 'school_deleted'){
     return {
-      verification_status: safeValue(metadata.verification_status)
+      verification_status: safeValue(metadata.verification_status),
+      ...traceMetadata
     };
   }
   return {};
+}
+
+async function runAuditedSchoolMutation(env, mutationStatement, action, entityId){
+  const requestId = crypto.randomUUID();
+  const entityIdText = String(entityId);
+  const statements = [
+    env.PLATFORM_DB.prepare([
+      'INSERT INTO audit_logs (action, entity_type, entity_id, result, metadata_json)',
+      "VALUES (?1, ?2, ?3, 'success', '{}')"
+    ].join(' ')).bind(
+      AUDIT_TRACE_MARKER_ACTION,
+      AUDIT_TRACE_MARKER_ENTITY,
+      requestId
+    ),
+    mutationStatement,
+    env.PLATFORM_DB.prepare([
+      'UPDATE audit_logs',
+      "SET metadata_json = json_set(metadata_json, '$.request_id', ?1, '$.actor_type', ?2)",
+      'WHERE id = (',
+      'SELECT target.id FROM audit_logs AS target',
+      'WHERE target.id > (',
+      'SELECT marker.id FROM audit_logs AS marker',
+      'WHERE marker.action = ?3 AND marker.entity_type = ?4 AND marker.entity_id = ?1',
+      'ORDER BY marker.id DESC LIMIT 1',
+      ') AND target.action = ?5 AND target.entity_type = ?6 AND target.entity_id = ?7',
+      'ORDER BY target.id ASC LIMIT 1',
+      ')'
+    ].join(' ')).bind(
+      requestId,
+      ADMIN_AUDIT_ACTOR_TYPE,
+      AUDIT_TRACE_MARKER_ACTION,
+      AUDIT_TRACE_MARKER_ENTITY,
+      action,
+      'school',
+      entityIdText
+    ),
+    env.PLATFORM_DB.prepare(
+      'DELETE FROM audit_logs WHERE action = ?1 AND entity_type = ?2 AND entity_id = ?3'
+    ).bind(
+      AUDIT_TRACE_MARKER_ACTION,
+      AUDIT_TRACE_MARKER_ENTITY,
+      requestId
+    )
+  ];
+  const results = await env.PLATFORM_DB.batch(statements);
+  return results[1];
 }
 
 async function handleAuditLogs(request, env){
@@ -400,9 +459,9 @@ async function handleSchoolItem(request, env, id){
       return adminErrorResponse('Invalid status', 400, 'invalid_status');
     }
 
-    const result = await env.PLATFORM_DB.prepare(
+    const result = await runAuditedSchoolMutation(env, env.PLATFORM_DB.prepare(
       "UPDATE schools SET verification_status = ?1, updated_at = datetime('now') WHERE id = ?2"
-    ).bind(status, id).run();
+    ).bind(status, id), 'school_status_changed', id);
 
     return jsonResponse({
       ok: true,
@@ -413,9 +472,9 @@ async function handleSchoolItem(request, env, id){
   }
 
   if(request.method === 'DELETE'){
-    const result = await env.PLATFORM_DB.prepare(
+    const result = await runAuditedSchoolMutation(env, env.PLATFORM_DB.prepare(
       'DELETE FROM schools WHERE id = ?1'
-    ).bind(id).run();
+    ).bind(id), 'school_deleted', id);
 
     return jsonResponse({
       ok: true,
