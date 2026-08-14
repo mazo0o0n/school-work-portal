@@ -145,11 +145,19 @@ export function buildWhatsAppOtpTemplatePayload(env, phone, code) {
       language: {
         code: normalizeWhatsAppTemplateLanguage(env.WHATSAPP_TEMPLATE_LANGUAGE)
       },
-      // Must match the approved Meta template before any real send is attempted.
-      components: [{
-        type: 'body',
-        parameters: [{ type: 'text', text: code }]
-      }]
+      // Authentication Copy Code templates require the same OTP in body and URL button.
+      components: [
+        {
+          type: 'body',
+          parameters: [{ type: 'text', text: code }]
+        },
+        {
+          type: 'button',
+          sub_type: 'url',
+          index: '0',
+          parameters: [{ type: 'text', text: code }]
+        }
+      ]
     }
   };
 }

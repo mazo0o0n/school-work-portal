@@ -632,7 +632,7 @@ function adminRequest(path, options = {}){
   });
 }
 
-test('builds the versioned Meta endpoint and current one-parameter template payload', async () => {
+test('builds the versioned Meta endpoint and Copy Code authentication payload', async () => {
   assert.equal(normalizeWhatsAppGraphApiVersion('v99.0'), 'v99.0');
   for(const invalidVersion of ['', '99.0', 'v99', 'v99.0/messages', 'latest']){
     assert.equal(normalizeWhatsAppGraphApiVersion(invalidVersion), '');
@@ -682,10 +682,18 @@ test('builds the versioned Meta endpoint and current one-parameter template payl
       template: {
         name: 'school_registration_test',
         language: { code: 'ar' },
-        components: [{
-          type: 'body',
-          parameters: [{ type: 'text', text: '123456' }]
-        }]
+        components: [
+          {
+            type: 'body',
+            parameters: [{ type: 'text', text: '123456' }]
+          },
+          {
+            type: 'button',
+            sub_type: 'url',
+            index: '0',
+            parameters: [{ type: 'text', text: '123456' }]
+          }
+        ]
       }
     }
   );
@@ -708,9 +716,24 @@ test('builds the versioned Meta endpoint and current one-parameter template payl
     capturedRequest.init.headers.Authorization,
     `Bearer ${META_TEST_ENV.WHATSAPP_ACCESS_TOKEN}`
   );
+  const capturedPayload = JSON.parse(capturedRequest.init.body);
   assert.deepEqual(
-    JSON.parse(capturedRequest.init.body),
+    capturedPayload,
     buildWhatsAppOtpTemplatePayload(META_TEST_ENV, '+966500000000', '123456')
+  );
+  const bodyComponent = capturedPayload.template.components.find(
+    (component) => component.type === 'body'
+  );
+  const copyCodeButton = capturedPayload.template.components.find(
+    (component) => component.type === 'button'
+  );
+  assert.deepEqual(bodyComponent.parameters, [{ type: 'text', text: '123456' }]);
+  assert.equal(copyCodeButton.sub_type, 'url');
+  assert.equal(copyCodeButton.index, '0');
+  assert.deepEqual(copyCodeButton.parameters, [{ type: 'text', text: '123456' }]);
+  assert.equal(
+    bodyComponent.parameters[0].text,
+    copyCodeButton.parameters[0].text
   );
 });
 
