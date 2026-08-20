@@ -1,4 +1,5 @@
 import baseWorker from './index.js';
+import { runDataRetentionCleanup } from './data-retention.mjs';
 
 const ADMIN_PAGE_PATHS = new Set(['/admin-schools', '/admin-schools.html']);
 const SCHOOL_STATUSES = new Set(['unverified', 'pending', 'verified', 'suspended']);
@@ -510,6 +511,10 @@ async function fetchAdminPage(request, env){
 }
 
 export default {
+  async scheduled(controller, env){
+    await runDataRetentionCleanup(env, new Date(controller.scheduledTime));
+  },
+
   async fetch(request, env, ctx){
     const url = new URL(request.url);
 

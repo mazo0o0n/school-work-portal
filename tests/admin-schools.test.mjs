@@ -12,7 +12,15 @@ const baseWorkerModule = `data:text/javascript;base64,${Buffer.from(`
   };
 `).toString('base64')}`;
 const loadableSource = source.replace("'./index.js'", JSON.stringify(baseWorkerModule));
-const workerModule = `data:text/javascript;base64,${Buffer.from(loadableSource).toString('base64')}`;
+const dataRetentionModuleUrl = new globalThis.URL(
+  '../src/data-retention.mjs',
+  import.meta.url
+).href;
+const loadableWorkerSource = loadableSource.replace(
+  "'./data-retention.mjs'",
+  JSON.stringify(dataRetentionModuleUrl)
+);
+const workerModule = `data:text/javascript;base64,${Buffer.from(loadableWorkerSource).toString('base64')}`;
 const { default: worker } = await import(workerModule);
 
 const registrationSource = await readFile(

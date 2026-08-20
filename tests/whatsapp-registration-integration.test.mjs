@@ -30,6 +30,9 @@ const wrapperSource = await readFile(
 const loadableWrapperSource = wrapperSource.replace(
   "'./index.js'",
   JSON.stringify(registrationWorkerModule)
+).replace(
+  "'./data-retention.mjs'",
+  JSON.stringify(new globalThis.URL('../src/data-retention.mjs', import.meta.url).href)
 );
 const wrapperWorkerModule =
   `data:text/javascript;base64,${Buffer.from(loadableWrapperSource).toString('base64')}`;
