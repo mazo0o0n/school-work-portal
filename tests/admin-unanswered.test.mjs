@@ -5,12 +5,17 @@ import test from 'node:test';
 
 const workerSource = await readFile(new globalThis.URL('../src/index.js', import.meta.url), 'utf8');
 const securityModuleUrl = new globalThis.URL('../src/chat-security.mjs', import.meta.url).href;
+const assistantTimeoutModuleUrl = new globalThis.URL(
+  '../src/assistant-timeout.mjs',
+  import.meta.url
+).href;
 const registrationVerificationModuleUrl = new globalThis.URL(
   '../src/registration-verification.mjs',
   import.meta.url
 ).href;
 const loadableWorkerSource = workerSource
   .replace("'./chat-security.mjs'", JSON.stringify(securityModuleUrl))
+  .replace("'./assistant-timeout.mjs'", JSON.stringify(assistantTimeoutModuleUrl))
   .replace(
     "'./registration-verification.mjs'",
     JSON.stringify(registrationVerificationModuleUrl)

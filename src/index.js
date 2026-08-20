@@ -25,6 +25,10 @@ import {
   normalizeSaudiMobile,
   sendWhatsAppOtp
 } from './registration-verification.mjs';
+import {
+  AssistantOperationTimeoutError,
+  withAssistantTimeout
+} from './assistant-timeout.mjs';
 
 const FALLBACK_ANSWER = CHAT_FALLBACK_ANSWER;
 const EMBEDDING_MODEL = '@cf/qwen/qwen3-embedding-0.6b';
@@ -32,6 +36,9 @@ const CHAT_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
 const MIN_SCORE = 0.55;
 const TOP_K = 4;
 const MAX_ASSISTANT_SEARCH_QUERIES = 5;
+const ASSISTANT_EMBEDDING_TIMEOUT_MS = 8_000;
+const ASSISTANT_VECTORIZE_TIMEOUT_MS = 5_000;
+const ASSISTANT_GENERATION_TIMEOUT_MS = 15_000;
 const UNANSWERED_STATUSES = new Set(['new', 'reviewed', 'added_to_knowledge', 'ignored']);
 const UNANSWERED_DEFAULT_PAGE_SIZE = 50;
 const UNANSWERED_MAX_PAGE_SIZE = 50;
@@ -620,6 +627,33 @@ function mergeMatches(matchGroups, question){
     .slice(0, TOP_K);
 }
 
+function runAssistantAi(
+  env,
+  model,
+  input,
+  timeoutMs,
+  operation,
+  controller = new AbortController()
+){
+  return withAssistantTimeout(
+    env.AI.run(model, input, { signal: controller.signal }),
+    timeoutMs,
+    operation,
+    { onTimeout: () => controller.abort() }
+  );
+}
+
+function queryAssistantVectorize(env, embedding){
+  return withAssistantTimeout(
+    env.VECTORIZE.query(embedding, {
+      topK: TOP_K,
+      returnMetadata: true
+    }),
+    ASSISTANT_VECTORIZE_TIMEOUT_MS,
+    'vectorize_query'
+  );
+}
+
 async function handleChat(request, env){
   let question = '';
   let pagePath = '';
@@ -661,16 +695,19 @@ async function handleChat(request, env){
     }
 
     const searchQueries = buildAssistantSearchQueries(question);
+    const retrievalAiController = new AbortController();
     const matchGroups = await Promise.all(searchQueries.map(async (query, queryIndex) => {
-      const embeddingResult = await env.AI.run(EMBEDDING_MODEL, {
-        text: query
-      });
+      const embeddingResult = await runAssistantAi(
+        env,
+        EMBEDDING_MODEL,
+        { text: query },
+        ASSISTANT_EMBEDDING_TIMEOUT_MS,
+        'embedding',
+        retrievalAiController
+      );
       const queryEmbedding = extractEmbedding(embeddingResult);
 
-      const vectorizeResult = await env.VECTORIZE.query(queryEmbedding, {
-        topK: TOP_K,
-        returnMetadata: true
-      });
+      const vectorizeResult = await queryAssistantVectorize(env, queryEmbedding);
 
       return getMatchesWithText(vectorizeResult, queryIndex);
     }));
@@ -710,33 +747,39 @@ async function handleChat(request, env){
     }
 
     const context = buildContext(usableMatches);
-    const generation = await env.AI.run(CHAT_MODEL, {
-      messages: [
-        {
-          role: 'system',
-          content: [
-            'أنت مساعد منصة التنظيم المدرسي والموارد التعليمية.',
-            'أجب فقط من السياق المرفق.',
-            'لا تستخدم معرفة عامة.',
-            'لا تخترع أي معلومة.',
-            'لا تذكر أرقام المقاطع أو كلمة chunk أو عبارات مثل وفقًا للمقطع أو المقطع 1 أو المقطع 2.',
-            'لا تقل للمستخدم القسم كذا أو المصدر كذا داخل نص الإجابة. اكتب إجابة طبيعية مباشرة فقط.',
-            `إذا لم تكن الإجابة موجودة في السياق، أرجع هذا النص حرفيًا: "${FALLBACK_ANSWER}"`,
-            'أجب بالعربية وباختصار.'
-          ].join('\n')
-        },
-        {
-          role: 'user',
-          content: [
-            'السياق المسترجع من مستندات المنصة:',
-            context,
-            '',
-            'سؤال المستخدم:',
-            question
-          ].join('\n')
-        }
-      ]
-    });
+    const generation = await runAssistantAi(
+      env,
+      CHAT_MODEL,
+      {
+        messages: [
+          {
+            role: 'system',
+            content: [
+              'أنت مساعد منصة التنظيم المدرسي والموارد التعليمية.',
+              'أجب فقط من السياق المرفق.',
+              'لا تستخدم معرفة عامة.',
+              'لا تخترع أي معلومة.',
+              'لا تذكر أرقام المقاطع أو كلمة chunk أو عبارات مثل وفقًا للمقطع أو المقطع 1 أو المقطع 2.',
+              'لا تقل للمستخدم القسم كذا أو المصدر كذا داخل نص الإجابة. اكتب إجابة طبيعية مباشرة فقط.',
+              `إذا لم تكن الإجابة موجودة في السياق، أرجع هذا النص حرفيًا: "${FALLBACK_ANSWER}"`,
+              'أجب بالعربية وباختصار.'
+            ].join('\n')
+          },
+          {
+            role: 'user',
+            content: [
+              'السياق المسترجع من مستندات المنصة:',
+              context,
+              '',
+              'سؤال المستخدم:',
+              question
+            ].join('\n')
+          }
+        ]
+      },
+      ASSISTANT_GENERATION_TIMEOUT_MS,
+      'generation'
+    );
 
     const answer = extractGeneratedText(generation) || FALLBACK_ANSWER;
     const notFound = answer.trim() === FALLBACK_ANSWER;
@@ -775,6 +818,13 @@ async function handleChat(request, env){
       }))
     }));
   }catch(error){
+    if(error instanceof AssistantOperationTimeoutError){
+      console.error('Strict RAG operation timed out:', error.operation);
+      return jsonResponse(
+        withDebug(env, temporaryErrorBody(), { type: 'infrastructure_timeout' }),
+        502
+      );
+    }
     console.error('Strict RAG chat failed:', error?.message || error);
     await saveUnansweredQuestion(env, {
       question,

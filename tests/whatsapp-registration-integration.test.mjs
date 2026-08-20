@@ -14,6 +14,10 @@ const loadableRegistrationSource = registrationSource
     JSON.stringify(new globalThis.URL('../src/chat-security.mjs', import.meta.url).href)
   )
   .replace(
+    "'./assistant-timeout.mjs'",
+    JSON.stringify(new globalThis.URL('../src/assistant-timeout.mjs', import.meta.url).href)
+  )
+  .replace(
     "'./registration-verification.mjs'",
     JSON.stringify(new globalThis.URL('../src/registration-verification.mjs', import.meta.url).href)
   );

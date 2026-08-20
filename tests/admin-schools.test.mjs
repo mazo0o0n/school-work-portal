@@ -23,6 +23,10 @@ const chatSecurityModuleUrl = new globalThis.URL(
   '../src/chat-security.mjs',
   import.meta.url
 ).href;
+const assistantTimeoutModuleUrl = new globalThis.URL(
+  '../src/assistant-timeout.mjs',
+  import.meta.url
+).href;
 const registrationVerificationModuleUrl = new globalThis.URL(
   '../src/registration-verification.mjs',
   import.meta.url
@@ -42,6 +46,7 @@ const {
 } = await import(registrationVerificationModuleUrl);
 const loadableRegistrationSource = registrationSource
   .replace("'./chat-security.mjs'", JSON.stringify(chatSecurityModuleUrl))
+  .replace("'./assistant-timeout.mjs'", JSON.stringify(assistantTimeoutModuleUrl))
   .replace(
     "'./registration-verification.mjs'",
     JSON.stringify(registrationVerificationModuleUrl)

@@ -10,15 +10,24 @@ import {
   MAX_CHAT_REQUEST_BYTES,
   sanitizeQuestionForStorage
 } from '../src/chat-security.mjs';
+import {
+  AssistantOperationTimeoutError,
+  withAssistantTimeout
+} from '../src/assistant-timeout.mjs';
 
 const workerSource = await readFile(new globalThis.URL('../src/index.js', import.meta.url), 'utf8');
 const securityModuleUrl = new globalThis.URL('../src/chat-security.mjs', import.meta.url).href;
+const assistantTimeoutModuleUrl = new globalThis.URL(
+  '../src/assistant-timeout.mjs',
+  import.meta.url
+).href;
 const registrationVerificationModuleUrl = new globalThis.URL(
   '../src/registration-verification.mjs',
   import.meta.url
 ).href;
 const loadableWorkerSource = workerSource
   .replace("'./chat-security.mjs'", JSON.stringify(securityModuleUrl))
+  .replace("'./assistant-timeout.mjs'", JSON.stringify(assistantTimeoutModuleUrl))
   .replace(
     "'./registration-verification.mjs'",
     JSON.stringify(registrationVerificationModuleUrl)
@@ -65,6 +74,8 @@ function jsonRequest(payload, headers = {}) {
 
 function createRagEnv({ matches, answer = 'إجابة موثوقة من معرفة المنصة.' } = {}) {
   const embeddingInputs = [];
+  const aiOptions = [];
+  const vectorQueryOptions = [];
   const defaultVectorMatches = [{
     id: 'known-1',
     score: 0.92,
@@ -80,6 +91,8 @@ function createRagEnv({ matches, answer = 'إجابة موثوقة من معرف
 
   return {
     embeddingInputs,
+    aiOptions,
+    vectorQueryOptions,
     env: {
       RATE_LIMIT_SALT: 'test-only-rate-limit-salt',
       CHAT_RATE_LIMITER: {
@@ -88,7 +101,8 @@ function createRagEnv({ matches, answer = 'إجابة موثوقة من معرف
         }
       },
       AI: {
-        async run(_model, payload) {
+        async run(_model, payload, options) {
+          aiOptions.push(options);
           if(typeof payload.text === 'string') {
             embeddingInputs.push(payload.text);
             return { data: [[embeddingInputs.length, 0.2, 0.3]] };
@@ -97,7 +111,8 @@ function createRagEnv({ matches, answer = 'إجابة موثوقة من معرف
         }
       },
       VECTORIZE: {
-        async query(queryEmbedding) {
+        async query(queryEmbedding, options) {
+          vectorQueryOptions.push(options);
           const queryIndex = Math.max(0, Number(queryEmbedding?.[0] || 1) - 1);
           return { matches: resolveMatches(embeddingInputs[queryIndex] || '') };
         }
@@ -156,6 +171,209 @@ async function responseJson(request, env = createRagEnv().env) {
     body: await response.json()
   };
 }
+
+function createTimerHarness() {
+  let callback;
+  const cleared = [];
+  return {
+    cleared,
+    setTimeoutFn(nextCallback) {
+      callback = nextCallback;
+      return 17;
+    },
+    clearTimeoutFn(timeoutId) {
+      cleared.push(timeoutId);
+    },
+    fire() {
+      callback();
+    }
+  };
+}
+
+async function withImmediateAssistantTimeouts(callback) {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+
+  globalThis.setTimeout = (timeoutCallback) => originalSetTimeout(timeoutCallback, 0);
+  globalThis.clearTimeout = (timeoutId) => originalClearTimeout(timeoutId);
+
+  try {
+    return await callback();
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+}
+
+test('clears assistant timeout timers after success and upstream rejection', async (t) => {
+  await t.test('success', async () => {
+    const timers = createTimerHarness();
+    const result = await withAssistantTimeout(
+      Promise.resolve('ok'),
+      100,
+      'embedding',
+      timers
+    );
+
+    assert.equal(result, 'ok');
+    assert.deepEqual(timers.cleared, [17]);
+  });
+
+  await t.test('rejection', async () => {
+    const timers = createTimerHarness();
+    await assert.rejects(
+      withAssistantTimeout(
+        Promise.reject(new Error('upstream failed')),
+        100,
+        'vectorize_query',
+        timers
+      ),
+      /upstream failed/
+    );
+
+    assert.deepEqual(timers.cleared, [17]);
+  });
+});
+
+test('returns a generic timeout error without sensitive operation data', async () => {
+  const timers = createTimerHarness();
+  const sensitiveValue = 'private-prompt-context-secret';
+  const pending = withAssistantTimeout(
+    new Promise(() => {}),
+    100,
+    'generation',
+    timers
+  );
+  timers.fire();
+
+  let caught;
+  try {
+    await pending;
+  } catch (error) {
+    caught = error;
+  }
+
+  assert.ok(caught instanceof AssistantOperationTimeoutError);
+  assert.equal(caught.code, 'assistant_operation_timeout');
+  assert.equal(caught.operation, 'generation');
+  assert.doesNotMatch(`${caught.message} ${JSON.stringify(caught)}`, new RegExp(sensitiveValue));
+  assert.deepEqual(timers.cleared, [17]);
+});
+
+test('keeps fast AI and Vectorize operations on the normal known-question path', async () => {
+  const { env, aiOptions, vectorQueryOptions } = createRagEnv();
+  const { response, body } = await responseJson(
+    jsonRequest({ question: 'ما برنامج فرص؟' }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(body.notFound, false);
+  assert.equal(aiOptions.length, 5);
+  assert.ok(aiOptions.every((options) => options?.signal instanceof globalThis.AbortSignal));
+  assert.ok(aiOptions.every((options) => options.signal.aborted === false));
+  assert.equal(vectorQueryOptions.length, 4);
+  assert.ok(vectorQueryOptions.every((options) => options.topK === 4));
+  assert.ok(vectorQueryOptions.every((options) => options.returnMetadata === true));
+});
+
+test('bounds a hanging AI call, aborts it, and does not store the question as unanswered', async () => {
+  const sensitiveQuestion = 'private-prompt-secret ما برنامج فرص؟';
+  const { env } = createRagEnv();
+  const database = createDbRecorder();
+  const signals = [];
+  const logs = [];
+  const originalConsoleError = globalThis.console.error;
+
+  env.UNANSWERED_DB = database.binding;
+  env.APP_ENV = 'production';
+  env.DEBUG_CHAT = 'true';
+  env.AI.run = (_model, _payload, options) => {
+    signals.push(options.signal);
+    return new Promise(() => {});
+  };
+  globalThis.console.error = (...values) => logs.push(values.join(' '));
+
+  let result;
+  try {
+    result = await withImmediateAssistantTimeouts(() => responseJson(
+      jsonRequest({ question: sensitiveQuestion }),
+      env
+    ));
+  } finally {
+    globalThis.console.error = originalConsoleError;
+  }
+
+  assert.equal(result.response.status, 502);
+  assert.equal(result.body.error, 'temporary_error');
+  assert.equal(result.body.debug, undefined);
+  assert.ok(signals.length >= 1);
+  assert.ok(signals.every((signal) => signal.aborted));
+  assert.equal(database.statements.length, 0);
+  assert.deepEqual(logs, ['Strict RAG operation timed out: embedding']);
+  assert.doesNotMatch(`${JSON.stringify(result.body)} ${logs.join(' ')}`, /private-prompt-secret/);
+});
+
+test('bounds a hanging Vectorize query without storing an infrastructure miss', async () => {
+  const { env } = createRagEnv();
+  const database = createDbRecorder();
+  const logs = [];
+  const originalConsoleError = globalThis.console.error;
+
+  env.UNANSWERED_DB = database.binding;
+  env.VECTORIZE.query = () => new Promise(() => {});
+  globalThis.console.error = (...values) => logs.push(values.join(' '));
+
+  let result;
+  try {
+    result = await withImmediateAssistantTimeouts(() => responseJson(
+      jsonRequest({ question: 'ما برنامج فرص؟' }),
+      env
+    ));
+  } finally {
+    globalThis.console.error = originalConsoleError;
+  }
+
+  assert.equal(result.response.status, 502);
+  assert.equal(result.body.error, 'temporary_error');
+  assert.equal(database.statements.length, 0);
+  assert.deepEqual(logs, ['Strict RAG operation timed out: vectorize_query']);
+});
+
+test('bounds hanging final generation and aborts its Workers AI signal', async () => {
+  const { env } = createRagEnv();
+  const database = createDbRecorder();
+  const generationSignals = [];
+  const logs = [];
+  const originalConsoleError = globalThis.console.error;
+
+  env.UNANSWERED_DB = database.binding;
+  env.AI.run = (_model, payload, options) => {
+    if(typeof payload.text === 'string') {
+      return Promise.resolve({ data: [[1, 0.2, 0.3]] });
+    }
+    generationSignals.push(options.signal);
+    return new Promise(() => {});
+  };
+  globalThis.console.error = (...values) => logs.push(values.join(' '));
+
+  let result;
+  try {
+    result = await withImmediateAssistantTimeouts(() => responseJson(
+      jsonRequest({ question: 'ما برنامج فرص؟' }),
+      env
+    ));
+  } finally {
+    globalThis.console.error = originalConsoleError;
+  }
+
+  assert.equal(result.response.status, 502);
+  assert.equal(result.body.error, 'temporary_error');
+  assert.equal(database.statements.length, 0);
+  assert.equal(generationSignals.length, 1);
+  assert.equal(generationSignals[0].aborted, true);
+  assert.deepEqual(logs, ['Strict RAG operation timed out: generation']);
+});
 
 test('fails closed when rate limiting configuration is unavailable', async () => {
   const { env } = createRagEnv();
