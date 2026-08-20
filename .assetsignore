@@ -20,6 +20,10 @@
 /src/
 
 # Non-public project files at the asset root
+/.assetsignore
+/.gitignore
+/.stylelintrc.json
+/eslint.config.cjs
 /package.json
 /package-lock.json
 /README.md
