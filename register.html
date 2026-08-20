@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>تسجيل مدرسة جديدة</title>
 <meta name="description" content="إنشاء ملف مدرسة جديد للوصول إلى أدوات التنظيم المدرسي والموارد التعليمية.">
-<link rel="canonical" href="https://mazen.zb-store.com/register.html">
+<link rel="canonical" href="https://mazen.zb-store.com/register">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32x32.png">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/register.css">
@@ -32,12 +32,12 @@
           </div>
           <div class="registration-fields">
             <div class="field">
-            <label for="schoolName">اسم المدرسة</label>
+            <label for="schoolName">اسم المدرسة <span class="required-label" aria-label="مطلوب">*</span></label>
             <input id="schoolName" name="schoolName" type="text" placeholder="مثال: مازن" autocomplete="organization" inputmode="text" required>
             <p class="field-error" id="schoolNameError" aria-live="polite"></p>
             </div>
             <div class="field">
-              <label for="schoolStage">المرحلة</label>
+              <label for="schoolStage">المرحلة <span class="required-label" aria-label="مطلوب">*</span></label>
               <select id="schoolStage" name="schoolStage" required>
                 <option value="" selected disabled>اختر المرحلة</option>
                 <option value="ابتدائية">ابتدائي</option>
@@ -46,7 +46,7 @@
               </select>
             </div>
             <div class="field">
-              <label for="educationDepartment">إدارة التعليم</label>
+              <label for="educationDepartment">إدارة التعليم <span class="required-label" aria-label="مطلوب">*</span></label>
               <select id="educationDepartment" name="educationDepartment" required>
               <option value="" selected disabled>اختر إدارة التعليم</option>
               <option value="إدارة التعليم بمنطقة الرياض">إدارة التعليم بمنطقة الرياض</option>
@@ -117,7 +117,7 @@
         </section>
         <label class="registration-consent" for="registrationConsent">
           <input id="registrationConsent" name="registrationConsent" type="checkbox" required>
-          <span>أقر بأن بيانات المدرسة صحيحة، وأوافق على استخدام رقم الجوال للتواصل بخصوص طلب التسجيل فقط.</span>
+          <span>أقر بأن بيانات المدرسة صحيحة، وأوافق على استخدام رقم الجوال للتواصل بخصوص طلب التسجيل فقط. <span class="required-label" aria-label="مطلوب">*</span></span>
         </label>
         <div class="actions">
           <button id="registrationSubmit" type="submit" disabled>إنشاء ملف المدرسة</button>
