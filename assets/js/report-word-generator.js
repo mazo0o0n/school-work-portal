@@ -420,6 +420,7 @@
         }
       });
       const reportData = getCleanReportData(report);
+      reportData.reportTitle = report.title || '';
       documentTemplate.render(reportData);
       downloadBlob(documentTemplate.toBlob(), createDownloadName(report, reportData));
       setStatus(status, 'تم تجهيز التقرير وتنزيله بنجاح.');
