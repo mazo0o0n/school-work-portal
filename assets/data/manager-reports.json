@@ -194,21 +194,5 @@
     "optionalFields": [],
     "customFields": [],
     "notes": ""
-  },
-  {
-    "id": "hhhhhhh",
-    "title": "سجل الغياب الفصلي - سادس ابتدائي أ",
-    "description": "",
-    "category": "الاجتماعات",
-    "status": "تجريبي",
-    "sectionId": "managerReports",
-    "templatePath": "assets/report-templates/manager-reports/hhhhhhh.docx",
-    "outputFileName": "سجل الغياب الفصلي - سادس ابتدائي أ - {{schoolDisplayName}}.docx",
-    "tags": [],
-    "fields": [],
-    "requiredFields": [],
-    "optionalFields": [],
-    "customFields": [],
-    "notes": ""
   }
 ]
