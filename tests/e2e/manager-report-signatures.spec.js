@@ -1,4 +1,6 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
 
 const templateCases = [
   { name: 'academic-achievement-committee.docx', leftName: 'محمد أحمد' },
@@ -100,4 +102,97 @@ test('تستبدل قوالب المدير حقول التوقيع الأربع�
     }
     expect(result.text, `${result.name}: لا تبقى placeholders`).not.toContain('{{');
   }
+});
+
+test('يحافظ fallback على العنوان ويعالج XML المرئي فقط', async ({ page }) => {
+  const sourcePath = path.resolve(__dirname, '../../assets/js/report-word-generator.js');
+  const source = fs.readFileSync(sourcePath, 'utf8');
+  const reportDataIndex = source.indexOf('const reportData = getCleanReportData(report);');
+  const titleIndex = source.indexOf("reportData.reportTitle = report.title || '';");
+  const renderIndex = source.indexOf('documentTemplate.render(reportData);');
+
+  expect(reportDataIndex).toBeGreaterThanOrEqual(0);
+  expect(titleIndex).toBeGreaterThan(reportDataIndex);
+  expect(renderIndex).toBeGreaterThan(titleIndex);
+
+  const extract = (startToken, endToken) => {
+    const start = source.indexOf(startToken);
+    const end = source.indexOf(endToken, start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    return source.slice(start, end).trim();
+  };
+  const helperSource = [
+    extract('function replaceTokenAcrossWordRuns(', '\nfunction replaceHeaderTokenRuns('),
+    extract('function replaceHeaderTokenRuns(', '\nfunction ensureEducationDepartmentSecondLine('),
+    extract('function ensureEducationDepartmentSecondLine(', '\nfunction replaceRemainingReportTokens('),
+    extract('function replaceRemainingReportTokens(', '\nasync function generateManagerReport(')
+  ].join('\n');
+
+  await page.goto('about:blank');
+  await page.addScriptTag({
+    content: `${helperSource}\nwindow.__reportHelpers = {replaceRemainingReportTokens};`
+  });
+  const result = await page.evaluate(() => {
+    const helpers = window.__reportHelpers;
+    const wordNs = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const contents = new Map([
+      ['word/document.xml', `<w:document xmlns:w="${wordNs}"><w:body><w:p><w:r><w:t>{{school</w:t></w:r><w:r><w:t>DisplayName}}</w:t></w:r></w:p></w:body></w:document>`],
+      ['word/header1.xml', `<w:hdr xmlns:w="${wordNs}"><w:p><w:r><w:t>{{educationDepartmentPrefix}}</w:t></w:r><w:r><w:t>{{educationDepartmentName}}</w:t></w:r></w:p></w:hdr>`],
+      ['word/header2.xml', `<w:hdr xmlns:w="${wordNs}"><w:p><w:r><w:t>نص ثابت</w:t></w:r></w:p></w:hdr>`],
+      ['word/header3.xml', `<w:hdr xmlns:w="${wordNs}"><w:p><w:r><w:t>““</w:t></w:r><w:r><w:t>educationDepartmentPrefix</w:t></w:r><w:r><w:t>””</w:t></w:r></w:p></w:hdr>`],
+      ['word/footer1.xml', `<w:ftr xmlns:w="${wordNs}"><w:p><w:r><w:t>{{signatureRight</w:t></w:r><w:r><w:t>Role}}</w:t></w:r></w:p></w:ftr>`],
+      ['word/styles.xml', `<w:styles xmlns:w="${wordNs}"><w:style><w:name w:val="{{schoolDisplayName}}"/></w:style></w:styles>`],
+      ['word/settings.xml', `<w:settings xmlns:w="${wordNs}"/>`]
+    ]);
+    const original = new Map(contents);
+    const writes = [];
+    const zip = {
+      files: Object.fromEntries([...contents.keys()].map(name => [name, {}])),
+      file(name, value) {
+        if(arguments.length === 2) {
+          contents.set(name, value);
+          writes.push(name);
+          return this;
+        }
+        if(!contents.has(name)) return null;
+        return {asText: () => contents.get(name)};
+      }
+    };
+
+    helpers.replaceRemainingReportTokens(zip, {
+      educationDepartmentPrefix: 'الإدارة العامة للتعليم بمنطقة',
+      educationDepartmentName: 'المدينة المنورة',
+      schoolDisplayName: 'متوسطة معن بن عدي',
+      signatureRightRole: 'مدير المدرسة'
+    });
+
+    const header = new DOMParser().parseFromString(contents.get('word/header1.xml'), 'application/xml');
+    return {
+      splitPlaceholderReplaced: contents.get('word/document.xml').includes('متوسطة معن بن عدي')
+        && !contents.get('word/document.xml').includes('{{school'),
+      departmentSeparated: header.getElementsByTagNameNS(wordNs, 'br').length === 1,
+      smartQuotePlaceholderReplaced: contents.get('word/header3.xml').includes('الإدارة العامة للتعليم بمنطقة')
+        && !contents.get('word/header3.xml').includes('educationDepartmentPrefix'),
+      footerPlaceholderReplaced: contents.get('word/footer1.xml').includes('مدير المدرسة'),
+      untargetedXmlUnchanged: contents.get('word/styles.xml') === original.get('word/styles.xml')
+        && contents.get('word/settings.xml') === original.get('word/settings.xml'),
+      unchangedHeaderNotRewritten: contents.get('word/header2.xml') === original.get('word/header2.xml')
+        && !writes.includes('word/header2.xml'),
+      writes
+    };
+  });
+
+  expect(result.splitPlaceholderReplaced).toBe(true);
+  expect(result.departmentSeparated).toBe(true);
+  expect(result.smartQuotePlaceholderReplaced).toBe(true);
+  expect(result.footerPlaceholderReplaced).toBe(true);
+  expect(result.untargetedXmlUnchanged).toBe(true);
+  expect(result.unchangedHeaderNotRewritten).toBe(true);
+  expect(result.writes.sort()).toEqual([
+    'word/document.xml',
+    'word/footer1.xml',
+    'word/header1.xml',
+    'word/header3.xml'
+  ]);
 });

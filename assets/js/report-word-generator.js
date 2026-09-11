@@ -181,8 +181,8 @@
       result[key] = value;
       return result;
     }, {});
-    data.schoolDisplayName = createSchoolDisplayName(data.schoolStage, data.schoolName);
-    data.schoolName = data.schoolDisplayName;
+data.schoolDisplayName = createSchoolDisplayName(data.schoolStage, data.schoolName);
+data.schoolName = data.schoolDisplayName;
     return {
       ...data,
       ...getReportCustomData(report)
@@ -392,7 +392,323 @@
     status.classList.toggle('is-error', isError);
   }
 
-  async function generateManagerReport(report, button, status){
+function replaceTokenAcrossWordRuns(xml, token, value){
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'application/xml');
+  let changed = false;
+
+  if(doc.getElementsByTagName('parsererror').length){
+    return xml;
+  }
+
+  const wordNs =
+    'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+  const paragraphs =
+    Array.from(doc.getElementsByTagNameNS(wordNs, 'p'));
+
+  paragraphs.forEach((paragraph) => {
+    let safety = 0;
+
+    while(safety++ < 50){
+      const nodes =
+        Array.from(paragraph.getElementsByTagNameNS(wordNs, 't'));
+
+      const fullText =
+        nodes.map((node) => node.textContent || '').join('');
+
+      const start = fullText.indexOf(token);
+      if(start === -1) break;
+
+      const end = start + token.length;
+
+      let cursor = 0;
+      let first = -1;
+      let last = -1;
+      let firstOffset = 0;
+      let lastOffset = 0;
+
+      for(let i = 0; i < nodes.length; i++){
+        const current = nodes[i].textContent || '';
+        const next = cursor + current.length;
+
+        if(first === -1 && start >= cursor && start < next){
+          first = i;
+          firstOffset = start - cursor;
+        }
+
+        if(end > cursor && end <= next){
+          last = i;
+          lastOffset = end - cursor;
+          break;
+        }
+
+        cursor = next;
+      }
+
+      if(first === -1 || last === -1) break;
+
+      const replacement = String(value ?? '');
+      const firstText = nodes[first].textContent || '';
+      const lastText = nodes[last].textContent || '';
+      changed = true;
+
+      if(first === last){
+        nodes[first].textContent =
+          firstText.slice(0, firstOffset) +
+          replacement +
+          firstText.slice(lastOffset);
+      }else{
+        nodes[first].textContent =
+          firstText.slice(0, firstOffset) + replacement;
+
+        for(let i = first + 1; i < last; i++){
+          nodes[i].textContent = '';
+        }
+
+        nodes[last].textContent =
+          lastText.slice(lastOffset);
+      }
+    }
+  });
+
+  return changed ? new XMLSerializer().serializeToString(doc) : xml;
+}
+
+function replaceHeaderTokenRuns(xml, replacements){
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'application/xml');
+  let changed = false;
+
+  if(doc.getElementsByTagName('parsererror').length){
+    return xml;
+  }
+
+  const wordNs =
+    'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+  const paragraphs =
+    Array.from(doc.getElementsByTagNameNS(wordNs, 'p'))
+      .filter(paragraph => paragraph.getElementsByTagNameNS(wordNs, 'p').length === 0);
+
+  const delimiterOnly = /^[\s{}“”"«»]+$/;
+
+  paragraphs.forEach((paragraph) => {
+    const nodes =
+      Array.from(paragraph.getElementsByTagNameNS(wordNs, 't'));
+
+    Object.entries(replacements).forEach(([key, value]) => {
+      nodes.forEach((node, index) => {
+        const current = node.textContent || '';
+
+        if(!current.includes(key)) return;
+        changed = true;
+
+        const escapedKey =
+          key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        const pattern = new RegExp(
+          '[\\s{}“”"«»]*' +
+          escapedKey +
+          '[\\s{}“”"«»]*',
+          'g'
+        );
+
+        node.textContent =
+          current.replace(pattern, String(value ?? ''));
+
+        for(let i = index - 1; i >= 0; i--){
+          const previous = nodes[i].textContent || '';
+
+          if(previous && delimiterOnly.test(previous)){
+            nodes[i].textContent = '';
+          }else{
+            break;
+          }
+        }
+
+        for(let i = index + 1; i < nodes.length; i++){
+          const next = nodes[i].textContent || '';
+
+          if(next && delimiterOnly.test(next)){
+            nodes[i].textContent = '';
+          }else{
+            break;
+          }
+        }
+      });
+    });
+  });
+
+  return changed ? new XMLSerializer().serializeToString(doc) : xml;
+}
+
+function ensureEducationDepartmentSecondLine(xml, data){
+  const prefix = String(data.educationDepartmentPrefix || '').trim();
+  const departmentName = String(data.educationDepartmentName || '').trim();
+
+  if (!prefix || !departmentName) return xml;
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'application/xml');
+  const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  let changed = false;
+
+  const paragraphs = Array.from(
+    doc.getElementsByTagNameNS(ns, 'p')
+  ).filter(paragraph => paragraph.getElementsByTagNameNS(ns, 'p').length === 0);
+
+  paragraphs.forEach((paragraph) => {
+    const textNodes = Array.from(
+      paragraph.getElementsByTagNameNS(ns, 't')
+    );
+
+    const fullText = textNodes
+      .map((node) => node.textContent || '')
+      .join('');
+
+    const prefixPos = fullText.indexOf(prefix);
+
+    if (prefixPos < 0) return;
+
+    const namePos = fullText.indexOf(
+      departmentName,
+      prefixPos + prefix.length
+    );
+
+    if (namePos < 0) return;
+
+    let pPr = Array.from(paragraph.childNodes)
+      .find((node) => node.localName === 'pPr');
+
+    if (!pPr) {
+      pPr = doc.createElementNS(ns, 'w:pPr');
+      paragraph.insertBefore(pPr, paragraph.firstChild);
+      changed = true;
+    }
+
+    let jc = Array.from(pPr.childNodes)
+      .find((node) => node.localName === 'jc');
+
+    if (!jc) {
+      jc = doc.createElementNS(ns, 'w:jc');
+      pPr.appendChild(jc);
+      changed = true;
+    }
+
+    if(jc.getAttributeNS(ns, 'val') !== 'left'){
+      jc.setAttributeNS(ns, 'w:val', 'left');
+      changed = true;
+    }
+
+    let cursor = 0;
+    let prefixInfo = null;
+    let nameInfo = null;
+
+    for (const node of textNodes) {
+      const value = node.textContent || '';
+      const start = cursor;
+      const end = cursor + value.length;
+
+      if (!prefixInfo && prefixPos >= start && prefixPos < end) {
+        prefixInfo = { node, start, end };
+      }
+
+      if (!nameInfo && namePos >= start && namePos < end) {
+        nameInfo = { node, start, end };
+      }
+
+      cursor = end;
+    }
+
+    if (!prefixInfo || !nameInfo) return;
+
+    const breaks = Array.from(
+      paragraph.getElementsByTagNameNS(ns, 'br')
+    );
+
+    const alreadySeparated = breaks.some((br) => {
+      const prefixBeforeBreak =
+        Boolean(prefixInfo.node.compareDocumentPosition(br) & 4);
+
+      const breakBeforeName =
+        Boolean(br.compareDocumentPosition(nameInfo.node) & 4);
+
+      return prefixBeforeBreak && breakBeforeName;
+    });
+
+    if (alreadySeparated) return;
+
+    const nameNode = nameInfo.node;
+    const nameRun = nameNode.parentNode;
+
+    if (!nameRun || nameRun.localName !== 'r') return;
+
+    const br = doc.createElementNS(ns, 'w:br');
+    changed = true;
+
+    if (prefixInfo.node === nameNode) {
+      const offset = namePos - nameInfo.start;
+      const original = nameNode.textContent || '';
+
+      const before = original.slice(0, offset);
+      const after = original.slice(offset);
+
+      nameNode.textContent = before;
+
+      const newText = nameNode.cloneNode(false);
+      newText.textContent = after;
+
+      nameRun.insertBefore(br, nameNode.nextSibling);
+      nameRun.insertBefore(newText, br.nextSibling);
+    } else {
+      nameRun.insertBefore(br, nameNode);
+    }
+  });
+
+  return changed ? new XMLSerializer().serializeToString(doc) : xml;
+}
+
+function replaceRemainingReportTokens(zip, data){
+  const replacements = {
+    educationDepartmentPrefix: data.educationDepartmentPrefix || '',
+    educationDepartmentName: data.educationDepartmentName || '',
+    schoolDisplayName: data.schoolDisplayName || '',
+    principalName: data.principalName || '',
+    activityLeaderName: data.activityLeaderName || '',
+    signatureRightRole: data.signatureRightRole || '',
+    signatureRightName: data.signatureRightName || '',
+    signatureLeftRole: data.signatureLeftRole || '',
+    signatureLeftName: data.signatureLeftName || ''
+  };
+
+  Object.keys(zip.files)
+    .filter((name) => name === 'word/document.xml'
+      || /^word\/(?:header|footer).*\.xml$/i.test(name))
+    .forEach((name) => {
+      const file = zip.file(name);
+      if(!file) return;
+
+      const originalXml = file.asText();
+      let xml = originalXml;
+
+      Object.entries(replacements).forEach(([key, value]) => {
+        xml = replaceTokenAcrossWordRuns(
+          xml,
+          `{{${key}}}`,
+          value
+        );
+      });
+
+      if(/^word\/header.*\.xml$/i.test(name)){
+        xml = replaceHeaderTokenRuns(xml, replacements);
+        xml = ensureEducationDepartmentSecondLine(xml, data);
+      }
+
+      if(xml !== originalXml) zip.file(name, xml);
+    });
+}
+async function generateManagerReport(report, button, status){
     if(button.disabled) return;
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
@@ -419,10 +735,14 @@
           return '';
         }
       });
-      const reportData = getCleanReportData(report);
-      reportData.reportTitle = report.title || '';
-      documentTemplate.render(reportData);
-      downloadBlob(documentTemplate.toBlob(), createDownloadName(report, reportData));
+    const reportData = getCleanReportData(report);
+    reportData.reportTitle = report.title || '';
+
+    documentTemplate.render(reportData);
+
+    replaceRemainingReportTokens(zip, reportData);
+
+    downloadBlob(documentTemplate.toBlob(), createDownloadName(report, reportData));
       setStatus(status, 'تم تجهيز التقرير وتنزيله بنجاح.');
     }catch(error){
       const message = error instanceof Error && error.message
