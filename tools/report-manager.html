@@ -304,12 +304,24 @@
     .report-item h3 { margin: 0 0 7px; font-size: 16px; overflow-wrap: anywhere; }
     .report-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 12px; }
     .report-meta span { overflow-wrap: anywhere; }
+    .report-actions { display: grid; gap: 9px; min-width: 170px; }
+    .report-actions .danger-button { margin-top: 10px; }
+    .live-template-link { display: inline-flex; justify-content: center; align-items: center; text-decoration: none; }
     .danger-button { border-color: var(--danger); background: rgba(202, 61, 73, 0.12); color: #ffd7db; }
     .danger-button:hover { background: rgba(202, 61, 73, 0.24); }
     .delete-panel { margin-top: 16px; border: 1px solid var(--danger); border-radius: 12px; padding: 14px; }
     .delete-warning { border-inline-start: 4px solid var(--danger); padding-inline-start: 10px; color: #ffd7db; }
     .slug-confirmation { display: grid; gap: 7px; margin-top: 14px; }
     .slug-confirmation input { direction: ltr; text-align: left; }
+    .edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+    .edit-grid .wide { grid-column: 1 / -1; }
+    .edit-grid label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
+    .edit-grid input[readonly] { opacity: 0.72; }
+    .edit-review { display: grid; gap: 9px; margin: 14px 0; }
+    .edit-change { border: 1px solid var(--line); border-radius: 9px; padding: 9px; overflow-wrap: anywhere; }
+    .edit-change strong, .edit-change span { display: block; }
+    .edit-change span { color: var(--muted); margin-top: 3px; }
+    .edit-actions { display: flex; flex-wrap: wrap; gap: 10px; }
     dialog {
       width: min(560px, calc(100% - 24px));
       max-height: calc(100vh - 32px);
@@ -346,6 +358,9 @@
       .dialog-actions .button { width: 100%; }
       .report-item { grid-template-columns: minmax(0, 1fr); }
       .report-item .danger-button { width: 100%; margin-top: 8px; }
+      .report-actions { width: 100%; }
+      .edit-grid { grid-template-columns: minmax(0, 1fr); }
+      .edit-grid .wide { grid-column: auto; }
     }
   </style>
 </head>
@@ -506,6 +521,20 @@
       <h2 id="currentReportsTitle">التقارير الحالية</h2>
       <p>الحذف من الموقع الحي يتطلب تحققًا بالـslug، ثم Commit وPush وDeploy آمن.</p>
       <div id="reportsList" class="reports-list" aria-live="polite"></div>
+      <section id="editPanel" class="delete-panel" aria-labelledby="editPanelTitle" hidden>
+        <span id="editState" class="publish-state" data-state="local">تعديل محلي</span>
+        <h3 id="editPanelTitle">مراجعة التعديلات</h3>
+        <p id="editPanelMessage">—</p>
+        <div id="editReview" class="edit-review"></div>
+        <div class="edit-actions">
+          <button id="undoEdit" class="button" type="button">إلغاء التعديلات المحلية</button>
+          <button id="publishEdit" class="button success" type="button">نشر التعديلات للموقع الحي</button>
+          <button id="retryEditDeploy" class="button" type="button" hidden>إعادة محاولة النشر</button>
+        </div>
+        <ol id="editProgress" class="progress-list" aria-live="polite" hidden></ol>
+        <ul id="editErrors" class="publish-errors" hidden></ul>
+        <div id="editSuccess" class="publish-success" hidden></div>
+      </section>
       <section id="deletePanel" class="delete-panel" aria-labelledby="deletePanelTitle" hidden>
         <span id="deleteState" class="publish-state" data-state="local">محلي فقط</span>
         <h3 id="deletePanelTitle">حذف التقرير</h3>
@@ -533,6 +562,52 @@
       <div class="dialog-actions">
         <button id="cancelPublish" class="button" type="button">إلغاء</button>
         <button id="confirmPublish" class="button success" type="button">تأكيد النشر</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="editDialog" aria-labelledby="editDialogTitle">
+    <div class="dialog-body">
+      <h2 id="editDialogTitle">تعديل التقرير</h2>
+      <form id="editForm" class="edit-grid">
+        <label>عنوان التقرير<input id="editTitle" maxlength="160" required></label>
+        <label>التصنيف<select id="editCategory" required><option>الاجتماعات</option><option>اللجان</option><option>النماذج</option><option>السجلات</option><option>أخرى</option></select></label>
+        <label>الحالة<select id="editStatus" required><option>متاح</option><option>معتمد</option><option>تجريبي</option><option>مخطط</option></select></label>
+        <label>ID / slug<input id="editId" readonly dir="ltr"></label>
+        <label class="wide">الوصف<textarea id="editDescription" maxlength="1000"></textarea></label>
+        <label class="wide">الوسوم — مفصولة بفواصل<input id="editTags"></label>
+        <label class="wide">requiredFields — مفصولة بفواصل<input id="editRequiredFields" dir="ltr"></label>
+        <label class="wide">optionalFields — مفصولة بفواصل<input id="editOptionalFields" dir="ltr"></label>
+        <label class="wide">customFields — JSON array<textarea id="editCustomFields" dir="ltr"></textarea></label>
+        <label class="wide">الملاحظات<textarea id="editNotes" maxlength="2000"></textarea></label>
+        <label>sectionId<input id="editSectionId" readonly dir="ltr"></label>
+        <label>templatePath<input id="editTemplatePath" readonly dir="ltr"></label>
+        <label>ملف DOCX الحالي<input id="editDocxName" readonly dir="ltr"></label>
+        <label>استبدال قالب Word — اختياري<input id="editWordFile" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
+      </form>
+      <div class="dialog-actions">
+        <button id="cancelEdit" class="button" type="button">إلغاء</button>
+        <button id="saveEdit" class="button success" type="button">حفظ التعديلات محليًا</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="editPublishConfirm" aria-labelledby="editPublishConfirmTitle">
+    <div class="dialog-body">
+      <h2 id="editPublishConfirmTitle">تأكيد نشر تعديلات التقرير</h2>
+      <p>سيتم إنشاء Commit وPush ثم Deploy للتعديلات المعروضة فقط.</p>
+      <dl class="publish-summary">
+        <div><dt>العنوان</dt><dd id="editConfirmTitle">—</dd></div>
+        <div><dt>ID</dt><dd id="editConfirmId" dir="ltr">—</dd></div>
+        <div><dt>الملفات</dt><dd id="editConfirmFiles" dir="ltr">—</dd></div>
+        <div><dt>الفرع</dt><dd dir="ltr">main</dd></div>
+        <div><dt>Production URL</dt><dd dir="ltr">https://mazen.zb-store.com</dd></div>
+        <div><dt>Commit</dt><dd id="editConfirmCommit" dir="ltr">—</dd></div>
+        <div><dt>قالب Word</dt><dd id="editConfirmWord">—</dd></div>
+      </dl>
+      <div class="dialog-actions">
+        <button id="cancelEditPublish" class="button" type="button">إلغاء</button>
+        <button id="confirmEditPublish" class="button success" type="button">تأكيد النشر</button>
       </div>
     </div>
   </dialog>
@@ -619,9 +694,22 @@
     const deleteConfirm = document.getElementById('deleteConfirm');
     const deleteSlugInput = document.getElementById('deleteSlugInput');
     const confirmDelete = document.getElementById('confirmDelete');
+    const editDialog = document.getElementById('editDialog');
+    const editPanel = document.getElementById('editPanel');
+    const editState = document.getElementById('editState');
+    const editPanelMessage = document.getElementById('editPanelMessage');
+    const editReview = document.getElementById('editReview');
+    const editProgress = document.getElementById('editProgress');
+    const editErrors = document.getElementById('editErrors');
+    const editSuccess = document.getElementById('editSuccess');
+    const retryEditDeploy = document.getElementById('retryEditDeploy');
+    const editPublishConfirm = document.getElementById('editPublishConfirm');
     let lastGitCommands = [];
     let currentPublishReport = null;
     let currentDeleteReport = null;
+    let currentEditReport = null;
+    let currentEditDraft = null;
+    let currentReports = [];
 
     function setResult(message, type = '') {
       resultStatus.textContent = message;
@@ -852,7 +940,10 @@
         const details = document.createElement('div');
         const title = document.createElement('h3');
         const meta = document.createElement('div');
-        const button = document.createElement('button');
+        const actions = document.createElement('div');
+        const editButton = document.createElement('button');
+        const liveLink = document.createElement('a');
+        const deleteButton = document.createElement('button');
         item.className = 'report-item';
         title.textContent = report.title;
         meta.className = 'report-meta';
@@ -867,14 +958,235 @@
           field.textContent = value;
           meta.append(field);
         });
-        button.className = 'button danger-button delete-report-button';
-        button.type = 'button';
-        button.dataset.reportId = report.id;
-        button.textContent = 'حذف من الموقع الحي';
+        actions.className = 'report-actions';
+        editButton.className = 'button edit-report-button';
+        editButton.type = 'button';
+        editButton.dataset.reportId = report.id;
+        editButton.textContent = 'تعديل التقرير';
+        liveLink.className = 'button live-template-link';
+        liveLink.href = `https://mazen.zb-store.com/${report.templatePath}`;
+        liveLink.target = '_blank';
+        liveLink.rel = 'noopener noreferrer';
+        liveLink.textContent = 'فتح القالب المنشور';
+        deleteButton.className = 'button danger-button delete-report-button';
+        deleteButton.type = 'button';
+        deleteButton.dataset.reportId = report.id;
+        deleteButton.textContent = 'حذف من الموقع الحي';
+        actions.append(editButton, liveLink, deleteButton);
         details.append(title, meta);
-        item.append(details, button);
+        item.append(details, actions);
         return item;
       }));
+    }
+
+    function openEditDialog(report) {
+      currentEditReport = report;
+      document.getElementById('editTitle').value = report.title || '';
+      document.getElementById('editDescription').value = report.description || '';
+      document.getElementById('editCategory').value = report.category || 'أخرى';
+      document.getElementById('editStatus').value = report.status || 'تجريبي';
+      document.getElementById('editTags').value = (report.tags || []).join(', ');
+      document.getElementById('editRequiredFields').value = (report.requiredFields || []).join(', ');
+      document.getElementById('editOptionalFields').value = (report.optionalFields || []).join(', ');
+      document.getElementById('editCustomFields').value = JSON.stringify(report.customFields || [], null, 2);
+      document.getElementById('editNotes').value = report.notes || '';
+      document.getElementById('editId').value = report.id;
+      document.getElementById('editSectionId').value = report.sectionId || '';
+      document.getElementById('editTemplatePath').value = report.templatePath;
+      document.getElementById('editDocxName').value = report.templatePath.split('/').pop();
+      document.getElementById('editWordFile').value = '';
+      editDialog.showModal();
+    }
+
+    async function buildEditPayload() {
+      if (!currentEditReport) throw new Error('لم يتم اختيار تقرير للتعديل.');
+      let customFields;
+      try {
+        customFields = JSON.parse(document.getElementById('editCustomFields').value || '[]');
+      } catch {
+        throw new Error('customFields يجب أن يكون JSON array صالحًا.');
+      }
+      const payload = {
+        reportId: currentEditReport.id,
+        changes: {
+          title: document.getElementById('editTitle').value.trim(),
+          description: document.getElementById('editDescription').value.trim(),
+          category: document.getElementById('editCategory').value,
+          status: document.getElementById('editStatus').value,
+          tags: parseList(document.getElementById('editTags').value),
+          requiredFields: parseList(document.getElementById('editRequiredFields').value),
+          optionalFields: parseList(document.getElementById('editOptionalFields').value),
+          customFields,
+          notes: document.getElementById('editNotes').value.trim()
+        }
+      };
+      const file = document.getElementById('editWordFile').files[0];
+      if (file) payload.wordFile = {fileName: file.name, fileBase64: arrayBufferToBase64(await file.arrayBuffer())};
+      return payload;
+    }
+
+    function displayValue(value) {
+      if (Array.isArray(value) || (value && typeof value === 'object')) return JSON.stringify(value);
+      if (value === null || value === undefined || value === '') return 'فارغ';
+      return String(value);
+    }
+
+    function renderEditDraft(draft) {
+      currentEditDraft = draft;
+      editPanel.hidden = false;
+      editState.dataset.state = 'ready';
+      editState.textContent = 'تعديل محلي — جاهز للنشر';
+      editPanelMessage.textContent = `التقرير: ${draft.title} | Word: ${draft.wordChanged ? 'تم استبداله' : 'لم يتغير'}`;
+      const items = Object.entries(draft.differences || {}).map(([key, change]) => {
+        const item = document.createElement('div');
+        const label = document.createElement('strong');
+        const value = document.createElement('span');
+        item.className = 'edit-change';
+        label.textContent = key;
+        value.textContent = `${displayValue(change.before)} ← ${displayValue(change.after)}`;
+        item.append(label, value);
+        return item;
+      });
+      const word = document.createElement('div');
+      word.className = 'edit-change';
+      word.textContent = `قالب Word: ${draft.wordChanged ? 'تم استبداله' : 'لم يتغير'}`;
+      editReview.replaceChildren(...items, word);
+      editProgress.hidden = true;
+      editErrors.hidden = true;
+      editSuccess.hidden = true;
+      retryEditDeploy.hidden = true;
+      document.getElementById('undoEdit').hidden = false;
+      document.getElementById('publishEdit').hidden = false;
+    }
+
+    function showRecoveredEditRetry(prior, commitHash) {
+      currentEditDraft = {...prior, commitHash};
+      editPanel.hidden = false;
+      editState.dataset.state = 'failed';
+      editState.textContent = 'Deploy يحتاج إعادة';
+      editPanelMessage.textContent = 'تم اكتشاف Commit تعديل مرفوع. إعادة المحاولة ستنفذ Deploy والتحقق فقط.';
+      editReview.replaceChildren();
+      editProgress.hidden = true;
+      editErrors.hidden = true;
+      editSuccess.hidden = true;
+      document.getElementById('undoEdit').hidden = true;
+      document.getElementById('publishEdit').hidden = true;
+      retryEditDeploy.hidden = false;
+    }
+
+    function showAmbiguousEdit(info) {
+      editPanel.hidden = false;
+      editState.dataset.state = 'failed';
+      editState.textContent = 'تحتاج مراجعة';
+      editPanelMessage.textContent = info.message || 'توجد تغييرات محلية غير واضحة.';
+      editReview.replaceChildren();
+      renderEditErrors(info.details || []);
+      document.getElementById('undoEdit').hidden = true;
+      document.getElementById('publishEdit').hidden = true;
+      retryEditDeploy.hidden = true;
+    }
+
+    async function saveLocalEdit() {
+      setBusy(true);
+      try {
+        const data = await apiRequest('/api/reports/edit', {method: 'POST', body: JSON.stringify(await buildEditPayload())});
+        editDialog.close();
+        renderEditDraft(data.draft);
+        setResult(data.message, 'success');
+        await loadReports();
+      } catch (error) {
+        setResult(error.message, 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function renderEditProgress(steps) {
+      const items = steps.map((step) => {
+        const item = document.createElement('li');
+        const content = document.createElement('span');
+        const label = document.createElement('strong');
+        const detail = document.createElement('small');
+        item.className = 'progress-step';
+        item.dataset.state = step.status;
+        label.textContent = step.label;
+        detail.textContent = step.message || (step.status === 'pending' ? 'انتظار' : '');
+        content.append(label, detail);
+        item.append(content);
+        return item;
+      });
+      editProgress.replaceChildren(...items);
+      editProgress.hidden = false;
+    }
+
+    function renderEditErrors(details) {
+      const safe = Array.isArray(details) ? details : [];
+      editErrors.replaceChildren(...safe.map((detail) => {
+        const item = document.createElement('li');
+        item.textContent = detail;
+        return item;
+      }));
+      editErrors.hidden = safe.length === 0;
+    }
+
+    async function pollEdit(operationId) {
+      while (true) {
+        const data = await apiRequest(`/api/reports/edit-status?operationId=${encodeURIComponent(operationId)}`);
+        renderEditProgress(data.steps || []);
+        editPanelMessage.textContent = data.message;
+        if (data.status === 'updated') {
+          editState.dataset.state = 'published';
+          editState.textContent = 'منشور';
+          const heading = document.createElement('p');
+          const details = document.createElement('p');
+          const link = document.createElement('a');
+          heading.textContent = '✅ تم تحديث التقرير على الموقع الحي بنجاح';
+          details.textContent = `العنوان: ${data.title} | ID: ${data.reportId} | Commit: ${data.commitHash} | Word: ${data.wordChanged ? 'محدث' : 'لم يتغير'} | الوقت: ${data.publishedAt}`;
+          link.href = data.productionUrl;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = data.productionUrl;
+          editSuccess.replaceChildren(heading, details, link);
+          editSuccess.hidden = false;
+          document.getElementById('undoEdit').hidden = true;
+          document.getElementById('publishEdit').hidden = true;
+          retryEditDeploy.hidden = true;
+          currentEditDraft = null;
+          await loadReports();
+          return;
+        }
+        if (data.status === 'failed') {
+          editState.dataset.state = 'failed';
+          editState.textContent = data.verificationWarning ? 'تحتاج مراجعة' : 'فشل النشر';
+          renderEditErrors(data.details);
+          retryEditDeploy.hidden = !data.retryAvailable;
+          setResult(data.message, 'error');
+          return;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
+      }
+    }
+
+    async function beginEditPublish(endpoint) {
+      if (!currentEditDraft) return;
+      setBusy(true);
+      editState.dataset.state = 'publishing';
+      editState.textContent = 'جارٍ النشر';
+      editErrors.hidden = true;
+      editSuccess.hidden = true;
+      retryEditDeploy.hidden = true;
+      try {
+        const data = await apiRequest(endpoint, {method: 'POST', body: JSON.stringify({reportId: currentEditDraft.reportId})});
+        renderEditProgress(data.steps || []);
+        await pollEdit(data.operationId);
+      } catch (error) {
+        editState.dataset.state = 'failed';
+        editState.textContent = 'فشل النشر';
+        renderEditErrors(error.data?.details);
+        setResult(error.message, 'error');
+      } finally {
+        setBusy(false);
+      }
     }
 
     function openDeleteConfirmation(report) {
@@ -1012,9 +1324,13 @@
     async function loadReports() {
       try {
         const data = await apiRequest('/api/reports/list');
+        currentReports = data.reports || [];
         reportCount.textContent = String(data.count);
         resultReportCount.textContent = String(data.count);
-        renderReports(data.reports || []);
+        renderReports(currentReports);
+        if (data.pendingEdit?.state === 'local') renderEditDraft(data.pendingEdit.draft);
+        else if (data.pendingEdit?.state === 'deploy-retry') showRecoveredEditRetry(data.pendingEdit.prior, data.pendingEdit.commitHash);
+        else if (data.pendingEdit?.state === 'ambiguous') showAmbiguousEdit(data.pendingEdit);
         if (data.pendingDelete?.state === 'ready') showRecoveredDelete(data.pendingDelete.prior);
         if (data.pendingPublish?.state === 'ready') {
           showReadyToPublish(data.pendingPublish.publish);
@@ -1098,15 +1414,16 @@
     retryDeployButton.addEventListener('click', () => beginPublish('/api/reports/publish/retry-deploy'));
 
     reportsList.addEventListener('click', (event) => {
+      const editButton = event.target.closest('.edit-report-button');
+      if (editButton) {
+        const selected = currentReports.find((item) => item.id === editButton.dataset.reportId);
+        if (selected) openEditDialog(selected);
+        return;
+      }
       const button = event.target.closest('.delete-report-button');
       if (!button) return;
-      const report = Array.from(reportsList.querySelectorAll('.delete-report-button'))
-        .find((candidate) => candidate === button);
-      if (!report) return;
-      apiRequest('/api/reports/list').then((data) => {
-        const selected = data.reports.find((item) => item.id === button.dataset.reportId);
-        if (selected) openDeleteConfirmation(selected);
-      }).catch((error) => setResult(error.message, 'error'));
+      const selected = currentReports.find((item) => item.id === button.dataset.reportId);
+      if (selected) openDeleteConfirmation(selected);
     });
     deleteSlugInput.addEventListener('input', () => {
       confirmDelete.disabled = deleteSlugInput.value !== currentDeleteReport?.id;
@@ -1118,6 +1435,38 @@
       beginDelete('/api/reports/delete');
     });
     retryDeleteDeploy.addEventListener('click', () => beginDelete('/api/reports/delete/retry-deploy'));
+    document.getElementById('cancelEdit').addEventListener('click', () => editDialog.close());
+    document.getElementById('saveEdit').addEventListener('click', saveLocalEdit);
+    document.getElementById('undoEdit').addEventListener('click', async () => {
+      if (!currentEditDraft) return;
+      setBusy(true);
+      try {
+        const data = await apiRequest('/api/reports/edit/undo', {method: 'POST', body: JSON.stringify({reportId: currentEditDraft.reportId})});
+        currentEditDraft = null;
+        editPanel.hidden = true;
+        setResult(data.message, 'success');
+        await loadReports();
+      } catch (error) {
+        setResult(error.message, 'error');
+      } finally {
+        setBusy(false);
+      }
+    });
+    document.getElementById('publishEdit').addEventListener('click', () => {
+      if (!currentEditDraft) return;
+      document.getElementById('editConfirmTitle').textContent = currentEditDraft.title;
+      document.getElementById('editConfirmId').textContent = currentEditDraft.reportId;
+      document.getElementById('editConfirmFiles').textContent = currentEditDraft.files.join(' + ');
+      document.getElementById('editConfirmCommit').textContent = `Update manager report: ${currentEditDraft.reportId}`;
+      document.getElementById('editConfirmWord').textContent = currentEditDraft.wordChanged ? 'تم استبداله' : 'لم يتغير';
+      editPublishConfirm.showModal();
+    });
+    document.getElementById('cancelEditPublish').addEventListener('click', () => editPublishConfirm.close());
+    document.getElementById('confirmEditPublish').addEventListener('click', () => {
+      editPublishConfirm.close();
+      beginEditPublish('/api/reports/edit/publish');
+    });
+    retryEditDeploy.addEventListener('click', () => beginEditPublish('/api/reports/edit/retry-deploy'));
 
     document.getElementById('checkReports').addEventListener('click', () => {
       runSimpleAction('/api/reports/check', 'جاري فحص جميع التقارير...');

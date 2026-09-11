@@ -59,7 +59,7 @@ async function routeReportList(page, pendingPublish = {state:'none'}, reports = 
   await page.route('**/api/reports/list', route=>route.fulfill({
     status:200,
     contentType:'application/json',
-    body:JSON.stringify({ok:true, count:reports.length, reports, pendingPublish, pendingDelete:{state:'none'}})
+    body:JSON.stringify({ok:true, count:reports.length, reports, pendingPublish, pendingDelete:{state:'none'}, pendingEdit:{state:'none'}})
   }));
 }
 
@@ -156,6 +156,73 @@ for(const testCase of cases){
   });
 }
 
+for(const testCase of cases){
+  test(`تعديل التقرير محلي ومراجعته قبل النشر: ${testCase.name}`, async ({page})=>{
+    const currentReport = {
+      id:'edit-ui-report',
+      sectionId:'manager-reports',
+      title:'تقرير قابل للتعديل',
+      description:'وصف قديم',
+      category:'أخرى',
+      status:'تجريبي',
+      tags:['قديم'],
+      requiredFields:[],
+      optionalFields:[],
+      customFields:[],
+      notes:'',
+      templatePath:'assets/report-templates/manager-reports/edit-ui-report.docx',
+      publishStatus:'published'
+    };
+    let submittedPayload = null;
+    await routeReportList(page, {state:'none'}, [currentReport]);
+    await page.route('**/api/reports/edit', async route=>{
+      submittedPayload = route.request().postDataJSON();
+      await route.fulfill({
+        status:200,
+        contentType:'application/json',
+        body:JSON.stringify({
+          ok:true,
+          message:'تم حفظ التعديلات محليًا وفحصها. التعديلات جاهزة للمراجعة والنشر.',
+          draft:{
+            reportId:'edit-ui-report',
+            title:'عنوان محدث',
+            templatePath:currentReport.templatePath,
+            wordChanged:false,
+            files:['assets/data/manager-reports.json'],
+            differences:{title:{before:'تقرير قابل للتعديل', after:'عنوان محدث'}}
+          }
+        })
+      });
+    });
+    await page.setViewportSize(testCase.viewport);
+    await page.emulateMedia({colorScheme:testCase.colorScheme});
+    await page.goto('http://127.0.0.1:4174');
+
+    await page.locator('.edit-report-button').click();
+    await expect(page.locator('#editDialog')).toBeVisible();
+    await expect(page.locator('#editId')).toHaveValue('edit-ui-report');
+    await expect(page.locator('#editId')).toHaveAttribute('readonly', '');
+    await expect(page.locator('#editTemplatePath')).toHaveAttribute('readonly', '');
+    await page.locator('#editTitle').fill('عنوان محدث');
+    await page.locator('#saveEdit').click();
+
+    await expect(page.locator('#editPanel')).toBeVisible();
+    await expect(page.locator('#editState')).toHaveText('تعديل محلي — جاهز للنشر');
+    await expect(page.locator('#editReview')).toContainText('عنوان محدث');
+    expect(submittedPayload.reportId).toBe('edit-ui-report');
+    expect(submittedPayload.changes.title).toBe('عنوان محدث');
+    expect(submittedPayload.changes.id).toBeUndefined();
+    expect(submittedPayload.changes.templatePath).toBeUndefined();
+
+    await page.locator('#publishEdit').click();
+    await expect(page.locator('#editPublishConfirm')).toBeVisible();
+    await expect(page.locator('#editConfirmCommit')).toHaveText('Update manager report: edit-ui-report');
+    const overflow = await page.evaluate(()=>document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(overflow).toBe(false);
+    await page.screenshot({path:path.join(os.tmpdir(), `report-manager-edit-${testCase.name}.png`), fullPage:true});
+  });
+}
+
 test('واجهة التقدم تعرض المراحل الست والفشل الآمن دون نشر فعلي', async ({page})=>{
   await routeReportList(page);
   await page.route('**/api/reports/add', route=>route.fulfill({
@@ -215,6 +282,67 @@ test('واجهة التقدم تعرض المراحل الست والفشل ال
   await expect(page.locator('#publishErrors')).toContainText('assets/js/unrelated.js');
   await expect(page.locator('#retryDeployButton')).toBeHidden();
   await page.screenshot({path:path.join(os.tmpdir(), 'report-manager-progress-safe-failure.png'), fullPage:true});
+});
+
+test('فشل Deploy لتعديل تقرير يعرض إعادة المحاولة دون نشر فعلي', async ({page})=>{
+  const currentReport = {
+    id:'edit-retry-report', sectionId:'managerReports', title:'تقرير قبل التعديل', description:'',
+    category:'أخرى', status:'تجريبي', tags:[], fields:[], requiredFields:[], optionalFields:[],
+    customFields:[], notes:'', templatePath:'assets/report-templates/manager-reports/edit-retry-report.docx',
+    publishStatus:'published'
+  };
+  await routeReportList(page, {state:'none'}, [currentReport]);
+  await page.route('**/api/reports/edit', route=>route.fulfill({
+    status:200,
+    contentType:'application/json',
+    body:JSON.stringify({
+      ok:true,
+      message:'تم حفظ التعديلات محليًا وفحصها.',
+      draft:{
+        reportId:'edit-retry-report', title:'تقرير بعد التعديل', templatePath:currentReport.templatePath,
+        wordChanged:false, files:['assets/data/manager-reports.json'],
+        differences:{title:{before:'تقرير قبل التعديل', after:'تقرير بعد التعديل'}}
+      }
+    })
+  }));
+  await page.route('**/api/reports/edit/publish', route=>route.fulfill({
+    status:202,
+    contentType:'application/json',
+    body:JSON.stringify({ok:true, operationId:'edit-retry-op', status:'publishing', steps:[]})
+  }));
+  await page.route('**/api/reports/edit-status?**', route=>route.fulfill({
+    status:200,
+    contentType:'application/json',
+    body:JSON.stringify({
+      ok:true,
+      operationId:'edit-retry-op',
+      status:'failed',
+      message:'فشل Deploy بعد نجاح Commit وPush.',
+      details:['يمكن إعادة Deploy بأمان.'],
+      retryAvailable:true,
+      verificationWarning:false,
+      steps:[
+        {id:'validation', label:'فحص التعديلات', status:'success', message:'نجح'},
+        {id:'git', label:'فحص Git', status:'success', message:'نجح'},
+        {id:'commit', label:'إنشاء Commit', status:'success', message:'نجح'},
+        {id:'push', label:'Push إلى GitHub', status:'success', message:'نجح'},
+        {id:'deploy', label:'Deploy إلى Cloudflare', status:'failed', message:'فشل'},
+        {id:'verify', label:'التحقق من الموقع', status:'pending', message:''}
+      ]
+    })
+  }));
+
+  await page.goto('http://127.0.0.1:4174');
+  await page.locator('.edit-report-button').click();
+  await page.locator('#editTitle').fill('تقرير بعد التعديل');
+  await page.locator('#saveEdit').click();
+  await page.locator('#publishEdit').click();
+  await page.locator('#confirmEditPublish').click();
+
+  await expect(page.locator('#editState')).toHaveText('فشل النشر');
+  await expect(page.locator('#editProgress .progress-step')).toHaveCount(6);
+  await expect(page.locator('#editErrors')).toContainText('يمكن إعادة Deploy بأمان.');
+  await expect(page.locator('#retryEditDeploy')).toBeVisible();
 });
 
 test('التقرير المحلي الجاهز يعود بعد إعادة تحميل الصفحة دون إضافة مكررة', async ({page})=>{

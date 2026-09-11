@@ -19,6 +19,13 @@ const {
   validateDeletePayload,
   validatePublishPayload
 } = require('./report-publish-service');
+const {
+  EDIT_PROGRESS_STEPS,
+  detectPendingEdit,
+  publishReportEdit,
+  saveReportEdit,
+  undoReportEdit
+} = require('./report-edit-service');
 
 const host = '127.0.0.1';
 const port = 4174;
@@ -39,10 +46,14 @@ const allowedStatuses = new Set(['متاح', 'معتمد', 'تجريبي', 'مخ
 let addQueue = Promise.resolve();
 let publishQueue = Promise.resolve();
 let deleteQueue = Promise.resolve();
+let editQueue = Promise.resolve();
 const publishOperations = new Map();
 const deleteOperations = new Map();
 const latestPublishByReport = new Map();
 const latestDeleteByReport = new Map();
+const editDrafts = new Map();
+const editOperations = new Map();
+const latestEditByReport = new Map();
 
 class RequestError extends Error{
   constructor(status, message){
@@ -335,6 +346,42 @@ function publicDeleteState(state){
   };
 }
 
+function publicEditDraft(draft){
+  return {
+    reportId:draft.reportId,
+    title:draft.title,
+    before:draft.before,
+    after:draft.after,
+    differences:draft.differences,
+    wordChanged:draft.wordChanged,
+    templatePath:draft.templatePath,
+    files:draft.files,
+    savedAt:draft.savedAt,
+    committed:draft.committed === true
+  };
+}
+
+function publicEditState(state){
+  return {
+    ok:true,
+    operationId:state.operationId,
+    reportId:state.reportId,
+    title:state.title,
+    status:state.status,
+    message:state.message,
+    details:state.details,
+    steps:state.steps,
+    retryAvailable:state.retryAvailable,
+    commitHash:state.commitHash,
+    pushSucceeded:state.pushSucceeded,
+    wordChanged:state.wordChanged,
+    templatePath:state.templatePath,
+    productionUrl:state.productionUrl,
+    publishedAt:state.publishedAt,
+    verificationWarning:state.verificationWarning
+  };
+}
+
 function publicPublishState(state){
   return {
     ok:true,
@@ -505,6 +552,109 @@ async function startDeleteOperation(payload, mode = 'full'){
   return publicDeleteState(state);
 }
 
+async function saveEditDraft(payload){
+  const draft = await saveReportEdit({
+    projectRoot,
+    reportsDataPath,
+    templatesDirectory,
+    payload,
+    runReportCheck
+  });
+  editDrafts.set(draft.reportId, draft);
+  latestEditByReport.delete(draft.reportId);
+  return {
+    ok:true,
+    message:'تم حفظ التعديلات محليًا وفحصها. التعديلات جاهزة للمراجعة والنشر.',
+    draft:publicEditDraft(draft)
+  };
+}
+
+async function undoEditDraft(payload){
+  const reportId = validateDeletePayload(payload);
+  const draft = editDrafts.get(reportId);
+  const result = await undoReportEdit({projectRoot, reportsDataPath, templatesDirectory, reportId, draft, runReportCheck});
+  editDrafts.delete(reportId);
+  latestEditByReport.delete(reportId);
+  return result;
+}
+
+async function startEditOperation(payload, mode = 'full'){
+  const reportId = validateDeletePayload(payload);
+  const draft = editDrafts.get(reportId);
+  let priorState = latestEditByReport.get(reportId);
+  if(mode === 'deploy-only' && (!priorState?.retryAvailable || !priorState?.editPrior)){
+    const recovered = await detectPendingEdit({projectRoot, reportsDataPath, templatesDirectory});
+    if(recovered.state === 'deploy-retry' && recovered.prior.reportId === reportId){
+      priorState = {retryAvailable:true, editPrior:recovered.prior};
+    }
+  }
+  const prior = mode === 'deploy-only' ? priorState?.editPrior : draft;
+  if(mode === 'full' && !draft) throw new RequestError(409, 'لا توجد تعديلات محلية جاهزة للنشر لهذا التقرير.');
+  if(mode === 'deploy-only' && (!priorState?.retryAvailable || !prior?.commitHash || !prior?.pushSucceeded)){
+    throw new RequestError(409, 'لا توجد محاولة Deploy تعديل قابلة للإعادة لهذا التقرير.');
+  }
+  const state = {
+    operationId:crypto.randomUUID(),
+    reportId,
+    title:prior.after.title,
+    status:'publishing',
+    message:mode === 'deploy-only' ? 'جاري إعادة محاولة Deploy للتعديل فقط...' : 'بدأ نشر تعديل التقرير.',
+    details:[],
+    steps:createProgressSteps(EDIT_PROGRESS_STEPS),
+    retryAvailable:false,
+    commitHash:mode === 'deploy-only' ? prior.commitHash : '',
+    pushSucceeded:mode === 'deploy-only',
+    wordChanged:prior.wordChanged,
+    templatePath:prior.templatePath,
+    productionUrl:PRODUCTION_ORIGIN,
+    publishedAt:'',
+    verificationWarning:false,
+    editPrior:prior
+  };
+  editOperations.set(state.operationId, state);
+  latestEditByReport.set(reportId, state);
+
+  const execute = async ()=>{
+    try{
+      const result = await publishReportEdit({
+        projectRoot,
+        reportsDataPath,
+        templatesDirectory,
+        reportId,
+        mode,
+        draft:mode === 'full' ? draft : null,
+        prior:mode === 'deploy-only' ? prior : null,
+        runReportCheck,
+        onProgress:update=>setPublishProgress(state, update)
+      });
+      state.status = 'updated';
+      state.message = 'تم تحديث التقرير على الموقع الحي بنجاح.';
+      state.commitHash = result.commitHash;
+      state.pushSucceeded = result.pushSucceeded;
+      state.publishedAt = result.publishedAt;
+      state.editPrior = {...prior, commitHash:result.commitHash, pushSucceeded:true};
+      editDrafts.delete(reportId);
+    }catch(error){
+      const failedStep = state.steps.find(item=>item.id === error.phase);
+      if(failedStep){
+        failedStep.status = 'failed';
+        failedStep.message = error.message;
+      }
+      state.status = 'failed';
+      state.message = error.message || 'فشل نشر تعديل التقرير.';
+      state.details = Array.isArray(error.details) ? error.details.map(sanitizeOutput) : [];
+      state.retryAvailable = error.retryAvailable === true;
+      state.commitHash = error.commitHash || state.commitHash;
+      state.pushSucceeded = error.pushSucceeded === true;
+      state.verificationWarning = error.verificationWarning === true;
+      if(error.editPrior) state.editPrior = error.editPrior;
+    }
+  };
+  const operation = editQueue.then(execute, execute);
+  editQueue = operation.catch(()=>{});
+  return publicEditState(state);
+}
+
 function openLocalTarget(command, argumentsList){
   const processHandle = childProcess.spawn(command, argumentsList, {
     detached:true,
@@ -595,12 +745,34 @@ async function handleApi(request, response, requestUrl){
     if(pendingDelete.state === 'ready' && latestDeleteByReport.get(pendingDelete.prior.reportId)?.status === 'deleted'){
       pendingDelete = {state:'none'};
     }
+    let pendingEdit = await detectPendingEdit({projectRoot, reportsDataPath, templatesDirectory});
+    if(pendingEdit.state === 'local'){
+      const existingDraft = editDrafts.get(pendingEdit.draft.reportId);
+      if(existingDraft) pendingEdit = {state:'local', draft:publicEditDraft(existingDraft)};
+      else{
+        editDrafts.set(pendingEdit.draft.reportId, pendingEdit.draft);
+        pendingEdit = {state:'local', draft:publicEditDraft(pendingEdit.draft)};
+      }
+    }else if(pendingEdit.state === 'deploy-retry'){
+      if(latestEditByReport.get(pendingEdit.prior.reportId)?.status === 'updated') pendingEdit = {state:'none'};
+      else pendingEdit = {state:'deploy-retry', prior:publicEditDraft(pendingEdit.prior), commitHash:pendingEdit.prior.commitHash};
+    }
     sendJson(response, 200, {
       ok:true,
       count:reports.length,
-      reports:reports.map(report=>({...report, publishStatus:'published'})),
+      reports:reports.map(report=>{
+        const draft = editDrafts.get(report.id);
+        const operation = latestEditByReport.get(report.id);
+        let publishStatus = 'منشور';
+        if(draft && !draft.committed) publishStatus = 'تعديل محلي';
+        if(operation?.status === 'publishing') publishStatus = 'جارٍ النشر';
+        if(operation?.status === 'failed') publishStatus = operation.verificationWarning ? 'تحتاج مراجعة' : 'فشل النشر';
+        if(operation?.status === 'updated') publishStatus = 'منشور';
+        return {...report, publishStatus};
+      }),
       pendingPublish,
-      pendingDelete
+      pendingDelete,
+      pendingEdit
     });
     return;
   }
@@ -621,6 +793,13 @@ async function handleApi(request, response, requestUrl){
     const state = deleteOperations.get(operationId);
     if(!state) throw new RequestError(404, 'عملية الحذف المطلوبة غير موجودة.');
     sendJson(response, 200, publicDeleteState(state));
+    return;
+  }
+  if(request.method === 'GET' && pathname === '/api/reports/edit-status'){
+    const operationId = String(requestUrl.searchParams.get('operationId') || '');
+    const state = editOperations.get(operationId);
+    if(!state) throw new RequestError(404, 'عملية تعديل التقرير المطلوبة غير موجودة.');
+    sendJson(response, 200, publicEditState(state));
     return;
   }
 
@@ -649,6 +828,22 @@ async function handleApi(request, response, requestUrl){
   }
   if(pathname === '/api/reports/delete/retry-deploy'){
     sendJson(response, 202, await startDeleteOperation(await readJsonBody(request), 'deploy-only'));
+    return;
+  }
+  if(pathname === '/api/reports/edit'){
+    sendJson(response, 200, await saveEditDraft(await readJsonBody(request)));
+    return;
+  }
+  if(pathname === '/api/reports/edit/undo'){
+    sendJson(response, 200, await undoEditDraft(await readJsonBody(request)));
+    return;
+  }
+  if(pathname === '/api/reports/edit/publish'){
+    sendJson(response, 202, await startEditOperation(await readJsonBody(request)));
+    return;
+  }
+  if(pathname === '/api/reports/edit/retry-deploy'){
+    sendJson(response, 202, await startEditOperation(await readJsonBody(request), 'deploy-only'));
     return;
   }
   if(pathname === '/api/open/templates-folder'){
@@ -727,5 +922,6 @@ module.exports = {
   ensureLocalPost,
   startPublishOperation,
   startDeleteOperation,
+  startEditOperation,
   tokensMatch
 };
