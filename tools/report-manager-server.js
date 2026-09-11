@@ -9,6 +9,7 @@ const {
   PRODUCTION_ORIGIN,
   PROGRESS_STEPS,
   PublishError,
+  detectPendingReport,
   defaultRunCommand,
   publishReport,
   sanitizeOutput,
@@ -471,7 +472,16 @@ async function handleApi(request, response, requestUrl){
   const pathname = requestUrl.pathname;
   if(request.method === 'GET' && pathname === '/api/reports/list'){
     const {reports} = readReportsFile();
-    sendJson(response, 200, {ok:true, count:reports.length, reports});
+    const pendingDetection = await detectPendingReport({
+      projectRoot,
+      reportsDataPath,
+      templatesDirectory,
+      runCommand:defaultRunCommand
+    });
+    const pendingPublish = pendingDetection.state === 'ready'
+      ? {state:'ready', publish:buildPublishInfo(pendingDetection.report, pendingDetection.branch)}
+      : pendingDetection;
+    sendJson(response, 200, {ok:true, count:reports.length, reports, pendingPublish});
     return;
   }
   if(request.method === 'GET' && pathname === '/api/reports/check'){

@@ -536,6 +536,7 @@
     const csrfToken = document.querySelector('meta[name="report-manager-token"]').content;
     const publishSection = document.getElementById('publishSection');
     const publishState = document.getElementById('publishState');
+    const publishTitle = document.getElementById('publishTitle');
     const publishButton = document.getElementById('publishButton');
     const publishProgress = document.getElementById('publishProgress');
     const publishErrors = document.getElementById('publishErrors');
@@ -641,6 +642,7 @@
     function showReadyToPublish(info) {
       currentPublishReport = info;
       publishSection.hidden = false;
+      publishTitle.textContent = 'جاهز للنشر';
       setPublishState('ready', 'جاهز للنشر');
       publishReportTitle.textContent = info.title;
       publishSlug.textContent = info.slug;
@@ -653,6 +655,25 @@
       publishErrors.hidden = true;
       publishSuccess.hidden = true;
       retryDeployButton.hidden = true;
+    }
+
+    function showPendingReview(info) {
+      currentPublishReport = null;
+      publishSection.hidden = false;
+      publishTitle.textContent = 'تغييرات تحتاج مراجعة';
+      setPublishState('failed', 'تحتاج مراجعة');
+      publishReportTitle.textContent = '—';
+      publishSlug.textContent = '—';
+      publishDocx.textContent = '—';
+      publishReportStatus.textContent = '—';
+      publishBranch.textContent = '—';
+      renderPublishFiles([]);
+      publishButton.disabled = true;
+      publishProgress.hidden = true;
+      publishSuccess.hidden = true;
+      retryDeployButton.hidden = true;
+      renderPublishErrors(info.details || []);
+      setResult(info.message, 'error');
     }
 
     function renderProgress(steps) {
@@ -777,6 +798,14 @@
         const data = await apiRequest('/api/reports/list');
         reportCount.textContent = String(data.count);
         resultReportCount.textContent = String(data.count);
+        if (data.pendingPublish?.state === 'ready') {
+          showReadyToPublish(data.pendingPublish.publish);
+          setResult('تم اكتشاف تقرير محلي جاهز للنشر.', 'success');
+        } else if (data.pendingPublish?.state === 'ambiguous') {
+          showPendingReview(data.pendingPublish);
+        } else if (!currentPublishReport) {
+          publishSection.hidden = true;
+        }
       } catch (error) {
         reportCount.textContent = '—';
         setResult(error.message, 'error');

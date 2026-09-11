@@ -41,9 +41,32 @@ const cases = [
   {name:'mobile-light', viewport:{width:390, height:844}, colorScheme:'light'}
 ];
 
+const readyPublishInfo = {
+  reportId:'ui-safe-report',
+  title:'تقرير واجهة آمن',
+  slug:'ui-safe-report',
+  outputFileName:'ui-safe-report.docx',
+  templatePath:'assets/report-templates/manager-reports/ui-safe-report.docx',
+  reportStatus:'تجريبي',
+  publishStatus:'ready',
+  files:['assets/data/manager-reports.json', 'assets/report-templates/manager-reports/ui-safe-report.docx'],
+  branch:'main',
+  commitMessage:'Add ui-safe-report manager report',
+  productionUrl:'https://mazen.zb-store.com'
+};
+
+async function routeReportList(page, pendingPublish = {state:'none'}){
+  await page.route('**/api/reports/list', route=>route.fulfill({
+    status:200,
+    contentType:'application/json',
+    body:JSON.stringify({ok:true, count:8, reports:[], pendingPublish})
+  }));
+}
+
 for(const testCase of cases){
   test(`واجهة النشر المحلية آمنة ومتجاوبة: ${testCase.name}`, async ({page})=>{
     let publishRequests = 0;
+    await routeReportList(page);
     await page.setViewportSize(testCase.viewport);
     await page.emulateMedia({colorScheme:testCase.colorScheme});
     await page.route('**/api/reports/add', async route=>{
@@ -57,19 +80,7 @@ for(const testCase of cases){
           templatePath:'assets/report-templates/manager-reports/ui-safe-report.docx',
           reportCount:9,
           check:{ok:true, output:'PASS'},
-          publish:{
-            reportId:'ui-safe-report',
-            title:'تقرير واجهة آمن',
-            slug:'ui-safe-report',
-            outputFileName:'ui-safe-report.docx',
-            templatePath:'assets/report-templates/manager-reports/ui-safe-report.docx',
-            reportStatus:'تجريبي',
-            publishStatus:'ready',
-            files:['assets/data/manager-reports.json', 'assets/report-templates/manager-reports/ui-safe-report.docx'],
-            branch:'main',
-            commitMessage:'Add ui-safe-report manager report',
-            productionUrl:'https://mazen.zb-store.com'
-          }
+          publish:readyPublishInfo
         })
       });
     });
@@ -113,6 +124,7 @@ for(const testCase of cases){
 }
 
 test('واجهة التقدم تعرض المراحل الست والفشل الآمن دون نشر فعلي', async ({page})=>{
+  await routeReportList(page);
   await page.route('**/api/reports/add', route=>route.fulfill({
     status:201,
     contentType:'application/json',
@@ -122,12 +134,7 @@ test('واجهة التقدم تعرض المراحل الست والفشل ال
       outputFileName:'ui-safe-report.docx',
       templatePath:'assets/report-templates/manager-reports/ui-safe-report.docx',
       reportCount:9,
-      publish:{
-        reportId:'ui-safe-report', title:'تقرير واجهة آمن', slug:'ui-safe-report',
-        outputFileName:'ui-safe-report.docx', reportStatus:'تجريبي', branch:'main',
-        files:['assets/data/manager-reports.json', 'assets/report-templates/manager-reports/ui-safe-report.docx'],
-        commitMessage:'Add ui-safe-report manager report', productionUrl:'https://mazen.zb-store.com'
-      }
+      publish:readyPublishInfo
     })
   }));
   await page.route('**/api/reports/publish', route=>route.fulfill({
@@ -175,4 +182,22 @@ test('واجهة التقدم تعرض المراحل الست والفشل ال
   await expect(page.locator('#publishErrors')).toContainText('assets/js/unrelated.js');
   await expect(page.locator('#retryDeployButton')).toBeHidden();
   await page.screenshot({path:path.join(os.tmpdir(), 'report-manager-progress-safe-failure.png'), fullPage:true});
+});
+
+test('التقرير المحلي الجاهز يعود بعد إعادة تحميل الصفحة دون إضافة مكررة', async ({page})=>{
+  let addRequests = 0;
+  await routeReportList(page, {state:'ready', publish:readyPublishInfo});
+  page.on('request', request=>{
+    if(new URL(request.url()).pathname === '/api/reports/add') addRequests += 1;
+  });
+
+  await page.goto('http://127.0.0.1:4174');
+  await expect(page.locator('#publishSection')).toBeVisible();
+  await expect(page.locator('#publishSlug')).toHaveText('ui-safe-report');
+  await expect(page.locator('#publishButton')).toBeEnabled();
+  await page.reload();
+  await expect(page.locator('#publishSection')).toBeVisible();
+  await expect(page.locator('#publishSlug')).toHaveText('ui-safe-report');
+  await expect(page.locator('#publishButton')).toBeEnabled();
+  expect(addRequests).toBe(0);
 });

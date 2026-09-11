@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const {
   PublishError,
+  detectPendingReport,
   publishReport,
   sanitizeOutput,
   validatePublishPayload,
@@ -91,6 +92,75 @@ function publishOptions(t, overrides = {}){
     fixture
   };
 }
+
+function detectionOptions(context){
+  return {
+    projectRoot:context.fixture.root,
+    reportsDataPath:context.fixture.reportsDataPath,
+    templatesDirectory:context.fixture.templatesDirectory,
+    runCommand:context.command.runner
+  };
+}
+
+test('pending report is detected from Git status and trusted manager report data', async t=>{
+  const context = publishOptions(t);
+  const result = await detectPendingReport(detectionOptions(context));
+  assert.deepEqual(result, {
+    state:'ready',
+    branch:'main',
+    report:{
+      id:'test-report',
+      title:'تقرير اختباري',
+      status:'تجريبي',
+      templatePath:templateRelativePath
+    }
+  });
+});
+
+test('pending report survives server restart logically without process memory', async t=>{
+  const context = publishOptions(t);
+  const before = fs.readFileSync(context.fixture.reportsDataPath, 'utf8');
+  const firstProcessResult = await detectPendingReport(detectionOptions(context));
+  const secondProcessResult = await detectPendingReport(detectionOptions(context));
+  assert.deepEqual(secondProcessResult, firstProcessResult);
+  assert.equal(fs.readFileSync(context.fixture.reportsDataPath, 'utf8'), before);
+});
+
+test('multiple untracked report DOCX files are ambiguous', async t=>{
+  const context = publishOptions(t, {commands:{
+    'git status':()=>({
+      code:0,
+      stdout:` M ${reportsRelativePath}\0?? ${templateRelativePath}\0?? assets/report-templates/manager-reports/second-report.docx\0`,
+      stderr:''
+    })
+  }});
+  const result = await detectPendingReport(detectionOptions(context));
+  assert.equal(result.state, 'ambiguous');
+  assert.equal(result.details.length, 3);
+});
+
+test('unrelated local change makes pending report detection ambiguous', async t=>{
+  const context = publishOptions(t, {commands:{
+    'git status':()=>({
+      code:0,
+      stdout:` M ${reportsRelativePath}\0?? ${templateRelativePath}\0 M assets/js/unrelated.js\0`,
+      stderr:''
+    })
+  }});
+  const result = await detectPendingReport(detectionOptions(context));
+  assert.equal(result.state, 'ambiguous');
+  assert.equal(result.details.includes('assets/js/unrelated.js'), true);
+});
+
+test('pending detection never creates a duplicate report or writes project files', async t=>{
+  const context = publishOptions(t);
+  const jsonBefore = fs.readFileSync(context.fixture.reportsDataPath);
+  const templatesBefore = fs.readdirSync(context.fixture.templatesDirectory).sort();
+  await detectPendingReport(detectionOptions(context));
+  assert.deepEqual(fs.readFileSync(context.fixture.reportsDataPath), jsonBefore);
+  assert.deepEqual(fs.readdirSync(context.fixture.templatesDirectory).sort(), templatesBefore);
+  assert.equal(context.command.calls.some(call=>['add', 'commit', 'push'].includes(call.args[0])), false);
+});
 
 test('publish UI is disabled and hidden before a successful add', async ()=>{
   const html = await readFile(path.join(projectRoot, 'tools/report-manager.html'), 'utf8');

@@ -67,6 +67,10 @@ function sanitizeOutput(value){
 }
 
 function parsePorcelain(output){
+  return [...new Set(parsePorcelainEntries(output).map(entry=>entry.path))];
+}
+
+function parsePorcelainEntries(output){
   const entries = String(output || '').split('\0');
   const files = [];
   for(let index = 0; index < entries.length; index += 1){
@@ -74,13 +78,13 @@ function parsePorcelain(output){
     if(!entry) continue;
     const status = entry.slice(0, 2);
     const file = normalizeRepoPath(entry.slice(3));
-    if(file) files.push(file);
+    if(file) files.push({status, path:file});
     if(/[RC]/.test(status) && entries[index + 1]){
-      files.push(normalizeRepoPath(entries[index + 1]));
+      files.push({status, path:normalizeRepoPath(entries[index + 1])});
       index += 1;
     }
   }
-  return [...new Set(files)];
+  return files.filter((entry, index)=>entry.path && files.findIndex(candidate=>candidate.path === entry.path) === index);
 }
 
 function parseNullSeparatedPaths(output){
@@ -158,6 +162,7 @@ function validateReportLibrary(options){
 }
 
 function resolveTrustedReport(options, reportId, reports){
+  const fsApi = options.fsApi || fs;
   const report = reports.find(item=>String(item.id || '').trim() === reportId);
   if(!report){
     throw new PublishError('REPORT_NOT_FOUND', 'التقرير المطلوب غير موجود في مكتبة التقارير.', {phase:'validation'});
@@ -168,10 +173,98 @@ function resolveTrustedReport(options, reportId, reports){
     throw new PublishError('UNSAFE_TEMPLATE_PATH', 'مسار قالب التقرير لا يطابق المسار الآمن المتوقع.', {phase:'validation'});
   }
   const absoluteTemplatePath = path.resolve(options.projectRoot, templatePath);
-  if(!isInsideDirectory(options.templatesDirectory, absoluteTemplatePath) || !fs.existsSync(absoluteTemplatePath)){
+  if(!isInsideDirectory(options.templatesDirectory, absoluteTemplatePath) || !fsApi.existsSync(absoluteTemplatePath)){
     throw new PublishError('UNSAFE_TEMPLATE_PATH', 'تعذر اعتماد مسار قالب التقرير.', {phase:'validation'});
   }
   return {report, templatePath, absoluteTemplatePath};
+}
+
+async function detectPendingReport(options){
+  const fsApi = options.fsApi || fs;
+  const runCommand = options.runCommand || defaultRunCommand;
+  let statusResult;
+  try{
+    statusResult = await runCommand('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], {
+      cwd:options.projectRoot,
+      timeoutMs:15000,
+      maxBuffer:1024 * 1024
+    });
+  }catch(error){
+    return {state:'ambiguous', message:'تعذر فحص تغييرات Git المحلية.', details:[sanitizeOutput(error.message)]};
+  }
+  if(statusResult.code !== 0){
+    return {
+      state:'ambiguous',
+      message:'تعذر فحص تغييرات Git المحلية.',
+      details:[sanitizeOutput(statusResult.stderr || statusResult.stdout)]
+    };
+  }
+
+  const entries = parsePorcelainEntries(statusResult.stdout);
+  if(!entries.length) return {state:'none'};
+  const jsonEntries = entries.filter(entry=>entry.path === REPORTS_RELATIVE_PATH);
+  const reportDocxEntries = entries.filter(entry=>
+    entry.path.startsWith(`${TEMPLATES_RELATIVE_DIRECTORY}/`) && path.posix.extname(entry.path).toLowerCase() === '.docx'
+  );
+  const expectedPaths = new Set([
+    REPORTS_RELATIVE_PATH,
+    ...reportDocxEntries.map(entry=>entry.path)
+  ]);
+  const unrelatedEntries = entries.filter(entry=>!expectedPaths.has(entry.path));
+  const jsonIsModified = jsonEntries.length === 1 && jsonEntries[0].status.includes('M');
+  const oneUntrackedDocx = reportDocxEntries.length === 1 && reportDocxEntries[0].status === '??';
+  if(entries.length !== 2 || !jsonIsModified || !oneUntrackedDocx || unrelatedEntries.length){
+    return {
+      state:'ambiguous',
+      message:'توجد عدة تغييرات أو تغييرات غير واضحة وتحتاج مراجعة قبل النشر.',
+      details:entries.map(entry=>entry.path)
+    };
+  }
+
+  let reports;
+  try{
+    reports = JSON.parse(fsApi.readFileSync(options.reportsDataPath, 'utf8'));
+  }catch(error){
+    return {state:'ambiguous', message:'تعذر قراءة بيانات تقارير المدير.', details:[sanitizeOutput(error.message)]};
+  }
+  if(!Array.isArray(reports)){
+    return {state:'ambiguous', message:'بيانات تقارير المدير غير صالحة.', details:[REPORTS_RELATIVE_PATH]};
+  }
+  const templatePath = reportDocxEntries[0].path;
+  const matches = reports.filter(report=>normalizeRepoPath(report.templatePath) === templatePath);
+  if(matches.length !== 1){
+    return {
+      state:'ambiguous',
+      message:'تعذر مطابقة ملف DOCX مع تقرير واحد داخل manager-reports.json.',
+      details:[templatePath]
+    };
+  }
+
+  let trusted;
+  try{
+    const reportId = validateReportId(matches[0].id);
+    trusted = resolveTrustedReport(options, reportId, reports);
+  }catch(error){
+    return {state:'ambiguous', message:error.message, details:[templatePath]};
+  }
+
+  let branch = 'غير معروف';
+  try{
+    const branchResult = await runCommand('git', ['branch', '--show-current'], {cwd:options.projectRoot, timeoutMs:15000});
+    if(branchResult.code === 0) branch = branchResult.stdout.trim() || branch;
+  }catch{
+    branch = 'غير معروف';
+  }
+  return {
+    state:'ready',
+    branch,
+    report:{
+      id:trusted.report.id,
+      title:trusted.report.title,
+      status:trusted.report.status,
+      templatePath:trusted.templatePath
+    }
+  };
 }
 
 function defaultRunCommand(command, args, options = {}){
@@ -483,9 +576,11 @@ module.exports = {
   PRODUCTION_ORIGIN,
   PROGRESS_STEPS,
   PublishError,
+  detectPendingReport,
   defaultRunCommand,
   normalizeRepoPath,
   parsePorcelain,
+  parsePorcelainEntries,
   publishReport,
   resolveDeployInvocation,
   sanitizeOutput,
