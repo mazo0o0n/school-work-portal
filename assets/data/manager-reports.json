@@ -8,7 +8,11 @@
     "sectionId": "managerReports",
     "templatePath": "assets/report-templates/manager-reports/meeting-template-test.docx",
     "outputFileName": "سجل اجتماعات الأقسام - {{schoolDisplayName}}.docx",
-    "tags": ["اجتماعات", "أقسام", "لجان"],
+    "tags": [
+      "اجتماعات",
+      "أقسام",
+      "لجان"
+    ],
     "fields": [
       "educationDepartment",
       "schoolDisplayName",
@@ -59,10 +63,21 @@
     "sectionId": "managerReports",
     "templatePath": "assets/report-templates/manager-reports/academic-achievement-committee.docx",
     "outputFileName": "تشكيل لجنة التحصيل الدراسي - {{schoolDisplayName}}.docx",
-    "tags": ["لجنة", "تحصيل دراسي"],
-    "fields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "tags": [
+      "لجنة",
+      "تحصيل دراسي"
+    ],
+    "fields": [
+      "educationDepartment",
+      "schoolDisplayName",
+      "principalName"
+    ],
     "requiredFields": [],
-    "optionalFields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "optionalFields": [
+      "educationDepartment",
+      "schoolDisplayName",
+      "principalName"
+    ],
     "customFields": [],
     "notes": ""
   },
@@ -75,10 +90,21 @@
     "sectionId": "managerReports",
     "templatePath": "assets/report-templates/manager-reports/health-guide-assignment.docx",
     "outputFileName": "تكليف الموجه الصحي - {{schoolDisplayName}}.docx",
-    "tags": ["تكليف", "موجه صحي"],
-    "fields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "tags": [
+      "تكليف",
+      "موجه صحي"
+    ],
+    "fields": [
+      "educationDepartment",
+      "schoolDisplayName",
+      "principalName"
+    ],
     "requiredFields": [],
-    "optionalFields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "optionalFields": [
+      "educationDepartment",
+      "schoolDisplayName",
+      "principalName"
+    ],
     "customFields": [],
     "notes": ""
   },
@@ -91,10 +117,21 @@
     "sectionId": "managerReports",
     "templatePath": "assets/report-templates/manager-reports/school-guard-assignment.docx",
     "outputFileName": "تكليف حارس المدرسة - {{schoolDisplayName}}.docx",
-    "tags": ["تكليف", "حارس المدرسة"],
-    "fields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "tags": [
+      "تكليف",
+      "حارس المدرسة"
+    ],
+    "fields": [
+      "educationDepartment",
+      "schoolDisplayName",
+      "principalName"
+    ],
     "requiredFields": [],
-    "optionalFields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "optionalFields": [
+      "educationDepartment",
+      "schoolDisplayName",
+      "principalName"
+    ],
     "customFields": [],
     "notes": ""
   },
@@ -107,10 +144,54 @@
     "sectionId": "managerReports",
     "templatePath": "assets/report-templates/manager-reports/activity-leader-assignment-1448.docx",
     "outputFileName": "تكليف رائد النشاط للعام 1448 هـ - {{schoolDisplayName}}.docx",
-    "tags": ["تكليف", "رائد النشاط", "1448"],
-    "fields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "tags": [
+      "تكليف",
+      "رائد النشاط",
+      "1448"
+    ],
+    "fields": [
+      "educationDepartment",
+      "schoolDisplayName",
+      "principalName"
+    ],
     "requiredFields": [],
-    "optionalFields": ["educationDepartment", "schoolDisplayName", "principalName"],
+    "optionalFields": [
+      "educationDepartment",
+      "schoolDisplayName",
+      "principalName"
+    ],
+    "customFields": [],
+    "notes": ""
+  },
+  {
+    "id": "task-follow-up-record",
+    "title": "سجل متابعة تنفيذ المهام",
+    "description": "",
+    "category": "السجلات",
+    "status": "تجريبي",
+    "sectionId": "managerReports",
+    "templatePath": "assets/report-templates/manager-reports/task-follow-up-record.docx",
+    "outputFileName": "سجل متابعة تنفيذ المهام - {{schoolDisplayName}}.docx",
+    "tags": [],
+    "fields": [],
+    "requiredFields": [],
+    "optionalFields": [],
+    "customFields": [],
+    "notes": ""
+  },
+  {
+    "id": "awareness-program-report",
+    "title": "تقرير تنفيذ برنامج توعوي",
+    "description": "نموذج تجريبي لتوثيق تنفيذ برنامج توعوي",
+    "category": "النماذج",
+    "status": "تجريبي",
+    "sectionId": "managerReports",
+    "templatePath": "assets/report-templates/manager-reports/awareness-program-report.docx",
+    "outputFileName": "تقرير تنفيذ برنامج توعوي - {{schoolDisplayName}}.docx",
+    "tags": [],
+    "fields": [],
+    "requiredFields": [],
+    "optionalFields": [],
     "customFields": [],
     "notes": ""
   }
