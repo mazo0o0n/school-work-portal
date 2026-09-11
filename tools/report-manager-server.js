@@ -1,13 +1,26 @@
 'use strict';
 
 const childProcess = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const {
+  PRODUCTION_ORIGIN,
+  PROGRESS_STEPS,
+  PublishError,
+  defaultRunCommand,
+  publishReport,
+  sanitizeOutput,
+  validatePublishPayload
+} = require('./report-publish-service');
 
 const host = '127.0.0.1';
 const port = 4174;
 const origin = `http://${host}:${port}`;
+const allowedHosts = new Set([`${host}:${port}`, `localhost:${port}`]);
+const allowedOrigins = new Set([origin, `http://localhost:${port}`]);
+const csrfToken = crypto.randomBytes(32).toString('hex');
 const maxRequestBytes = 22 * 1024 * 1024;
 const maxDocumentBytes = 15 * 1024 * 1024;
 const projectRoot = path.resolve(__dirname, '..');
@@ -19,6 +32,9 @@ const checkScriptPath = path.join(__dirname, 'check-manager-reports.js');
 const allowedCategories = new Set(['الاجتماعات', 'اللجان', 'النماذج', 'السجلات', 'أخرى']);
 const allowedStatuses = new Set(['متاح', 'معتمد', 'تجريبي', 'مخطط']);
 let addQueue = Promise.resolve();
+let publishQueue = Promise.resolve();
+const publishOperations = new Map();
+const latestPublishByReport = new Map();
 
 class RequestError extends Error{
   constructor(status, message){
@@ -52,12 +68,27 @@ function isLoopback(address){
   return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
 }
 
-function ensureLocalPost(request){
-  if(request.headers.origin !== origin){
+function ensureAllowedHost(request){
+  if(!allowedHosts.has(String(request.headers.host || '').toLowerCase())){
+    throw new RequestError(403, 'تم رفض الطلب لأن Host غير محلي أو غير متوقع.');
+  }
+}
+
+function tokensMatch(actual, expected){
+  const actualBuffer = Buffer.from(String(actual || ''), 'utf8');
+  const expectedBuffer = Buffer.from(String(expected || ''), 'utf8');
+  return actualBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+function ensureLocalPost(request, expectedToken = csrfToken){
+  if(!allowedOrigins.has(request.headers.origin)){
     throw new RequestError(403, 'تم رفض الطلب لأنه لم يصدر من واجهة الأداة المحلية.');
   }
   if(request.headers['x-report-manager'] !== 'local'){
     throw new RequestError(403, 'رأس التحقق المحلي مفقود.');
+  }
+  if(!tokensMatch(request.headers['x-report-manager-token'], expectedToken)){
+    throw new RequestError(403, 'رمز حماية العملية المحلية غير صالح. أعد فتح الأداة وحاول مرة أخرى.');
   }
 }
 
@@ -245,6 +276,124 @@ function runReportCheck(){
   });
 }
 
+async function getCurrentBranch(){
+  try{
+    const result = await defaultRunCommand('git', ['branch', '--show-current'], {cwd:projectRoot, timeoutMs:15000});
+    return result.code === 0 ? result.stdout.trim() : 'غير معروف';
+  }catch{
+    return 'غير معروف';
+  }
+}
+
+function buildPublishInfo(report, branch){
+  return {
+    reportId:report.id,
+    title:report.title,
+    slug:report.id,
+    outputFileName:`${report.id}.docx`,
+    templatePath:report.templatePath,
+    reportStatus:report.status,
+    publishStatus:'ready',
+    files:['assets/data/manager-reports.json', report.templatePath],
+    branch,
+    commitMessage:`Add ${report.id} manager report`,
+    productionUrl:PRODUCTION_ORIGIN
+  };
+}
+
+function createProgressSteps(){
+  return PROGRESS_STEPS.map(step=>({...step, status:'pending', message:''}));
+}
+
+function publicPublishState(state){
+  return {
+    ok:true,
+    operationId:state.operationId,
+    reportId:state.reportId,
+    status:state.status,
+    message:state.message,
+    details:state.details,
+    steps:state.steps,
+    retryAvailable:state.retryAvailable,
+    commitHash:state.commitHash,
+    productionUrl:state.productionUrl,
+    outputFileName:state.outputFileName,
+    publishedAt:state.publishedAt,
+    verificationWarning:state.verificationWarning
+  };
+}
+
+function setPublishProgress(state, update){
+  const step = state.steps.find(item=>item.id === update.step);
+  if(!step) return;
+  step.status = update.status;
+  step.message = update.message || '';
+}
+
+function startPublishOperation(payload, mode = 'full'){
+  const reportId = validatePublishPayload(payload);
+  const prior = latestPublishByReport.get(reportId);
+  if(mode === 'deploy-only' && (!prior || !prior.retryAvailable || !prior.commitHash || !prior.pushSucceeded)){
+    throw new RequestError(409, 'لا توجد محاولة Deploy قابلة للإعادة لهذا التقرير.');
+  }
+
+  const state = {
+    operationId:crypto.randomUUID(),
+    reportId,
+    status:'publishing',
+    message:mode === 'deploy-only' ? 'جاري إعادة محاولة Deploy فقط...' : 'بدأت عملية النشر الآمنة.',
+    details:[],
+    steps:createProgressSteps(),
+    retryAvailable:false,
+    commitHash:mode === 'deploy-only' ? prior.commitHash : '',
+    pushSucceeded:mode === 'deploy-only',
+    productionUrl:PRODUCTION_ORIGIN,
+    outputFileName:`${reportId}.docx`,
+    publishedAt:'',
+    verificationWarning:false
+  };
+  publishOperations.set(state.operationId, state);
+  latestPublishByReport.set(reportId, state);
+
+  const execute = async ()=>{
+    try{
+      const result = await publishReport({
+        projectRoot,
+        reportsDataPath,
+        templatesDirectory,
+        payload:{reportId},
+        mode,
+        prior:mode === 'deploy-only' ? prior : null,
+        runReportCheck,
+        onProgress:update=>setPublishProgress(state, update)
+      });
+      state.status = 'published';
+      state.message = 'تم نشر التقرير على الموقع الحي بنجاح.';
+      state.commitHash = result.commitHash;
+      state.pushSucceeded = result.pushSucceeded;
+      state.outputFileName = result.outputFileName;
+      state.publishedAt = result.publishedAt;
+    }catch(error){
+      const failedStep = state.steps.find(item=>item.id === error.phase);
+      if(failedStep){
+        failedStep.status = 'failed';
+        failedStep.message = error.message;
+      }
+      state.status = 'failed';
+      state.message = error.message || 'فشلت عملية النشر.';
+      state.details = Array.isArray(error.details) ? error.details.map(sanitizeOutput) : [];
+      state.retryAvailable = error.retryAvailable === true;
+      state.commitHash = error.commitHash || state.commitHash;
+      state.pushSucceeded = error.pushSucceeded === true;
+      state.verificationWarning = error.verificationWarning === true;
+    }
+  };
+
+  const operation = publishQueue.then(execute, execute);
+  publishQueue = operation.catch(()=>{});
+  return publicPublishState(state);
+}
+
 function openLocalTarget(command, argumentsList){
   const processHandle = childProcess.spawn(command, argumentsList, {
     detached:true,
@@ -304,7 +453,8 @@ async function addReport(payload){
         templatePath:candidate.report.templatePath,
         reportCount:updatedReports.length,
         check,
-        gitCommands:buildGitCommands(candidate.report)
+        gitCommands:buildGitCommands(candidate.report),
+        publish:buildPublishInfo(candidate.report, await getCurrentBranch())
       };
     }catch(error){
       if(temporaryDataWritten && fs.existsSync(temporaryDataPath)) fs.unlinkSync(temporaryDataPath);
@@ -317,7 +467,8 @@ async function addReport(payload){
   });
 }
 
-async function handleApi(request, response, pathname){
+async function handleApi(request, response, requestUrl){
+  const pathname = requestUrl.pathname;
   if(request.method === 'GET' && pathname === '/api/reports/list'){
     const {reports} = readReportsFile();
     sendJson(response, 200, {ok:true, count:reports.length, reports});
@@ -326,6 +477,13 @@ async function handleApi(request, response, pathname){
   if(request.method === 'GET' && pathname === '/api/reports/check'){
     const check = await runReportCheck();
     sendJson(response, check.ok ? 200 : 422, check);
+    return;
+  }
+  if(request.method === 'GET' && pathname === '/api/reports/publish-status'){
+    const operationId = String(requestUrl.searchParams.get('operationId') || '');
+    const state = publishOperations.get(operationId);
+    if(!state) throw new RequestError(404, 'عملية النشر المطلوبة غير موجودة.');
+    sendJson(response, 200, publicPublishState(state));
     return;
   }
 
@@ -338,6 +496,14 @@ async function handleApi(request, response, pathname){
   }
   if(pathname === '/api/reports/add'){
     sendJson(response, 201, await addReport(await readJsonBody(request)));
+    return;
+  }
+  if(pathname === '/api/reports/publish'){
+    sendJson(response, 202, startPublishOperation(await readJsonBody(request)));
+    return;
+  }
+  if(pathname === '/api/reports/publish/retry-deploy'){
+    sendJson(response, 202, startPublishOperation(await readJsonBody(request), 'deploy-only'));
     return;
   }
   if(pathname === '/api/open/templates-folder'){
@@ -358,40 +524,62 @@ async function handleApi(request, response, pathname){
   throw new RequestError(404, 'المسار المطلوب غير موجود.');
 }
 
-const server = http.createServer(async (request, response)=>{
-  try{
-    if(!isLoopback(request.socket.remoteAddress)){
-      sendJson(response, 403, {ok:false, message:'هذه الأداة متاحة من الجهاز المحلي فقط.'});
-      return;
+function createServer(){
+  return http.createServer(async (request, response)=>{
+    try{
+      if(!isLoopback(request.socket.remoteAddress)){
+        sendJson(response, 403, {ok:false, message:'هذه الأداة متاحة من الجهاز المحلي فقط.'});
+        return;
+      }
+      ensureAllowedHost(request);
+      const requestUrl = new URL(request.url, origin);
+      if(request.method === 'GET' && (requestUrl.pathname === '/' || requestUrl.pathname === '/report-manager.html')){
+        const page = fs.readFileSync(pagePath, 'utf8').replace('__REPORT_MANAGER_CSRF_TOKEN__', csrfToken);
+        sendHtml(response, page);
+        return;
+      }
+      if(requestUrl.pathname.startsWith('/api/')){
+        await handleApi(request, response, requestUrl);
+        return;
+      }
+      sendJson(response, 404, {ok:false, message:'المسار المطلوب غير موجود.'});
+    }catch(error){
+      const status = error instanceof RequestError || error instanceof PublishError ? (error.status || 400) : 500;
+      const message = status === 500 ? 'حدث خطأ محلي غير متوقع أثناء تنفيذ العملية.' : error.message;
+      if(status === 500) console.error(error.message);
+      sendJson(response, status, {
+        ok:false,
+        message,
+        details:Array.isArray(error.details) ? error.details.map(sanitizeOutput) : []
+      });
     }
-    const requestUrl = new URL(request.url, origin);
-    if(request.method === 'GET' && (requestUrl.pathname === '/' || requestUrl.pathname === '/report-manager.html')){
-      sendHtml(response, fs.readFileSync(pagePath, 'utf8'));
-      return;
-    }
-    if(requestUrl.pathname.startsWith('/api/')){
-      await handleApi(request, response, requestUrl.pathname);
-      return;
-    }
-    sendJson(response, 404, {ok:false, message:'المسار المطلوب غير موجود.'});
-  }catch(error){
-    const status = error instanceof RequestError ? error.status : 500;
-    const message = status === 500 ? 'حدث خطأ محلي غير متوقع أثناء تنفيذ العملية.' : error.message;
-    if(status === 500) console.error(error.message);
-    sendJson(response, status, {ok:false, message});
-  }
-});
+  });
+}
 
-server.on('error', error=>{
-  if(error.code === 'EADDRINUSE'){
-    console.error(`المنفذ ${port} مستخدم. افتح ${origin} أو أوقف العملية الحالية أولًا.`);
-  }else{
-    console.error(`تعذر تشغيل أداة تقارير المدير: ${error.message}`);
-  }
-  process.exitCode = 1;
-});
+function startServer(){
+  const server = createServer();
+  server.on('error', error=>{
+    if(error.code === 'EADDRINUSE'){
+      console.error(`المنفذ ${port} مستخدم. افتح ${origin} أو أوقف العملية الحالية أولًا.`);
+    }else{
+      console.error(`تعذر تشغيل أداة تقارير المدير: ${error.message}`);
+    }
+    process.exitCode = 1;
+  });
+  server.listen(port, host, ()=>{
+    console.log(`أداة إدارة تقارير المدير تعمل محليًا على ${origin}`);
+    console.log('لإيقافها اضغط Ctrl+C في نافذة التشغيل.');
+  });
+  return server;
+}
 
-server.listen(port, host, ()=>{
-  console.log(`أداة إدارة تقارير المدير تعمل محليًا على ${origin}`);
-  console.log('لإيقافها اضغط Ctrl+C في نافذة التشغيل.');
-});
+if(require.main === module) startServer();
+
+module.exports = {
+  RequestError,
+  createServer,
+  ensureAllowedHost,
+  ensureLocalPost,
+  startPublishOperation,
+  tokensMatch
+};

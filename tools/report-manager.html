@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="report-manager-token" content="__REPORT_MANAGER_CSRF_TOKEN__">
   <title>إدارة تقارير المدير | أداة محلية</title>
   <style>
     :root {
@@ -249,6 +250,69 @@
     .git-section { margin-top: 16px; }
     .git-section h3 { margin-bottom: 7px; font-size: 15px; }
     .git-section .button { margin-top: 8px; width: 100%; }
+    .publish-card { padding: 20px; border-top: 4px solid var(--green); }
+    .publish-card h2 { margin-bottom: 5px; font-size: 20px; }
+    .publish-card > p { color: var(--muted); font-size: 13px; }
+    .publish-summary { display: grid; gap: 9px; margin: 15px 0; }
+    .publish-summary div { min-width: 0; }
+    .publish-summary dt { color: var(--muted); font-size: 12px; }
+    .publish-summary dd { margin: 1px 0 0; overflow-wrap: anywhere; }
+    .publish-files, .publish-errors { margin: 8px 0 14px; padding-inline-start: 22px; overflow-wrap: anywhere; }
+    .publish-button { width: 100%; background: linear-gradient(135deg, #11824b, #0b9b68); border-color: #3bc78a; }
+    .publish-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .publish-state[data-state="ready"] { color: #c9f4db; border-color: var(--green); }
+    .publish-state[data-state="publishing"] { color: #f7e9b9; border-color: var(--gold); }
+    .publish-state[data-state="published"] { color: #c9f4db; border-color: #3bc78a; }
+    .publish-state[data-state="failed"] { color: #ffd7db; border-color: var(--danger); }
+    .progress-list { display: grid; gap: 8px; margin: 14px 0; padding: 0; list-style: none; }
+    .progress-step {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 8px 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .progress-step::before { content: "○"; color: var(--muted); font-weight: 900; }
+    .progress-step[data-state="running"]::before { content: "◌"; color: var(--gold); }
+    .progress-step[data-state="success"]::before { content: "✓"; color: #60d394; }
+    .progress-step[data-state="failed"]::before { content: "×"; color: var(--danger); }
+    .progress-step[data-state="skipped"]::before { content: "–"; color: var(--muted); }
+    .progress-step strong, .progress-step small { display: block; }
+    .progress-step small { margin-top: 2px; color: var(--muted); }
+    .publish-success { border: 1px solid var(--green); border-radius: 10px; padding: 12px; background: rgba(17, 130, 75, 0.12); }
+    .publish-success p { margin-bottom: 5px; }
+    .publish-success a { color: #73e1dc; overflow-wrap: anywhere; }
+    dialog {
+      width: min(560px, calc(100% - 24px));
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 0;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+    }
+    dialog::backdrop { background: rgba(3, 8, 15, 0.76); }
+    .dialog-body { padding: 22px; }
+    .dialog-body h2 { margin-bottom: 8px; }
+    .dialog-actions { display: flex; justify-content: flex-start; gap: 9px; margin-top: 18px; }
+    .dialog-actions .button { min-width: 120px; }
     [hidden] { display: none !important; }
 
     @media (max-width: 880px) {
@@ -261,10 +325,12 @@
       .hero { display: block; padding: 18px; }
       .report-count { margin-top: 16px; }
       .form-grid, .side-stack { grid-template-columns: minmax(0, 1fr); }
-      .card-header, .form-body, .tool-card, .result-card { padding-inline: 15px; }
+      .card-header, .form-body, .tool-card, .result-card, .publish-card { padding-inline: 15px; }
       .slug-row { grid-template-columns: minmax(0, 1fr); }
       .primary-actions { display: grid; }
       .primary-actions .button { width: 100%; }
+      .dialog-actions { display: grid; }
+      .dialog-actions .button { width: 100%; }
     }
   </style>
 </head>
@@ -398,9 +464,48 @@
             <button id="copyGitCommands" class="button" type="button">نسخ أوامر Git المقترحة</button>
           </div>
         </section>
+
+        <section id="publishSection" class="card publish-card" aria-labelledby="publishTitle" hidden>
+          <span id="publishState" class="publish-state" data-state="local">محلي فقط</span>
+          <h2 id="publishTitle">جاهز للنشر</h2>
+          <p>لن تُرفع إلا بيانات مكتبة التقارير وملف DOCX الخاص بهذا التقرير.</p>
+          <dl class="publish-summary">
+            <div><dt>عنوان التقرير</dt><dd id="publishReportTitle">—</dd></div>
+            <div><dt>slug</dt><dd id="publishSlug" dir="ltr">—</dd></div>
+            <div><dt>ملف DOCX</dt><dd id="publishDocx" dir="ltr">—</dd></div>
+            <div><dt>حالة التقرير</dt><dd id="publishReportStatus">—</dd></div>
+            <div><dt>الفرع الحالي</dt><dd id="publishBranch" dir="ltr">—</dd></div>
+          </dl>
+          <strong>الملفات المسموحة:</strong>
+          <ul id="publishFiles" class="publish-files" dir="ltr"></ul>
+          <button id="publishButton" class="button publish-button" type="button" disabled>☁ نشر للموقع الحي</button>
+          <ol id="publishProgress" class="progress-list" aria-live="polite" hidden></ol>
+          <ul id="publishErrors" class="publish-errors" hidden></ul>
+          <div id="publishSuccess" class="publish-success" hidden></div>
+          <button id="retryDeployButton" class="button" type="button" hidden>إعادة محاولة النشر</button>
+        </section>
       </aside>
     </div>
   </main>
+
+  <dialog id="publishConfirm" aria-labelledby="publishConfirmTitle">
+    <div class="dialog-body">
+      <h2 id="publishConfirmTitle">تأكيد النشر للموقع الحي</h2>
+      <p>سيتم الآن حفظ التقرير في Git ثم رفعه إلى GitHub ونشر النسخة على الموقع الحي.</p>
+      <dl class="publish-summary">
+        <div><dt>التقرير</dt><dd id="confirmTitle">—</dd></div>
+        <div><dt>slug</dt><dd id="confirmSlug" dir="ltr">—</dd></div>
+        <div><dt>الملفات</dt><dd id="confirmFiles" dir="ltr">—</dd></div>
+        <div><dt>Commit</dt><dd id="confirmCommit" dir="ltr">—</dd></div>
+        <div><dt>الفرع</dt><dd id="confirmBranch" dir="ltr">—</dd></div>
+        <div><dt>Production URL</dt><dd id="confirmUrl" dir="ltr">—</dd></div>
+      </dl>
+      <div class="dialog-actions">
+        <button id="cancelPublish" class="button" type="button">إلغاء</button>
+        <button id="confirmPublish" class="button success" type="button">تأكيد النشر</button>
+      </div>
+    </div>
+  </dialog>
 
   <script>
     'use strict';
@@ -428,8 +533,30 @@
     const checkOutput = document.getElementById('checkOutput');
     const gitSection = document.getElementById('gitSection');
     const gitCommands = document.getElementById('gitCommands');
+    const csrfToken = document.querySelector('meta[name="report-manager-token"]').content;
+    const publishSection = document.getElementById('publishSection');
+    const publishState = document.getElementById('publishState');
+    const publishButton = document.getElementById('publishButton');
+    const publishProgress = document.getElementById('publishProgress');
+    const publishErrors = document.getElementById('publishErrors');
+    const publishSuccess = document.getElementById('publishSuccess');
+    const publishFiles = document.getElementById('publishFiles');
+    const publishReportTitle = document.getElementById('publishReportTitle');
+    const publishSlug = document.getElementById('publishSlug');
+    const publishDocx = document.getElementById('publishDocx');
+    const publishReportStatus = document.getElementById('publishReportStatus');
+    const publishBranch = document.getElementById('publishBranch');
+    const retryDeployButton = document.getElementById('retryDeployButton');
+    const publishConfirm = document.getElementById('publishConfirm');
+    const confirmTitle = document.getElementById('confirmTitle');
+    const confirmSlug = document.getElementById('confirmSlug');
+    const confirmFiles = document.getElementById('confirmFiles');
+    const confirmCommit = document.getElementById('confirmCommit');
+    const confirmBranch = document.getElementById('confirmBranch');
+    const confirmUrl = document.getElementById('confirmUrl');
     const operationButtons = Array.from(document.querySelectorAll('button'));
     let lastGitCommands = [];
+    let currentPublishReport = null;
 
     function setResult(message, type = '') {
       resultStatus.textContent = message;
@@ -441,6 +568,7 @@
       operationButtons.forEach((button) => {
         button.disabled = isBusy;
       });
+      if (!isBusy) publishButton.disabled = !currentPublishReport || publishState.dataset.state === 'published';
       form.setAttribute('aria-busy', String(isBusy));
     }
 
@@ -483,13 +611,135 @@
         requestOptions.headers = {
           'Content-Type': 'application/json',
           'X-Report-Manager': 'local',
+          'X-Report-Manager-Token': csrfToken,
           ...requestOptions.headers
         };
       }
       const response = await fetch(path, requestOptions);
       const data = await response.json().catch(() => ({ok: false, message: 'تعذر قراءة استجابة الخادم المحلي.'}));
-      if (!response.ok || data.ok === false) throw new Error(data.message || data.output || 'تعذر تنفيذ العملية.');
+      if (!response.ok || data.ok === false) {
+        const error = new Error(data.message || data.output || 'تعذر تنفيذ العملية.');
+        error.data = data;
+        throw error;
+      }
       return data;
+    }
+
+    function setPublishState(state, label) {
+      publishState.dataset.state = state;
+      publishState.textContent = label;
+    }
+
+    function renderPublishFiles(files) {
+      publishFiles.replaceChildren(...files.map((file) => {
+        const item = document.createElement('li');
+        item.textContent = file;
+        return item;
+      }));
+    }
+
+    function showReadyToPublish(info) {
+      currentPublishReport = info;
+      publishSection.hidden = false;
+      setPublishState('ready', 'جاهز للنشر');
+      publishReportTitle.textContent = info.title;
+      publishSlug.textContent = info.slug;
+      publishDocx.textContent = info.outputFileName;
+      publishReportStatus.textContent = info.reportStatus;
+      publishBranch.textContent = info.branch;
+      renderPublishFiles(info.files);
+      publishButton.disabled = false;
+      publishProgress.hidden = true;
+      publishErrors.hidden = true;
+      publishSuccess.hidden = true;
+      retryDeployButton.hidden = true;
+    }
+
+    function renderProgress(steps) {
+      publishProgress.replaceChildren(...steps.map((step) => {
+        const item = document.createElement('li');
+        const content = document.createElement('span');
+        const label = document.createElement('strong');
+        const detail = document.createElement('small');
+        item.className = 'progress-step';
+        item.dataset.state = step.status;
+        label.textContent = step.label;
+        detail.textContent = step.message || (step.status === 'pending' ? 'انتظار' : '');
+        content.append(label, detail);
+        item.append(content);
+        return item;
+      }));
+      publishProgress.hidden = false;
+    }
+
+    function renderPublishErrors(details) {
+      const safeDetails = Array.isArray(details) ? details : [];
+      publishErrors.replaceChildren(...safeDetails.map((detail) => {
+        const item = document.createElement('li');
+        item.textContent = detail;
+        return item;
+      }));
+      publishErrors.hidden = safeDetails.length === 0;
+    }
+
+    function renderPublishSuccess(data) {
+      const heading = document.createElement('p');
+      const details = document.createElement('p');
+      const link = document.createElement('a');
+      heading.textContent = '✅ تم نشر التقرير على الموقع الحي بنجاح';
+      details.textContent = `Commit: ${data.commitHash || '—'} | slug: ${data.reportId} | الملف: ${data.outputFileName} | الوقت: ${data.publishedAt || '—'}`;
+      link.href = data.productionUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = data.productionUrl;
+      publishSuccess.replaceChildren(heading, details, link);
+      publishSuccess.hidden = false;
+    }
+
+    async function pollPublish(operationId) {
+      while (true) {
+        const data = await apiRequest(`/api/reports/publish-status?operationId=${encodeURIComponent(operationId)}`);
+        renderProgress(data.steps || []);
+        if (data.status === 'published') {
+          setPublishState('published', 'منشور');
+          renderPublishSuccess(data);
+          publishButton.disabled = true;
+          retryDeployButton.hidden = true;
+          return;
+        }
+        if (data.status === 'failed') {
+          setPublishState('failed', data.verificationWarning ? 'نُشر مع تعذر التحقق' : 'فشل النشر');
+          renderPublishErrors(data.details);
+          setResult(data.message, 'error');
+          retryDeployButton.hidden = !data.retryAvailable;
+          publishButton.disabled = false;
+          return;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
+      }
+    }
+
+    async function beginPublish(endpoint) {
+      if (!currentPublishReport) return;
+      setBusy(true);
+      setPublishState('publishing', 'جارٍ النشر');
+      publishErrors.hidden = true;
+      publishSuccess.hidden = true;
+      retryDeployButton.hidden = true;
+      try {
+        const data = await apiRequest(endpoint, {
+          method: 'POST',
+          body: JSON.stringify({reportId: currentPublishReport.reportId})
+        });
+        renderProgress(data.steps || []);
+        await pollPublish(data.operationId);
+      } catch (error) {
+        setPublishState('failed', 'فشل النشر');
+        renderPublishErrors(error.data?.details);
+        setResult(error.message, 'error');
+      } finally {
+        setBusy(false);
+      }
     }
 
     function displayOperation(data) {
@@ -504,6 +754,7 @@
       lastGitCommands = Array.isArray(data.gitCommands) ? data.gitCommands : [];
       gitSection.hidden = lastGitCommands.length === 0;
       gitCommands.textContent = lastGitCommands.join('\n');
+      if (data.publish) showReadyToPublish(data.publish);
     }
 
     async function runReportOperation(endpoint) {
@@ -581,6 +832,23 @@
       const confirmed = window.confirm('سيتم نسخ القالب وتعديل manager-reports.json محليًا. هل تريد المتابعة؟');
       if (confirmed) runReportOperation('/api/reports/add');
     });
+
+    publishButton.addEventListener('click', () => {
+      if (!currentPublishReport) return;
+      confirmTitle.textContent = currentPublishReport.title;
+      confirmSlug.textContent = currentPublishReport.slug;
+      confirmFiles.textContent = currentPublishReport.files.join(' + ');
+      confirmCommit.textContent = currentPublishReport.commitMessage;
+      confirmBranch.textContent = currentPublishReport.branch;
+      confirmUrl.textContent = currentPublishReport.productionUrl;
+      publishConfirm.showModal();
+    });
+    document.getElementById('cancelPublish').addEventListener('click', () => publishConfirm.close());
+    document.getElementById('confirmPublish').addEventListener('click', () => {
+      publishConfirm.close();
+      beginPublish('/api/reports/publish');
+    });
+    retryDeployButton.addEventListener('click', () => beginPublish('/api/reports/publish/retry-deploy'));
 
     document.getElementById('checkReports').addEventListener('click', () => {
       runSimpleAction('/api/reports/check', 'جاري فحص جميع التقارير...');

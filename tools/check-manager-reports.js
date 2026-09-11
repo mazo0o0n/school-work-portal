@@ -5,6 +5,7 @@ const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..');
 const reportsDataPath = path.join(projectRoot, 'assets', 'data', 'manager-reports.json');
+const templatesDirectory = path.join(projectRoot, 'assets', 'report-templates', 'manager-reports');
 const requiredProperties = ['id', 'title', 'category', 'status', 'templatePath'];
 const allowedCategories = new Set(['الاجتماعات', 'اللجان', 'النماذج', 'السجلات', 'أخرى']);
 const allowedStatuses = new Set(['متاح', 'معتمد', 'تجريبي', 'مخطط']);
@@ -48,6 +49,9 @@ function main(){
     if(report.status && !allowedStatuses.has(String(report.status).trim())){
       issues.push(`السجل ${index + 1} يحتوي على حالة غير صالحة: ${report.status}`);
     }
+    if(report.id && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(report.id).trim())){
+      issues.push(`السجل ${index + 1} يحتوي على slug غير صالح: ${report.id}`);
+    }
 
     const templatePath = String(report.templatePath || '').trim();
     if(!templatePath) return;
@@ -63,6 +67,15 @@ function main(){
 
   addDuplicateIssues(reports, 'id', issues);
   addDuplicateIssues(reports, 'templatePath', issues);
+
+  const referencedTemplates = new Set(reports.map(report=>String(report.templatePath || '').replace(/\\/g, '/')));
+  if(fs.existsSync(templatesDirectory)){
+    fs.readdirSync(templatesDirectory, {withFileTypes:true})
+      .filter(entry=>entry.isFile() && path.extname(entry.name).toLowerCase() === '.docx')
+      .map(entry=>`assets/report-templates/manager-reports/${entry.name}`)
+      .filter(templatePath=>!referencedTemplates.has(templatePath))
+      .forEach(templatePath=>issues.push(`قالب غير مرتبط بأي تقرير: ${templatePath}`));
+  }
 
   const categories = [...new Set(reports.map(report=>String(report.category || '').trim()).filter(Boolean))];
   console.log(`عدد التقارير: ${reports.length}`);
