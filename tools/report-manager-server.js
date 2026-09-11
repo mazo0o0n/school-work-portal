@@ -6,13 +6,17 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const {
+  DELETE_PROGRESS_STEPS,
   PRODUCTION_ORIGIN,
   PROGRESS_STEPS,
   PublishError,
   detectPendingReport,
   defaultRunCommand,
+  deleteReport,
   publishReport,
+  recoverDeleteRetry,
   sanitizeOutput,
+  validateDeletePayload,
   validatePublishPayload
 } = require('./report-publish-service');
 
@@ -34,8 +38,11 @@ const allowedCategories = new Set(['الاجتماعات', 'اللجان', 'ال
 const allowedStatuses = new Set(['متاح', 'معتمد', 'تجريبي', 'مخطط']);
 let addQueue = Promise.resolve();
 let publishQueue = Promise.resolve();
+let deleteQueue = Promise.resolve();
 const publishOperations = new Map();
+const deleteOperations = new Map();
 const latestPublishByReport = new Map();
+const latestDeleteByReport = new Map();
 
 class RequestError extends Error{
   constructor(status, message){
@@ -302,8 +309,30 @@ function buildPublishInfo(report, branch){
   };
 }
 
-function createProgressSteps(){
-  return PROGRESS_STEPS.map(step=>({...step, status:'pending', message:''}));
+function createProgressSteps(steps = PROGRESS_STEPS){
+  return steps.map(step=>({...step, status:'pending', message:''}));
+}
+
+function publicDeleteState(state){
+  return {
+    ok:true,
+    operationId:state.operationId,
+    reportId:state.reportId,
+    title:state.title,
+    templatePath:state.templatePath,
+    outputFileName:state.outputFileName,
+    status:state.status,
+    message:state.message,
+    details:state.details,
+    steps:state.steps,
+    retryAvailable:state.retryAvailable,
+    commitHash:state.commitHash,
+    pushSucceeded:state.pushSucceeded,
+    productionUrl:state.productionUrl,
+    docxDeleted:state.docxDeleted,
+    deletedAt:state.deletedAt,
+    verificationWarning:state.verificationWarning
+  };
 }
 
 function publicPublishState(state){
@@ -395,6 +424,87 @@ function startPublishOperation(payload, mode = 'full'){
   return publicPublishState(state);
 }
 
+async function startDeleteOperation(payload, mode = 'full'){
+  const reportId = validateDeletePayload(payload);
+  let prior = latestDeleteByReport.get(reportId);
+  if(mode === 'deploy-only' && (!prior || !prior.retryAvailable)){
+    const recovered = await recoverDeleteRetry({projectRoot, reportsDataPath, templatesDirectory}, reportId);
+    if(recovered.state === 'ready') prior = recovered.prior;
+  }
+  if(mode === 'deploy-only' && (!prior || !prior.retryAvailable || !prior.commitHash || !prior.pushSucceeded)){
+    throw new RequestError(409, 'لا توجد محاولة Deploy حذف قابلة للإعادة لهذا التقرير.');
+  }
+  const currentReport = mode === 'full'
+    ? readReportsFile().reports.find(report=>String(report.id || '').trim() === reportId)
+    : prior;
+  if(!currentReport) throw new RequestError(404, 'التقرير المطلوب غير موجود في مكتبة التقارير.');
+
+  const state = {
+    operationId:crypto.randomUUID(),
+    reportId,
+    title:currentReport.title || reportId,
+    templatePath:currentReport.templatePath || '',
+    outputFileName:path.basename(currentReport.templatePath || `${reportId}.docx`),
+    status:'deleting',
+    message:mode === 'deploy-only' ? 'جاري إعادة محاولة Deploy للحذف فقط...' : 'بدأت عملية الحذف والنشر الآمنة.',
+    details:[],
+    steps:createProgressSteps(DELETE_PROGRESS_STEPS),
+    retryAvailable:false,
+    commitHash:mode === 'deploy-only' ? prior.commitHash : '',
+    pushSucceeded:mode === 'deploy-only',
+    productionUrl:PRODUCTION_ORIGIN,
+    docxDeleted:mode === 'deploy-only' ? prior.docxDeleted === true : false,
+    deletedAt:'',
+    verificationWarning:false
+  };
+  deleteOperations.set(state.operationId, state);
+  latestDeleteByReport.set(reportId, state);
+
+  const execute = async ()=>{
+    try{
+      const result = await deleteReport({
+        projectRoot,
+        reportsDataPath,
+        templatesDirectory,
+        payload:{reportId},
+        mode,
+        prior:mode === 'deploy-only' ? prior : null,
+        runReportCheck,
+        onProgress:update=>setPublishProgress(state, update)
+      });
+      state.status = 'deleted';
+      state.message = 'تم حذف التقرير من الموقع الحي بنجاح.';
+      state.title = result.title;
+      state.templatePath = result.templatePath;
+      state.outputFileName = result.outputFileName;
+      state.commitHash = result.commitHash;
+      state.pushSucceeded = result.pushSucceeded;
+      state.docxDeleted = result.docxDeleted;
+      state.deletedAt = result.deletedAt;
+    }catch(error){
+      const failedStep = state.steps.find(item=>item.id === error.phase);
+      if(failedStep){
+        failedStep.status = 'failed';
+        failedStep.message = error.message;
+      }
+      state.status = 'failed';
+      state.message = error.message || 'فشلت عملية حذف التقرير.';
+      state.details = Array.isArray(error.details) ? error.details.map(sanitizeOutput) : [];
+      state.retryAvailable = error.retryAvailable === true;
+      state.commitHash = error.commitHash || state.commitHash;
+      state.pushSucceeded = error.pushSucceeded === true;
+      state.verificationWarning = error.verificationWarning === true;
+      if(typeof error.docxDeleted === 'boolean') state.docxDeleted = error.docxDeleted;
+      if(error.templatePath) state.templatePath = error.templatePath;
+      if(error.reportTitle) state.title = error.reportTitle;
+    }
+  };
+
+  const operation = deleteQueue.then(execute, execute);
+  deleteQueue = operation.catch(()=>{});
+  return publicDeleteState(state);
+}
+
 function openLocalTarget(command, argumentsList){
   const processHandle = childProcess.spawn(command, argumentsList, {
     detached:true,
@@ -481,7 +591,17 @@ async function handleApi(request, response, requestUrl){
     const pendingPublish = pendingDetection.state === 'ready'
       ? {state:'ready', publish:buildPublishInfo(pendingDetection.report, pendingDetection.branch)}
       : pendingDetection;
-    sendJson(response, 200, {ok:true, count:reports.length, reports, pendingPublish});
+    let pendingDelete = await recoverDeleteRetry({projectRoot, reportsDataPath, templatesDirectory});
+    if(pendingDelete.state === 'ready' && latestDeleteByReport.get(pendingDelete.prior.reportId)?.status === 'deleted'){
+      pendingDelete = {state:'none'};
+    }
+    sendJson(response, 200, {
+      ok:true,
+      count:reports.length,
+      reports:reports.map(report=>({...report, publishStatus:'published'})),
+      pendingPublish,
+      pendingDelete
+    });
     return;
   }
   if(request.method === 'GET' && pathname === '/api/reports/check'){
@@ -494,6 +614,13 @@ async function handleApi(request, response, requestUrl){
     const state = publishOperations.get(operationId);
     if(!state) throw new RequestError(404, 'عملية النشر المطلوبة غير موجودة.');
     sendJson(response, 200, publicPublishState(state));
+    return;
+  }
+  if(request.method === 'GET' && pathname === '/api/reports/delete-status'){
+    const operationId = String(requestUrl.searchParams.get('operationId') || '');
+    const state = deleteOperations.get(operationId);
+    if(!state) throw new RequestError(404, 'عملية الحذف المطلوبة غير موجودة.');
+    sendJson(response, 200, publicDeleteState(state));
     return;
   }
 
@@ -514,6 +641,14 @@ async function handleApi(request, response, requestUrl){
   }
   if(pathname === '/api/reports/publish/retry-deploy'){
     sendJson(response, 202, startPublishOperation(await readJsonBody(request), 'deploy-only'));
+    return;
+  }
+  if(pathname === '/api/reports/delete'){
+    sendJson(response, 202, await startDeleteOperation(await readJsonBody(request)));
+    return;
+  }
+  if(pathname === '/api/reports/delete/retry-deploy'){
+    sendJson(response, 202, await startDeleteOperation(await readJsonBody(request), 'deploy-only'));
     return;
   }
   if(pathname === '/api/open/templates-folder'){
@@ -591,5 +726,6 @@ module.exports = {
   ensureAllowedHost,
   ensureLocalPost,
   startPublishOperation,
+  startDeleteOperation,
   tokensMatch
 };

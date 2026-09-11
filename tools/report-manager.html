@@ -297,6 +297,19 @@
     .publish-success { border: 1px solid var(--green); border-radius: 10px; padding: 12px; background: rgba(17, 130, 75, 0.12); }
     .publish-success p { margin-bottom: 5px; }
     .publish-success a { color: #73e1dc; overflow-wrap: anywhere; }
+    .reports-card { margin-top: 22px; padding: 20px; }
+    .reports-card > p { color: var(--muted); font-size: 13px; }
+    .reports-list { display: grid; gap: 12px; margin-top: 16px; }
+    .report-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+    .report-item h3 { margin: 0 0 7px; font-size: 16px; overflow-wrap: anywhere; }
+    .report-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 12px; }
+    .report-meta span { overflow-wrap: anywhere; }
+    .danger-button { border-color: var(--danger); background: rgba(202, 61, 73, 0.12); color: #ffd7db; }
+    .danger-button:hover { background: rgba(202, 61, 73, 0.24); }
+    .delete-panel { margin-top: 16px; border: 1px solid var(--danger); border-radius: 12px; padding: 14px; }
+    .delete-warning { border-inline-start: 4px solid var(--danger); padding-inline-start: 10px; color: #ffd7db; }
+    .slug-confirmation { display: grid; gap: 7px; margin-top: 14px; }
+    .slug-confirmation input { direction: ltr; text-align: left; }
     dialog {
       width: min(560px, calc(100% - 24px));
       max-height: calc(100vh - 32px);
@@ -331,6 +344,8 @@
       .primary-actions .button { width: 100%; }
       .dialog-actions { display: grid; }
       .dialog-actions .button { width: 100%; }
+      .report-item { grid-template-columns: minmax(0, 1fr); }
+      .report-item .danger-button { width: 100%; margin-top: 8px; }
     }
   </style>
 </head>
@@ -486,6 +501,21 @@
         </section>
       </aside>
     </div>
+
+    <section class="card reports-card" aria-labelledby="currentReportsTitle">
+      <h2 id="currentReportsTitle">التقارير الحالية</h2>
+      <p>الحذف من الموقع الحي يتطلب تحققًا بالـslug، ثم Commit وPush وDeploy آمن.</p>
+      <div id="reportsList" class="reports-list" aria-live="polite"></div>
+      <section id="deletePanel" class="delete-panel" aria-labelledby="deletePanelTitle" hidden>
+        <span id="deleteState" class="publish-state" data-state="local">محلي فقط</span>
+        <h3 id="deletePanelTitle">حذف التقرير</h3>
+        <p id="deletePanelMessage">—</p>
+        <ol id="deleteProgress" class="progress-list" aria-live="polite" hidden></ol>
+        <ul id="deleteErrors" class="publish-errors" hidden></ul>
+        <div id="deleteSuccess" class="publish-success" hidden></div>
+        <button id="retryDeleteDeploy" class="button" type="button" hidden>إعادة محاولة النشر</button>
+      </section>
+    </section>
   </main>
 
   <dialog id="publishConfirm" aria-labelledby="publishConfirmTitle">
@@ -503,6 +533,29 @@
       <div class="dialog-actions">
         <button id="cancelPublish" class="button" type="button">إلغاء</button>
         <button id="confirmPublish" class="button success" type="button">تأكيد النشر</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="deleteConfirm" aria-labelledby="deleteConfirmTitle">
+    <div class="dialog-body">
+      <h2 id="deleteConfirmTitle">تأكيد حذف التقرير من الموقع الحي</h2>
+      <p class="delete-warning">سيُحذف التقرير من مكتبة الموقع وسيتم نشر الحذف على الموقع الحي.</p>
+      <dl class="publish-summary">
+        <div><dt>عنوان التقرير</dt><dd id="deleteConfirmReportTitle">—</dd></div>
+        <div><dt>ID / slug</dt><dd id="deleteConfirmSlug" dir="ltr">—</dd></div>
+        <div><dt>templatePath</dt><dd id="deleteConfirmTemplate" dir="ltr">—</dd></div>
+        <div><dt>ملف DOCX</dt><dd id="deleteConfirmDocx" dir="ltr">—</dd></div>
+        <div><dt>Production URL</dt><dd id="deleteConfirmUrl" dir="ltr">—</dd></div>
+        <div><dt>الفرع</dt><dd dir="ltr">main</dd></div>
+        <div><dt>Commit</dt><dd id="deleteConfirmCommit" dir="ltr">—</dd></div>
+      </dl>
+      <label class="slug-confirmation">اكتب الـslug نفسه لتفعيل الحذف
+        <input id="deleteSlugInput" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="dialog-actions">
+        <button id="cancelDelete" class="button" type="button">إلغاء</button>
+        <button id="confirmDelete" class="button danger-button" type="button" disabled>تأكيد الحذف والنشر</button>
       </div>
     </div>
   </dialog>
@@ -555,9 +608,20 @@
     const confirmCommit = document.getElementById('confirmCommit');
     const confirmBranch = document.getElementById('confirmBranch');
     const confirmUrl = document.getElementById('confirmUrl');
-    const operationButtons = Array.from(document.querySelectorAll('button'));
+    const reportsList = document.getElementById('reportsList');
+    const deletePanel = document.getElementById('deletePanel');
+    const deleteState = document.getElementById('deleteState');
+    const deletePanelMessage = document.getElementById('deletePanelMessage');
+    const deleteProgress = document.getElementById('deleteProgress');
+    const deleteErrors = document.getElementById('deleteErrors');
+    const deleteSuccess = document.getElementById('deleteSuccess');
+    const retryDeleteDeploy = document.getElementById('retryDeleteDeploy');
+    const deleteConfirm = document.getElementById('deleteConfirm');
+    const deleteSlugInput = document.getElementById('deleteSlugInput');
+    const confirmDelete = document.getElementById('confirmDelete');
     let lastGitCommands = [];
     let currentPublishReport = null;
+    let currentDeleteReport = null;
 
     function setResult(message, type = '') {
       resultStatus.textContent = message;
@@ -566,10 +630,11 @@
     }
 
     function setBusy(isBusy) {
-      operationButtons.forEach((button) => {
+      document.querySelectorAll('button').forEach((button) => {
         button.disabled = isBusy;
       });
       if (!isBusy) publishButton.disabled = !currentPublishReport || publishState.dataset.state === 'published';
+      if (!isBusy) confirmDelete.disabled = deleteSlugInput.value !== currentDeleteReport?.id;
       form.setAttribute('aria-busy', String(isBusy));
     }
 
@@ -693,6 +758,24 @@
       publishProgress.hidden = false;
     }
 
+    function renderDeleteProgress(steps) {
+      const items = steps.map((step) => {
+        const item = document.createElement('li');
+        const content = document.createElement('span');
+        const label = document.createElement('strong');
+        const detail = document.createElement('small');
+        item.className = 'progress-step';
+        item.dataset.state = step.status;
+        label.textContent = step.label;
+        detail.textContent = step.message || (step.status === 'pending' ? 'انتظار' : '');
+        content.append(label, detail);
+        item.append(content);
+        return item;
+      });
+      deleteProgress.replaceChildren(...items);
+      deleteProgress.hidden = false;
+    }
+
     function renderPublishErrors(details) {
       const safeDetails = Array.isArray(details) ? details : [];
       publishErrors.replaceChildren(...safeDetails.map((detail) => {
@@ -763,6 +846,139 @@
       }
     }
 
+    function renderReports(reports) {
+      reportsList.replaceChildren(...reports.map((report) => {
+        const item = document.createElement('article');
+        const details = document.createElement('div');
+        const title = document.createElement('h3');
+        const meta = document.createElement('div');
+        const button = document.createElement('button');
+        item.className = 'report-item';
+        title.textContent = report.title;
+        meta.className = 'report-meta';
+        [
+          `slug: ${report.id}`,
+          `التصنيف: ${report.category}`,
+          `الحالة: ${report.status}`,
+          `DOCX: ${report.templatePath.split('/').pop()}`,
+          `النشر: ${report.publishStatus || 'غير معروف'}`
+        ].forEach((value) => {
+          const field = document.createElement('span');
+          field.textContent = value;
+          meta.append(field);
+        });
+        button.className = 'button danger-button delete-report-button';
+        button.type = 'button';
+        button.dataset.reportId = report.id;
+        button.textContent = 'حذف من الموقع الحي';
+        details.append(title, meta);
+        item.append(details, button);
+        return item;
+      }));
+    }
+
+    function openDeleteConfirmation(report) {
+      currentDeleteReport = report;
+      document.getElementById('deleteConfirmReportTitle').textContent = report.title;
+      document.getElementById('deleteConfirmSlug').textContent = report.id;
+      document.getElementById('deleteConfirmTemplate').textContent = report.templatePath;
+      document.getElementById('deleteConfirmDocx').textContent = report.templatePath.split('/').pop();
+      document.getElementById('deleteConfirmUrl').textContent = `https://mazen.zb-store.com/${report.templatePath}`;
+      document.getElementById('deleteConfirmCommit').textContent = `Remove manager report: ${report.id}`;
+      deleteSlugInput.value = '';
+      confirmDelete.disabled = true;
+      deleteConfirm.showModal();
+    }
+
+    function renderDeleteErrors(details) {
+      const safeDetails = Array.isArray(details) ? details : [];
+      deleteErrors.replaceChildren(...safeDetails.map((detail) => {
+        const item = document.createElement('li');
+        item.textContent = detail;
+        return item;
+      }));
+      deleteErrors.hidden = safeDetails.length === 0;
+    }
+
+    function renderDeleteSuccess(data) {
+      const heading = document.createElement('p');
+      const details = document.createElement('p');
+      const link = document.createElement('a');
+      heading.textContent = '✅ تم حذف التقرير من الموقع الحي بنجاح';
+      details.textContent = `العنوان: ${data.title} | slug: ${data.reportId} | Commit: ${data.commitHash || '—'} | DOCX: ${data.docxDeleted ? 'تم حذفه' : 'بقي لأنه مشترك'} | الوقت: ${data.deletedAt || '—'}`;
+      link.href = data.productionUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = data.productionUrl;
+      deleteSuccess.replaceChildren(heading, details, link);
+      deleteSuccess.hidden = false;
+    }
+
+    function showRecoveredDelete(info) {
+      currentDeleteReport = {
+        id: info.reportId,
+        title: info.title,
+        templatePath: info.templatePath
+      };
+      deletePanel.hidden = false;
+      deleteState.dataset.state = 'failed';
+      deleteState.textContent = 'Deploy يحتاج إعادة';
+      deletePanelMessage.textContent = 'تم اكتشاف Commit حذف مرفوع من Git. إعادة المحاولة ستنفذ Deploy والتحقق فقط.';
+      deleteProgress.hidden = true;
+      deleteErrors.hidden = true;
+      deleteSuccess.hidden = true;
+      retryDeleteDeploy.hidden = false;
+    }
+
+    async function pollDelete(operationId) {
+      while (true) {
+        const data = await apiRequest(`/api/reports/delete-status?operationId=${encodeURIComponent(operationId)}`);
+        renderDeleteProgress(data.steps || []);
+        deletePanelMessage.textContent = data.message;
+        if (data.status === 'deleted') {
+          deleteState.dataset.state = 'published';
+          deleteState.textContent = 'محذوف';
+          renderDeleteSuccess(data);
+          retryDeleteDeploy.hidden = true;
+          await loadReports();
+          return;
+        }
+        if (data.status === 'failed') {
+          deleteState.dataset.state = 'failed';
+          deleteState.textContent = data.verificationWarning ? 'نُشر مع تعذر التحقق' : 'فشل الحذف';
+          renderDeleteErrors(data.details);
+          retryDeleteDeploy.hidden = !data.retryAvailable;
+          setResult(data.message, 'error');
+          return;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
+      }
+    }
+
+    async function beginDelete(endpoint) {
+      if (!currentDeleteReport) return;
+      setBusy(true);
+      deletePanel.hidden = false;
+      deleteState.dataset.state = 'publishing';
+      deleteState.textContent = 'جارٍ الحذف';
+      deletePanelMessage.textContent = 'بدأت عملية الحذف والنشر الآمنة.';
+      deleteErrors.hidden = true;
+      deleteSuccess.hidden = true;
+      retryDeleteDeploy.hidden = true;
+      try {
+        const data = await apiRequest(endpoint, {method: 'POST', body: JSON.stringify({reportId: currentDeleteReport.id})});
+        renderDeleteProgress(data.steps || []);
+        await pollDelete(data.operationId);
+      } catch (error) {
+        deleteState.dataset.state = 'failed';
+        deleteState.textContent = 'فشل الحذف';
+        renderDeleteErrors(error.data?.details);
+        setResult(error.message, 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
     function displayOperation(data) {
       setResult(data.message || 'اكتملت العملية بنجاح.', 'success');
       outputFileName.textContent = data.outputFileName || '—';
@@ -798,6 +1014,8 @@
         const data = await apiRequest('/api/reports/list');
         reportCount.textContent = String(data.count);
         resultReportCount.textContent = String(data.count);
+        renderReports(data.reports || []);
+        if (data.pendingDelete?.state === 'ready') showRecoveredDelete(data.pendingDelete.prior);
         if (data.pendingPublish?.state === 'ready') {
           showReadyToPublish(data.pendingPublish.publish);
           setResult('تم اكتشاف تقرير محلي جاهز للنشر.', 'success');
@@ -878,6 +1096,28 @@
       beginPublish('/api/reports/publish');
     });
     retryDeployButton.addEventListener('click', () => beginPublish('/api/reports/publish/retry-deploy'));
+
+    reportsList.addEventListener('click', (event) => {
+      const button = event.target.closest('.delete-report-button');
+      if (!button) return;
+      const report = Array.from(reportsList.querySelectorAll('.delete-report-button'))
+        .find((candidate) => candidate === button);
+      if (!report) return;
+      apiRequest('/api/reports/list').then((data) => {
+        const selected = data.reports.find((item) => item.id === button.dataset.reportId);
+        if (selected) openDeleteConfirmation(selected);
+      }).catch((error) => setResult(error.message, 'error'));
+    });
+    deleteSlugInput.addEventListener('input', () => {
+      confirmDelete.disabled = deleteSlugInput.value !== currentDeleteReport?.id;
+    });
+    document.getElementById('cancelDelete').addEventListener('click', () => deleteConfirm.close());
+    confirmDelete.addEventListener('click', () => {
+      if (deleteSlugInput.value !== currentDeleteReport?.id) return;
+      deleteConfirm.close();
+      beginDelete('/api/reports/delete');
+    });
+    retryDeleteDeploy.addEventListener('click', () => beginDelete('/api/reports/delete/retry-deploy'));
 
     document.getElementById('checkReports').addEventListener('click', () => {
       runSimpleAction('/api/reports/check', 'جاري فحص جميع التقارير...');

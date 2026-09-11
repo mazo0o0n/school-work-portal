@@ -55,11 +55,11 @@ const readyPublishInfo = {
   productionUrl:'https://mazen.zb-store.com'
 };
 
-async function routeReportList(page, pendingPublish = {state:'none'}){
+async function routeReportList(page, pendingPublish = {state:'none'}, reports = []){
   await page.route('**/api/reports/list', route=>route.fulfill({
     status:200,
     contentType:'application/json',
-    body:JSON.stringify({ok:true, count:8, reports:[], pendingPublish})
+    body:JSON.stringify({ok:true, count:reports.length, reports, pendingPublish, pendingDelete:{state:'none'}})
   }));
 }
 
@@ -120,6 +120,39 @@ for(const testCase of cases){
       path:path.join(os.tmpdir(), `report-manager-${testCase.name}.png`),
       fullPage:true
     });
+  });
+}
+
+for(const testCase of cases){
+  test(`تأكيد حذف التقرير محمي ومتجاوب: ${testCase.name}`, async ({page})=>{
+    const currentReport = {
+      id:'delete-ui-report',
+      title:'تقرير حذف تجريبي',
+      category:'أخرى',
+      status:'تجريبي',
+      templatePath:'assets/report-templates/manager-reports/delete-ui-report.docx',
+      publishStatus:'published'
+    };
+    let deleteRequests = 0;
+    await routeReportList(page, {state:'none'}, [currentReport]);
+    await page.route('**/api/reports/delete', route=>{
+      deleteRequests += 1;
+      return route.fulfill({status:202, contentType:'application/json', body:JSON.stringify({ok:true, operationId:'delete-op', status:'deleting', steps:[]})});
+    });
+    await page.setViewportSize(testCase.viewport);
+    await page.emulateMedia({colorScheme:testCase.colorScheme});
+    await page.goto('http://127.0.0.1:4174');
+    await expect(page.locator('.delete-report-button')).toHaveText('حذف من الموقع الحي');
+    await page.locator('.delete-report-button').click();
+    await expect(page.locator('#deleteConfirm')).toBeVisible();
+    await expect(page.locator('#confirmDelete')).toBeDisabled();
+    expect(deleteRequests).toBe(0);
+    await page.locator('#deleteSlugInput').fill('wrong-slug');
+    await expect(page.locator('#confirmDelete')).toBeDisabled();
+    await page.locator('#deleteSlugInput').fill('delete-ui-report');
+    await expect(page.locator('#confirmDelete')).toBeEnabled();
+    const overflow = await page.evaluate(()=>document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(overflow).toBe(false);
   });
 }
 

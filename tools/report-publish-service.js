@@ -17,6 +17,15 @@ const PROGRESS_STEPS = [
   {id:'deploy', label:'Deploy إلى Cloudflare'},
   {id:'verify', label:'التحقق من الموقع'}
 ];
+const DELETE_PROGRESS_STEPS = [
+  {id:'git', label:'فحص Git'},
+  {id:'mutation', label:'تجهيز الحذف'},
+  {id:'validation', label:'فحص مكتبة التقارير'},
+  {id:'commit', label:'إنشاء Commit'},
+  {id:'push', label:'Push إلى GitHub'},
+  {id:'deploy', label:'Deploy إلى Cloudflare'},
+  {id:'verify', label:'التحقق من الموقع'}
+];
 
 class PublishError extends Error{
   constructor(code, message, options = {}){
@@ -52,6 +61,17 @@ function validatePublishPayload(payload){
   const keys = Object.keys(payload);
   if(keys.length !== 1 || keys[0] !== 'reportId'){
     throw new PublishError('UNSAFE_REQUEST', 'طلب النشر يقبل معرّف التقرير فقط.', {phase:'validation'});
+  }
+  return validateReportId(payload.reportId);
+}
+
+function validateDeletePayload(payload){
+  if(!payload || typeof payload !== 'object' || Array.isArray(payload)){
+    throw new PublishError('INVALID_REQUEST', 'طلب الحذف غير صالح.', {phase:'validation'});
+  }
+  const keys = Object.keys(payload);
+  if(keys.length !== 1 || keys[0] !== 'reportId'){
+    throw new PublishError('UNSAFE_REQUEST', 'طلب الحذف يقبل معرّف التقرير فقط.', {phase:'validation'});
   }
   return validateReportId(payload.reportId);
 }
@@ -175,6 +195,26 @@ function resolveTrustedReport(options, reportId, reports){
   const absoluteTemplatePath = path.resolve(options.projectRoot, templatePath);
   if(!isInsideDirectory(options.templatesDirectory, absoluteTemplatePath) || !fsApi.existsSync(absoluteTemplatePath)){
     throw new PublishError('UNSAFE_TEMPLATE_PATH', 'تعذر اعتماد مسار قالب التقرير.', {phase:'validation'});
+  }
+  return {report, templatePath, absoluteTemplatePath};
+}
+
+function resolveSafeDeleteTarget(options, reportId, reports){
+  const fsApi = options.fsApi || fs;
+  const report = reports.find(item=>String(item.id || '').trim() === reportId);
+  if(!report){
+    throw new PublishError('REPORT_NOT_FOUND', 'التقرير المطلوب غير موجود في مكتبة التقارير.', {phase:'validation'});
+  }
+  const templatePath = normalizeRepoPath(report.templatePath);
+  const segments = templatePath.split('/');
+  if(!templatePath.startsWith(`${TEMPLATES_RELATIVE_DIRECTORY}/`) ||
+     path.posix.extname(templatePath).toLowerCase() !== '.docx' ||
+     segments.includes('..')){
+    throw new PublishError('UNSAFE_TEMPLATE_PATH', 'مسار قالب التقرير غير آمن للحذف.', {phase:'validation'});
+  }
+  const absoluteTemplatePath = path.resolve(options.projectRoot, templatePath);
+  if(!isInsideDirectory(options.templatesDirectory, absoluteTemplatePath) || !fsApi.existsSync(absoluteTemplatePath)){
+    throw new PublishError('UNSAFE_TEMPLATE_PATH', 'تعذر اعتماد مسار قالب التقرير للحذف.', {phase:'validation'});
   }
   return {report, templatePath, absoluteTemplatePath};
 }
@@ -398,8 +438,88 @@ async function verifyProduction(dependencies, reportId, templatePath){
   }
 }
 
+async function verifyDeletedReport(dependencies, reportId, templatePath, docxDeleted){
+  const fetchImpl = dependencies.fetchImpl || globalThis.fetch;
+  if(typeof fetchImpl !== 'function'){
+    throw new PublishError('VERIFY_UNAVAILABLE', 'تعذر تشغيل التحقق من الموقع في إصدار Node الحالي.', {phase:'verify'});
+  }
+  const cacheBust = `delete-check=${Date.now()}`;
+  const jsonUrl = `${dependencies.productionOrigin}/${REPORTS_RELATIVE_PATH}?${cacheBust}`;
+  const templateUrl = `${dependencies.productionOrigin}/${templatePath}?${cacheBust}`;
+  let jsonResponse;
+  try{
+    jsonResponse = await fetchImpl(jsonUrl, {method:'GET', cache:'no-store', signal:AbortSignal.timeout(20000)});
+  }catch(error){
+    throw new PublishError('VERIFY_FAILED', 'تم النشر، لكن تعذر تأكيد حذف التقرير من الموقع.', {
+      phase:'verify', details:[sanitizeOutput(error.message)], deploySucceeded:true, verificationWarning:true
+    });
+  }
+  if(!jsonResponse.ok){
+    throw new PublishError('VERIFY_FAILED', 'تم النشر، لكن تعذر قراءة بيانات التقارير من الموقع.', {
+      phase:'verify', details:[`استجابة بيانات التقارير: HTTP ${jsonResponse.status}`], deploySucceeded:true, verificationWarning:true
+    });
+  }
+  let productionReports;
+  try{
+    productionReports = await jsonResponse.json();
+  }catch(error){
+    throw new PublishError('VERIFY_FAILED', 'تم النشر، لكن تعذر قراءة بيانات التقارير من الموقع.', {
+      phase:'verify', details:[sanitizeOutput(error.message)], deploySucceeded:true, verificationWarning:true
+    });
+  }
+  if(!Array.isArray(productionReports) || productionReports.some(report=>String(report.id || '').trim() === reportId)){
+    throw new PublishError('VERIFY_FAILED', 'تم النشر، لكن التقرير ما زال ظاهرًا في بيانات الموقع.', {
+      phase:'verify', deploySucceeded:true, verificationWarning:true
+    });
+  }
+
+  let templateResponse;
+  try{
+    templateResponse = await fetchImpl(templateUrl, {method:'HEAD', cache:'no-store', signal:AbortSignal.timeout(20000)});
+    if(templateResponse.status === 405){
+      templateResponse = await fetchImpl(templateUrl, {method:'GET', cache:'no-store', signal:AbortSignal.timeout(20000)});
+    }
+  }catch(error){
+    throw new PublishError('VERIFY_FAILED', 'تم النشر، لكن تعذر التحقق من ملف DOCX.', {
+      phase:'verify', details:[sanitizeOutput(error.message)], deploySucceeded:true, verificationWarning:true
+    });
+  }
+  if(docxDeleted && templateResponse.ok){
+    throw new PublishError('VERIFY_FAILED', 'تم حذف السجل، لكن ملف DOCX ما زال متاحًا في الموقع.', {
+      phase:'verify', deploySucceeded:true, verificationWarning:true
+    });
+  }
+  if(!docxDeleted && !templateResponse.ok){
+    throw new PublishError('VERIFY_FAILED', 'تم حذف السجل، لكن ملف DOCX المشترك لم يعد متاحًا.', {
+      phase:'verify', details:[`استجابة ملف DOCX: HTTP ${templateResponse.status}`], deploySucceeded:true, verificationWarning:true
+    });
+  }
+}
+
 function emitProgress(callback, step, status, message){
   if(typeof callback === 'function') callback({step, status, message});
+}
+
+async function runDeploy(dependencies, commitHash){
+  try{
+    await requireCommandSuccess(
+      dependencies,
+      dependencies.deployInvocation.command,
+      dependencies.deployInvocation.args,
+      'deploy',
+      'تم رفع التغييرات إلى GitHub، لكن Deploy فشل.',
+      {
+        timeoutMs:10 * 60 * 1000,
+        env:{...process.env, CI:'true', WRANGLER_SEND_METRICS:'false'},
+        errorState:{commitHash, pushSucceeded:true, retryAvailable:true}
+      }
+    );
+  }catch(error){
+    error.commitHash = commitHash;
+    error.pushSucceeded = true;
+    error.retryAvailable = true;
+    throw error;
+  }
 }
 
 async function publishReport(options){
@@ -528,25 +648,7 @@ async function publishReport(options){
   }
 
   emitProgress(options.onProgress, 'deploy', 'running', 'جاري النشر إلى Cloudflare...');
-  try{
-    await requireCommandSuccess(
-      dependencies,
-      dependencies.deployInvocation.command,
-      dependencies.deployInvocation.args,
-      'deploy',
-      'تم رفع التغييرات إلى GitHub، لكن Deploy فشل.',
-      {
-        timeoutMs:10 * 60 * 1000,
-        env:{...process.env, CI:'true', WRANGLER_SEND_METRICS:'false'},
-        errorState:{commitHash, pushSucceeded:true, retryAvailable:true}
-      }
-    );
-  }catch(error){
-    error.commitHash = commitHash;
-    error.pushSucceeded = true;
-    error.retryAvailable = true;
-    throw error;
-  }
+  await runDeploy(dependencies, commitHash);
   emitProgress(options.onProgress, 'deploy', 'success', 'اكتمل Deploy إلى Cloudflare.');
 
   emitProgress(options.onProgress, 'verify', 'running', 'جاري التحقق من بيانات التقرير وملف DOCX في الموقع...');
@@ -572,11 +674,281 @@ async function publishReport(options){
   };
 }
 
+function writeReportsAtomically(fsApi, reportsDataPath, contents){
+  const temporaryPath = `${reportsDataPath}.${process.pid}.${Date.now()}.delete.tmp`;
+  fsApi.writeFileSync(temporaryPath, contents, {encoding:'utf8', flag:'wx'});
+  try{
+    fsApi.renameSync(temporaryPath, reportsDataPath);
+  }catch(error){
+    if(fsApi.existsSync(temporaryPath)) fsApi.unlinkSync(temporaryPath);
+    throw error;
+  }
+}
+
+async function restoreDeleteMutation(dependencies, backup){
+  try{
+    writeReportsAtomically(dependencies.fsApi, dependencies.reportsDataPath, backup.rawReports);
+    if(backup.docxDeleted && !dependencies.fsApi.existsSync(backup.absoluteTemplatePath)){
+      dependencies.fsApi.writeFileSync(backup.absoluteTemplatePath, backup.docxBuffer, {flag:'wx'});
+    }
+  }catch(error){
+    throw new PublishError('ROLLBACK_FAILED', 'فشل الحذف وفشلت استعادة الملفات المحلية بالكامل.', {
+      phase:'validation', details:[sanitizeOutput(error.message)]
+    });
+  }
+}
+
+async function deleteReport(options){
+  const dependencies = {
+    projectRoot:options.projectRoot,
+    reportsDataPath:options.reportsDataPath || path.join(options.projectRoot, REPORTS_RELATIVE_PATH),
+    templatesDirectory:options.templatesDirectory || path.join(options.projectRoot, TEMPLATES_RELATIVE_DIRECTORY),
+    productionOrigin:options.productionOrigin || PRODUCTION_ORIGIN,
+    runCommand:options.runCommand || defaultRunCommand,
+    runReportCheck:options.runReportCheck,
+    fetchImpl:options.fetchImpl || globalThis.fetch,
+    deployInvocation:options.deployInvocation || resolveDeployInvocation(),
+    fsApi:options.fsApi || fs
+  };
+  const reportId = validateDeletePayload(options.payload);
+  const mode = options.mode === 'deploy-only' ? 'deploy-only' : 'full';
+  const prior = options.prior || {};
+  let report;
+  let templatePath;
+  let docxDeleted = prior.docxDeleted === true;
+  let commitHash = prior.commitHash || '';
+  let pushSucceeded = mode === 'deploy-only' && prior.pushSucceeded === true;
+
+  if(mode === 'deploy-only'){
+    if(!pushSucceeded || !commitHash || prior.reportId !== reportId || !prior.templatePath){
+      throw new PublishError('RETRY_NOT_ALLOWED', 'إعادة المحاولة متاحة فقط بعد Push ناجح وDeploy فاشل لعملية الحذف نفسها.', {phase:'validation'});
+    }
+    report = {id:reportId, title:prior.title || reportId};
+    templatePath = normalizeRepoPath(prior.templatePath);
+  }else{
+    let rawReports;
+    let reports;
+    try{
+      rawReports = dependencies.fsApi.readFileSync(dependencies.reportsDataPath, 'utf8');
+      reports = JSON.parse(rawReports);
+    }catch(error){
+      throw new PublishError('INVALID_REPORT_LIBRARY', 'تعذر قراءة بيانات تقارير المدير.', {
+        phase:'validation', details:[sanitizeOutput(error.message)]
+      });
+    }
+    if(!Array.isArray(reports)) throw new PublishError('INVALID_REPORT_LIBRARY', 'ملف بيانات التقارير لا يحتوي على مصفوفة.', {phase:'validation'});
+    const trusted = resolveSafeDeleteTarget(dependencies, reportId, reports);
+    report = trusted.report;
+    templatePath = trusted.templatePath;
+
+    emitProgress(options.onProgress, 'git', 'running', 'جاري فحص الفرع ونظافة Git قبل الحذف...');
+    const branchResult = await requireCommandSuccess(dependencies, 'git', ['branch', '--show-current'], 'git', 'تعذر تحديد فرع Git الحالي.');
+    if(branchResult.stdout.trim() !== 'main'){
+      throw new PublishError('WRONG_BRANCH', 'الحذف مسموح من فرع main فقط.', {phase:'git', details:[`الفرع الحالي: ${branchResult.stdout.trim() || 'غير معروف'}`]});
+    }
+    const statusResult = await requireCommandSuccess(dependencies, 'git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], 'git', 'تعذر قراءة حالة Git.');
+    const stagedBefore = await requireCommandSuccess(dependencies, 'git', ['diff', '--cached', '--name-only', '-z'], 'git', 'تعذر فحص Git index.');
+    const localChanges = parsePorcelain(statusResult.stdout);
+    const stagedChanges = parseNullSeparatedPaths(stagedBefore.stdout);
+    if(localChanges.length || stagedChanges.length){
+      throw new PublishError('UNRELATED_CHANGES', 'تعذر الحذف لأن هناك تغييرات محلية تحتاج مراجعة أولًا.', {
+        phase:'git', details:[...new Set([...localChanges, ...stagedChanges])]
+      });
+    }
+    emitProgress(options.onProgress, 'git', 'success', 'الفرع وWorking Tree وGit index نظيفة.');
+
+    const sharedTemplate = reports.some(item=>item !== report && normalizeRepoPath(item.templatePath) === templatePath);
+    const docxBuffer = sharedTemplate ? null : dependencies.fsApi.readFileSync(trusted.absoluteTemplatePath);
+    const updatedReports = reports.filter(item=>item !== report);
+    const backup = {rawReports, docxBuffer, docxDeleted:false, absoluteTemplatePath:trusted.absoluteTemplatePath};
+    let mutationApplied = false;
+    let commitCreated = false;
+    const allowedFiles = [REPORTS_RELATIVE_PATH];
+
+    try{
+      emitProgress(options.onProgress, 'mutation', 'running', 'جاري إزالة سجل التقرير وتجهيز ملف DOCX...');
+      writeReportsAtomically(dependencies.fsApi, dependencies.reportsDataPath, `${JSON.stringify(updatedReports, null, 2)}\n`);
+      mutationApplied = true;
+      if(!sharedTemplate){
+        dependencies.fsApi.unlinkSync(trusted.absoluteTemplatePath);
+        backup.docxDeleted = true;
+        docxDeleted = true;
+        allowedFiles.push(templatePath);
+      }
+      emitProgress(options.onProgress, 'mutation', 'success', sharedTemplate ? 'حُذف السجل وأُبقي ملف DOCX لأنه مشترك.' : 'حُذف السجل وملف DOCX محليًا.');
+
+      emitProgress(options.onProgress, 'validation', 'running', 'جاري فحص مكتبة التقارير بعد الحذف...');
+      if(typeof dependencies.runReportCheck !== 'function') throw new PublishError('CHECK_UNAVAILABLE', 'فاحص تقارير المدير غير متاح.', {phase:'validation'});
+      const check = await dependencies.runReportCheck();
+      if(!check.ok) throw new PublishError('REPORT_VALIDATION_FAILED', 'فشل فحص مكتبة تقارير المدير بعد الحذف.', {
+        phase:'validation', details:[sanitizeOutput(check.output || check.message)]
+      });
+      const verifiedReports = validateReportLibrary(dependencies);
+      if(verifiedReports.some(item=>String(item.id || '').trim() === reportId)){
+        throw new PublishError('REPORT_VALIDATION_FAILED', 'التقرير ما زال موجودًا بعد الحذف المحلي.', {phase:'validation'});
+      }
+      emitProgress(options.onProgress, 'validation', 'success', 'مكتبة التقارير سليمة بعد الحذف.');
+
+      emitProgress(options.onProgress, 'commit', 'running', 'جاري تجهيز Commit لملفات الحذف فقط...');
+      await requireCommandSuccess(dependencies, 'git', ['add', '--', ...allowedFiles], 'commit', 'تعذر تجهيز ملفات الحذف في Git.');
+      const stagedResult = await requireCommandSuccess(dependencies, 'git', ['diff', '--cached', '--name-only', '-z'], 'commit', 'تعذر التحقق من الملفات المجهزة.');
+      const stagedFiles = parseNullSeparatedPaths(stagedResult.stdout);
+      const allowedSet = new Set(allowedFiles);
+      if(stagedFiles.length !== allowedFiles.length || !stagedFiles.every(filePath=>allowedSet.has(filePath))){
+        throw new PublishError('UNSAFE_STAGE', 'أوقف الحذف لأن قائمة الملفات المجهزة لا تطابق allowlist.', {phase:'commit', details:stagedFiles});
+      }
+      const commitMessage = `Remove manager report: ${reportId}`;
+      await requireCommandSuccess(dependencies, 'git', ['commit', '-m', commitMessage, '--', ...allowedFiles], 'commit', 'تعذر إنشاء Commit محلي للحذف.');
+      commitCreated = true;
+      const hashResult = await requireCommandSuccess(dependencies, 'git', ['rev-parse', 'HEAD'], 'commit', 'تم إنشاء Commit، لكن تعذر قراءة معرّفه.');
+      commitHash = hashResult.stdout.trim();
+      emitProgress(options.onProgress, 'commit', 'success', 'تم إنشاء Commit حذف محلي آمن.');
+    }catch(error){
+      if(!commitCreated && mutationApplied){
+        await dependencies.runCommand('git', ['restore', '--staged', '--', ...allowedFiles], {cwd:dependencies.projectRoot, timeoutMs:30000});
+        await restoreDeleteMutation(dependencies, backup);
+      }
+      throw error;
+    }
+
+    emitProgress(options.onProgress, 'push', 'running', 'جاري رفع Commit الحذف إلى origin main...');
+    try{
+      await requireCommandSuccess(dependencies, 'git', ['push', 'origin', 'main'], 'push', 'تم إنشاء Commit الحذف محليًا، لكن Push فشل.', {errorState:{commitHash}});
+    }catch(error){
+      error.commitHash = commitHash;
+      throw error;
+    }
+    pushSucceeded = true;
+    emitProgress(options.onProgress, 'push', 'success', 'تم رفع الحذف إلى GitHub.');
+  }
+
+  if(mode === 'deploy-only'){
+    emitProgress(options.onProgress, 'git', 'running', 'جاري التأكد أن النسخة المحلية تطابق Commit الحذف المرفوع...');
+    const branchResult = await requireCommandSuccess(dependencies, 'git', ['branch', '--show-current'], 'git', 'تعذر تحديد فرع Git الحالي.');
+    const hashResult = await requireCommandSuccess(dependencies, 'git', ['rev-parse', 'HEAD'], 'git', 'تعذر التحقق من Commit الحالي.');
+    const statusResult = await requireCommandSuccess(dependencies, 'git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], 'git', 'تعذر قراءة حالة Git.');
+    if(branchResult.stdout.trim() !== 'main' || hashResult.stdout.trim() !== commitHash || parsePorcelain(statusResult.stdout).length){
+      throw new PublishError('UNSAFE_DEPLOY_RETRY', 'توقفت إعادة Deploy لأن النسخة المحلية لم تعد تطابق Commit الحذف المرفوع.', {phase:'git'});
+    }
+    emitProgress(options.onProgress, 'git', 'success', 'النسخة المحلية تطابق Commit الحذف المرفوع.');
+    emitProgress(options.onProgress, 'mutation', 'skipped', 'لن يتكرر الحذف المحلي.');
+    emitProgress(options.onProgress, 'validation', 'skipped', 'لن يتكرر فحص ما قبل Commit.');
+    emitProgress(options.onProgress, 'commit', 'skipped', 'لن يتم إنشاء Commit جديد.');
+    emitProgress(options.onProgress, 'push', 'skipped', 'لن يتم تنفيذ Push جديد.');
+  }
+
+  emitProgress(options.onProgress, 'deploy', 'running', 'جاري نشر الحذف إلى Cloudflare...');
+  try{
+    await runDeploy(dependencies, commitHash);
+  }catch(error){
+    error.docxDeleted = docxDeleted;
+    error.templatePath = templatePath;
+    error.reportTitle = report.title;
+    throw error;
+  }
+  emitProgress(options.onProgress, 'deploy', 'success', 'اكتمل Deploy إلى Cloudflare.');
+
+  emitProgress(options.onProgress, 'verify', 'running', 'جاري التحقق من اختفاء التقرير من الموقع...');
+  try{
+    await verifyDeletedReport(dependencies, reportId, templatePath, docxDeleted);
+  }catch(error){
+    error.commitHash = commitHash;
+    error.pushSucceeded = pushSucceeded;
+    error.docxDeleted = docxDeleted;
+    error.templatePath = templatePath;
+    error.reportTitle = report.title;
+    throw error;
+  }
+  emitProgress(options.onProgress, 'verify', 'success', docxDeleted ? 'اختفى التقرير وملف DOCX من الموقع.' : 'اختفى التقرير وبقي ملف DOCX المشترك متاحًا.');
+
+  return {
+    reportId,
+    title:report.title,
+    status:'deleted',
+    commitHash,
+    pushSucceeded,
+    productionUrl:dependencies.productionOrigin,
+    templatePath,
+    outputFileName:path.basename(templatePath),
+    docxDeleted,
+    deletedAt:new Date().toISOString()
+  };
+}
+
+async function recoverDeleteRetry(options, requestedReportId = ''){
+  const dependencies = {
+    projectRoot:options.projectRoot,
+    reportsDataPath:options.reportsDataPath || path.join(options.projectRoot, REPORTS_RELATIVE_PATH),
+    templatesDirectory:options.templatesDirectory || path.join(options.projectRoot, TEMPLATES_RELATIVE_DIRECTORY),
+    runCommand:options.runCommand || defaultRunCommand,
+    fsApi:options.fsApi || fs
+  };
+  try{
+    const [branchResult, statusResult, stagedResult, subjectResult, headResult, originResult] = await Promise.all([
+      requireCommandSuccess(dependencies, 'git', ['branch', '--show-current'], 'git', 'تعذر تحديد فرع Git الحالي.'),
+      requireCommandSuccess(dependencies, 'git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], 'git', 'تعذر قراءة حالة Git.'),
+      requireCommandSuccess(dependencies, 'git', ['diff', '--cached', '--name-only', '-z'], 'git', 'تعذر فحص Git index.'),
+      requireCommandSuccess(dependencies, 'git', ['log', '-1', '--pretty=%s'], 'git', 'تعذر قراءة آخر Commit.'),
+      requireCommandSuccess(dependencies, 'git', ['rev-parse', 'HEAD'], 'git', 'تعذر قراءة Commit الحالي.'),
+      requireCommandSuccess(dependencies, 'git', ['rev-parse', 'origin/main'], 'git', 'تعذر قراءة origin/main.')
+    ]);
+    if(branchResult.stdout.trim() !== 'main' || parsePorcelain(statusResult.stdout).length || parseNullSeparatedPaths(stagedResult.stdout).length){
+      return {state:'none'};
+    }
+    const match = subjectResult.stdout.trim().match(/^Remove manager report: ([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+    if(!match || (requestedReportId && match[1] !== requestedReportId)) return {state:'none'};
+    const reportId = validateReportId(match[1]);
+    const commitHash = headResult.stdout.trim();
+    if(!commitHash || originResult.stdout.trim() !== commitHash) return {state:'none'};
+
+    const currentReports = JSON.parse(dependencies.fsApi.readFileSync(dependencies.reportsDataPath, 'utf8'));
+    if(!Array.isArray(currentReports) || currentReports.some(item=>String(item.id || '').trim() === reportId)) return {state:'none'};
+    const previousResult = await requireCommandSuccess(dependencies, 'git', ['show', `HEAD^:${REPORTS_RELATIVE_PATH}`], 'git', 'تعذر استعادة بيانات التقرير المحذوف من Git.');
+    const previousReports = JSON.parse(previousResult.stdout);
+    const report = Array.isArray(previousReports) ? previousReports.find(item=>String(item.id || '').trim() === reportId) : null;
+    if(!report) return {state:'none'};
+    const templatePath = normalizeRepoPath(report.templatePath);
+    const absoluteTemplatePath = path.resolve(dependencies.projectRoot, templatePath);
+    if(!templatePath.startsWith(`${TEMPLATES_RELATIVE_DIRECTORY}/`) ||
+       path.posix.extname(templatePath).toLowerCase() !== '.docx' ||
+       templatePath.split('/').includes('..') ||
+       !isInsideDirectory(dependencies.templatesDirectory, absoluteTemplatePath)) return {state:'none'};
+
+    const diffResult = await requireCommandSuccess(dependencies, 'git', ['diff-tree', '--no-commit-id', '--name-status', '-r', 'HEAD'], 'git', 'تعذر فحص ملفات Commit الحذف.');
+    const changes = diffResult.stdout.split(/\r?\n/).filter(Boolean).map(line=>{
+      const parts = line.split(/\s+/);
+      return {status:parts[0], path:normalizeRepoPath(parts.slice(1).join(' '))};
+    });
+    const allowed = new Set([REPORTS_RELATIVE_PATH, templatePath]);
+    if(!changes.some(change=>change.path === REPORTS_RELATIVE_PATH) || changes.some(change=>!allowed.has(change.path))) return {state:'none'};
+    const templateChange = changes.find(change=>change.path === templatePath);
+    const docxDeleted = templateChange?.status === 'D';
+    if(docxDeleted === dependencies.fsApi.existsSync(absoluteTemplatePath)) return {state:'none'};
+    return {
+      state:'ready',
+      prior:{
+        reportId,
+        title:report.title,
+        templatePath,
+        docxDeleted,
+        commitHash,
+        pushSucceeded:true,
+        retryAvailable:true
+      }
+    };
+  }catch{
+    return {state:'none'};
+  }
+}
+
 module.exports = {
+  DELETE_PROGRESS_STEPS,
   PRODUCTION_ORIGIN,
   PROGRESS_STEPS,
   PublishError,
   detectPendingReport,
+  deleteReport,
+  recoverDeleteRetry,
   defaultRunCommand,
   normalizeRepoPath,
   parsePorcelain,
@@ -584,6 +956,7 @@ module.exports = {
   publishReport,
   resolveDeployInvocation,
   sanitizeOutput,
+  validateDeletePayload,
   validatePublishPayload,
   validateReportId,
   validateReportLibrary
