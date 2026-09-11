@@ -178,21 +178,5 @@
     "optionalFields": [],
     "customFields": [],
     "notes": ""
-  },
-  {
-    "id": "awareness-program-report",
-    "title": "تقرير تنفيذ برنامج توعوي",
-    "description": "نموذج تجريبي لتوثيق تنفيذ برنامج توعوي",
-    "category": "النماذج",
-    "status": "تجريبي",
-    "sectionId": "managerReports",
-    "templatePath": "assets/report-templates/manager-reports/awareness-program-report.docx",
-    "outputFileName": "تقرير تنفيذ برنامج توعوي - {{schoolDisplayName}}.docx",
-    "tags": [],
-    "fields": [],
-    "requiredFields": [],
-    "optionalFields": [],
-    "customFields": [],
-    "notes": ""
   }
 ]
