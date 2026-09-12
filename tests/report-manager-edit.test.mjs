@@ -130,6 +130,18 @@ test('edits title only without changing ID or template path', async t=>{
   assert.equal(draft.after.templatePath, templatePath);
 });
 
+test('edits description only with empty custom fields and no Word replacement', async t=>{
+  const draft = await save(context(t), {
+    description:'اختبار تعديل محلي',
+    requiredFields:[],
+    optionalFields:['principalName'],
+    customFields:[]
+  });
+  assert.equal(draft.after.description, 'اختبار تعديل محلي');
+  assert.deepEqual(Object.keys(draft.differences), ['description']);
+  assert.equal(draft.wordChanged, false);
+});
+
 test('edits status and category', async t=>{
   const draft = await save(context(t), {status:'معتمد', category:'النماذج'});
   assert.equal(draft.after.status, 'معتمد');

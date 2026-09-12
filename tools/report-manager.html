@@ -569,6 +569,7 @@
   <dialog id="editDialog" aria-labelledby="editDialogTitle">
     <div class="dialog-body">
       <h2 id="editDialogTitle">تعديل التقرير</h2>
+      <p id="editDialogStatus" class="result-status" role="status" aria-live="polite" hidden></p>
       <form id="editForm" class="edit-grid">
         <label>عنوان التقرير<input id="editTitle" maxlength="160" required></label>
         <label>التصنيف<select id="editCategory" required><option>الاجتماعات</option><option>اللجان</option><option>النماذج</option><option>السجلات</option><option>أخرى</option></select></label>
@@ -695,6 +696,8 @@
     const deleteSlugInput = document.getElementById('deleteSlugInput');
     const confirmDelete = document.getElementById('confirmDelete');
     const editDialog = document.getElementById('editDialog');
+    const editForm = document.getElementById('editForm');
+    const editDialogStatus = document.getElementById('editDialogStatus');
     const editPanel = document.getElementById('editPanel');
     const editState = document.getElementById('editState');
     const editPanelMessage = document.getElementById('editPanelMessage');
@@ -715,6 +718,13 @@
       resultStatus.textContent = message;
       resultStatus.classList.toggle('is-success', type === 'success');
       resultStatus.classList.toggle('is-error', type === 'error');
+    }
+
+    function setEditDialogStatus(message = '', type = '') {
+      editDialogStatus.textContent = message;
+      editDialogStatus.hidden = !message;
+      editDialogStatus.classList.toggle('is-success', type === 'success');
+      editDialogStatus.classList.toggle('is-error', type === 'error');
     }
 
     function setBusy(isBusy) {
@@ -981,6 +991,7 @@
 
     function openEditDialog(report) {
       currentEditReport = report;
+      setEditDialogStatus();
       document.getElementById('editTitle').value = report.title || '';
       document.getElementById('editDescription').value = report.description || '';
       document.getElementById('editCategory').value = report.category || 'أخرى';
@@ -1000,6 +1011,7 @@
 
     async function buildEditPayload() {
       if (!currentEditReport) throw new Error('لم يتم اختيار تقرير للتعديل.');
+      if (!editForm.reportValidity()) throw new Error('أكمل حقول تعديل التقرير المطلوبة.');
       let customFields;
       try {
         customFields = JSON.parse(document.getElementById('editCustomFields').value || '[]');
@@ -1088,13 +1100,16 @@
 
     async function saveLocalEdit() {
       setBusy(true);
+      setEditDialogStatus('جاري حفظ التعديلات محليًا...');
       try {
         const data = await apiRequest('/api/reports/edit', {method: 'POST', body: JSON.stringify(await buildEditPayload())});
         editDialog.close();
         renderEditDraft(data.draft);
-        setResult(data.message, 'success');
         await loadReports();
+        setResult(data.message, 'success');
+        editPanel.scrollIntoView({behavior: 'smooth', block: 'center'});
       } catch (error) {
+        setEditDialogStatus(error.message, 'error');
         setResult(error.message, 'error');
       } finally {
         setBusy(false);
@@ -1324,6 +1339,7 @@
     async function loadReports() {
       try {
         const data = await apiRequest('/api/reports/list');
+        const hasPendingEdit = data.pendingEdit?.state === 'local' || data.pendingEdit?.state === 'deploy-retry';
         currentReports = data.reports || [];
         reportCount.textContent = String(data.count);
         resultReportCount.textContent = String(data.count);
@@ -1335,7 +1351,7 @@
         if (data.pendingPublish?.state === 'ready') {
           showReadyToPublish(data.pendingPublish.publish);
           setResult('تم اكتشاف تقرير محلي جاهز للنشر.', 'success');
-        } else if (data.pendingPublish?.state === 'ambiguous') {
+        } else if (data.pendingPublish?.state === 'ambiguous' && !hasPendingEdit) {
           showPendingReview(data.pendingPublish);
         } else if (!currentPublishReport) {
           publishSection.hidden = true;

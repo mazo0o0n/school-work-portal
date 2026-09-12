@@ -223,6 +223,101 @@ for(const testCase of cases){
   });
 }
 
+test('نموذج تعديل غير صالح يعرض خطأ داخله ويعيد تفعيل الزر', async ({page})=>{
+  const report = {
+    id:'invalid-edit-report', sectionId:'managerReports', title:'تقرير', description:'', category:'أخرى',
+    status:'تجريبي', tags:[], fields:[], requiredFields:[], optionalFields:[], customFields:[], notes:'',
+    templatePath:'assets/report-templates/manager-reports/invalid-edit-report.docx', publishStatus:'published'
+  };
+  let editRequests = 0;
+  await routeReportList(page, {state:'none'}, [report]);
+  page.on('request', request=>{
+    if(new URL(request.url()).pathname === '/api/reports/edit') editRequests += 1;
+  });
+  await page.goto('http://127.0.0.1:4174');
+  await page.locator('.edit-report-button').click();
+  await page.locator('#editTitle').fill('');
+  await page.locator('#saveEdit').click();
+  await expect(page.locator('#editDialogStatus')).toContainText('أكمل حقول تعديل التقرير المطلوبة.');
+  await expect(page.locator('#editDialogStatus')).toBeVisible();
+  await expect(page.locator('#saveEdit')).toBeEnabled();
+  expect(editRequests).toBe(0);
+});
+
+for(const failure of [
+  {name:'CSRF', status:403, message:'رمز حماية الأداة غير صالح. أعد تحميل الصفحة ثم حاول مجددًا.'},
+  {name:'server 500', status:500, message:'حدث خطأ محلي غير متوقع أثناء تنفيذ العملية.'}
+]){
+  test(`${failure.name} يظهر رسالة واضحة داخل نموذج التعديل ويعيد تفعيل الزر`, async ({page})=>{
+    const report = {
+      id:'failed-edit-report', sectionId:'managerReports', title:'تقرير', description:'', category:'أخرى',
+      status:'تجريبي', tags:[], fields:[], requiredFields:[], optionalFields:[], customFields:[], notes:'',
+      templatePath:'assets/report-templates/manager-reports/failed-edit-report.docx', publishStatus:'published'
+    };
+    await routeReportList(page, {state:'none'}, [report]);
+    await page.route('**/api/reports/edit', route=>route.fulfill({
+      status:failure.status,
+      contentType:'application/json',
+      body:JSON.stringify({ok:false, message:failure.message})
+    }));
+    await page.goto('http://127.0.0.1:4174');
+    await page.locator('.edit-report-button').click();
+    await page.locator('#editDescription').fill('اختبار تعديل محلي');
+    await page.locator('#saveEdit').click();
+    await expect(page.locator('#editDialogStatus')).toHaveText(failure.message);
+    await expect(page.locator('#editDialogStatus')).toBeVisible();
+    await expect(page.locator('#saveEdit')).toBeEnabled();
+  });
+}
+
+test('نجاح التعديل لا تطمسه حالة pendingPublish الغامضة وينتقل إلى Diff', async ({page})=>{
+  const report = {
+    id:'edit-conflict-report', sectionId:'managerReports', title:'تقرير', description:'وصف قديم', category:'أخرى',
+    status:'تجريبي', tags:[], fields:[], requiredFields:[], optionalFields:[], customFields:[], notes:'',
+    templatePath:'assets/report-templates/manager-reports/edit-conflict-report.docx', publishStatus:'published'
+  };
+  const draft = {
+    reportId:report.id, title:report.title, templatePath:report.templatePath, wordChanged:false,
+    files:['assets/data/manager-reports.json'],
+    differences:{description:{before:'وصف قديم', after:'اختبار تعديل محلي'}}
+  };
+  let saved = false;
+  await page.route('**/api/reports/list', route=>route.fulfill({
+    status:200,
+    contentType:'application/json',
+    body:JSON.stringify({
+      ok:true,
+      count:1,
+      reports:[saved ? {...report, description:'اختبار تعديل محلي', publishStatus:'تعديل محلي'} : report],
+      pendingDelete:{state:'none'},
+      pendingPublish:saved ? {state:'ambiguous', message:'توجد تغييرات تحتاج مراجعة.', details:['assets/data/manager-reports.json']} : {state:'none'},
+      pendingEdit:saved ? {state:'local', draft} : {state:'none'}
+    })
+  }));
+  await page.route('**/api/reports/edit', route=>{
+    saved = true;
+    return route.fulfill({
+      status:200,
+      contentType:'application/json',
+      body:JSON.stringify({ok:true, message:'تم حفظ التعديلات محليًا وفحصها.', draft})
+    });
+  });
+
+  await page.goto('http://127.0.0.1:4174');
+  await page.locator('.edit-report-button').click();
+  await page.locator('#editDescription').fill('اختبار تعديل محلي');
+  await page.locator('#saveEdit').click();
+
+  await expect(page.locator('#resultStatus')).toHaveText('تم حفظ التعديلات محليًا وفحصها.');
+  await expect(page.locator('#editPanel')).toBeVisible();
+  await expect(page.locator('#editReview')).toContainText('اختبار تعديل محلي');
+  await expect(page.locator('#publishSection')).toBeHidden();
+  await expect.poll(()=>page.locator('#editPanel').evaluate(element=>{
+    const bounds = element.getBoundingClientRect();
+    return bounds.top < window.innerHeight && bounds.bottom > 0;
+  })).toBe(true);
+});
+
 test('واجهة التقدم تعرض المراحل الست والفشل الآمن دون نشر فعلي', async ({page})=>{
   await routeReportList(page);
   await page.route('**/api/reports/add', route=>route.fulfill({
