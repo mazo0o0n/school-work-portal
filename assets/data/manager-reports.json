@@ -111,7 +111,7 @@
   {
     "id": "school-guard-assignment",
     "title": "تكليف حارس المدرسة",
-    "description": "نموذج تكليف حارس المدرسة بمهام محددة.",
+    "description": "نموذج تكليف حارس المدرسة بمهام محددة.\nاختبار تعديل محلي",
     "category": "النماذج",
     "status": "معتمد",
     "sectionId": "managerReports",
