@@ -11,16 +11,21 @@ export function isPhoneVerificationRequired(env) {
   return String(env?.PHONE_VERIFICATION_REQUIRED || '').trim() === 'true';
 }
 
+export function isOtpSendEnabled(env) {
+  return String(env?.OTP_SEND_ENABLED || '').trim() === 'true';
+}
+
 export function isWhatsAppTestMode(env) {
   return String(env?.WHATSAPP_TEST_MODE || '').trim() === 'true';
 }
 
 export class WhatsAppOtpError extends Error {
-  constructor(code, status, message) {
+  constructor(code, status, message, ambiguous = false) {
     super(message);
     this.name = 'WhatsAppOtpError';
     this.code = code;
     this.status = status;
+    this.ambiguous = ambiguous === true;
   }
 }
 
@@ -186,11 +191,12 @@ export function isPhoneVerificationFlowConfigured(env) {
   );
 }
 
-function whatsappSendFailedError() {
+function whatsappSendFailedError(ambiguous = false) {
   return new WhatsAppOtpError(
     'whatsapp_send_failed',
     502,
-    'تعذر إرسال رمز التحقق حاليًا. حاول مرة أخرى لاحقًا.'
+    'تعذر إرسال رمز التحقق حاليًا. حاول مرة أخرى لاحقًا.',
+    ambiguous
   );
 }
 
@@ -240,7 +246,7 @@ export async function sendWhatsAppOtp(
       signal: controller.signal
     });
   } catch {
-    throw whatsappSendFailedError();
+    throw whatsappSendFailedError(true);
   } finally {
     globalThis.clearTimeout(timeout);
   }

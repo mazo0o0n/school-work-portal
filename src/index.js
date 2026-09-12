@@ -19,6 +19,7 @@ import {
   hashOtpCode,
   hashVerificationToken,
   isOtpCode,
+  isOtpSendEnabled,
   isPhoneVerificationFlowConfigured,
   isPhoneVerificationRequired,
   isWhatsAppTestRecipientAllowed,
@@ -48,6 +49,10 @@ const RATE_LIMIT_WINDOW_SECONDS = 60;
 const RATE_LIMIT_ALLOWED = 'allowed';
 const RATE_LIMIT_DENIED = 'denied';
 const RATE_LIMIT_UNAVAILABLE = 'unavailable';
+const OTP_ABUSE_SEND_EVENT = 'send_attempt';
+const OTP_ABUSE_VERIFY_FAILURE_EVENT = 'verify_failure';
+const OTP_SEND_HOLD_MS = 5 * 60 * 1000;
+const OTP_GLOBAL_WARNING_THRESHOLD = 80;
 const INTERNAL_PAGE_PATHS = new Set([
   '/admin-unanswered.html',
   '/assistant-status.html',
@@ -216,6 +221,116 @@ async function isRateLimitAllowed(request, env, scope, limiter){
     console.error('Rate limiting binding unavailable.');
     return RATE_LIMIT_UNAVAILABLE;
   }
+}
+
+async function hashVerificationRateValue(salt, scope, value){
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    SECRET_TOKEN_ENCODER.encode(`${salt}:${scope}:${value}`)
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function getVerificationAbuseKeys(request, env, phone){
+  const clientAddress = String(request.headers.get('CF-Connecting-IP') || '').trim();
+  const secretSalt = String(env.RATE_LIMIT_SALT || '').trim();
+  if(!clientAddress || !secretSalt || !phone) return null;
+
+  const [phoneHash, ipHash, ipPhoneHash] = await Promise.all([
+    hashVerificationRateValue(secretSalt, 'otp-phone', phone),
+    hashVerificationRateValue(secretSalt, 'otp-ip', clientAddress),
+    hashVerificationRateValue(secretSalt, 'otp-ip-phone', `${clientAddress}:${phone}`)
+  ]);
+  return { phoneHash, ipHash, ipPhoneHash };
+}
+
+function verificationRateLimitedResponse(){
+  return jsonResponse({
+    error: 'تم تجاوز الحد المسموح مؤقتًا. حاول مرة أخرى لاحقًا.',
+    code: 'verification_rate_limited'
+  }, 429, { 'Retry-After': String(RATE_LIMIT_WINDOW_SECONDS) });
+}
+
+async function isPhoneSendAvailable(database, phone, now){
+  const row = await database.prepare(
+    'SELECT last_sent_at, send_hold_until FROM phone_verifications ' +
+    'WHERE phone = ?1 AND purpose = ?2 LIMIT 1'
+  ).bind(phone, PHONE_VERIFICATION_PURPOSE).first();
+  if(!row) return true;
+
+  const lastSentAt = Date.parse(row.last_sent_at);
+  const sendHoldUntil = Date.parse(row.send_hold_until);
+  if(row.last_sent_at && !Number.isFinite(lastSentAt)) return false;
+  if(row.send_hold_until && !Number.isFinite(sendHoldUntil)) return false;
+  return !(
+    lastSentAt > now.getTime() - PHONE_OTP_COOLDOWN_MS ||
+    sendHoldUntil > now.getTime()
+  );
+}
+
+async function reserveOtpSendAttempt(database, keys, now){
+  const nowIso = now.toISOString();
+  const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
+  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  const insertedId = await database.prepare([
+    'INSERT INTO phone_verification_abuse_events',
+    '(request_id, event_type, phone_hash, ip_hash, ip_phone_hash, created_at, expires_at)',
+    `SELECT ?1, '${OTP_ABUSE_SEND_EVENT}', ?2, ?3, ?4, ?5, ?6`,
+    `WHERE (SELECT COUNT(*) FROM phone_verification_abuse_events WHERE event_type = '${OTP_ABUSE_SEND_EVENT}' AND phone_hash = ?2 AND created_at > ?7) < 3`,
+    `AND (SELECT COUNT(*) FROM phone_verification_abuse_events WHERE event_type = '${OTP_ABUSE_SEND_EVENT}' AND phone_hash = ?2 AND created_at > ?8) < 6`,
+    `AND (SELECT COUNT(*) FROM phone_verification_abuse_events WHERE event_type = '${OTP_ABUSE_SEND_EVENT}' AND phone_hash = ?2 AND created_at > ?9) < 10`,
+    `AND (SELECT COUNT(*) FROM phone_verification_abuse_events WHERE event_type = '${OTP_ABUSE_SEND_EVENT}' AND ip_hash = ?3 AND created_at > ?8) < 20`,
+    `AND (SELECT COUNT(*) FROM phone_verification_abuse_events WHERE event_type = '${OTP_ABUSE_SEND_EVENT}' AND ip_hash = ?3 AND created_at > ?9) < 50`,
+    `AND (SELECT COUNT(*) FROM phone_verification_abuse_events WHERE event_type = '${OTP_ABUSE_SEND_EVENT}' AND ip_phone_hash = ?4 AND created_at > ?7) < 3`,
+    `AND (SELECT COUNT(*) FROM phone_verification_abuse_events WHERE event_type = '${OTP_ABUSE_SEND_EVENT}' AND created_at > ?9) < 100`,
+    'RETURNING id'
+  ].join(' ')).bind(
+    crypto.randomUUID(),
+    keys.phoneHash,
+    keys.ipHash,
+    keys.ipPhoneHash,
+    nowIso,
+    expiresAt,
+    tenMinutesAgo,
+    hourAgo,
+    dayAgo
+  ).first('id');
+  if(insertedId === null || insertedId === undefined) return false;
+
+  const globalCount = await database.prepare(
+    `SELECT COUNT(*) AS count FROM phone_verification_abuse_events WHERE event_type = ?1 AND created_at > ?2`
+  ).bind(OTP_ABUSE_SEND_EVENT, dayAgo).first('count');
+  if(Number(globalCount || 0) >= OTP_GLOBAL_WARNING_THRESHOLD){
+    console.warn('OTP provider attempt cap warning threshold reached.');
+  }
+  return true;
+}
+
+async function reserveOtpVerifyFailure(database, keys, now){
+  const nowIso = now.toISOString();
+  const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
+  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000).toISOString();
+  const insertedId = await database.prepare([
+    'INSERT INTO phone_verification_abuse_events',
+    '(request_id, event_type, phone_hash, ip_hash, ip_phone_hash, created_at, expires_at)',
+    `SELECT ?1, '${OTP_ABUSE_VERIFY_FAILURE_EVENT}', ?2, ?3, ?4, ?5, ?6`,
+    `WHERE (SELECT COUNT(*) FROM phone_verification_abuse_events WHERE event_type = '${OTP_ABUSE_VERIFY_FAILURE_EVENT}' AND phone_hash = ?2 AND created_at > ?7) < 10`,
+    `AND (SELECT COUNT(*) FROM phone_verification_abuse_events WHERE event_type = '${OTP_ABUSE_VERIFY_FAILURE_EVENT}' AND ip_hash = ?3 AND created_at > ?7) < 30`,
+    'RETURNING id'
+  ].join(' ')).bind(
+    crypto.randomUUID(),
+    keys.phoneHash,
+    keys.ipHash,
+    keys.ipPhoneHash,
+    nowIso,
+    expiresAt,
+    tenMinutesAgo
+  ).first('id');
+  return insertedId !== null && insertedId !== undefined;
 }
 
 async function fetchInternalAsset(request, env, pathname){
@@ -1356,6 +1471,13 @@ function phoneVerificationUnavailableResponse() {
   }, 503);
 }
 
+function phoneVerificationSendDisabledResponse() {
+  return jsonResponse({
+    error: 'خدمة إرسال رمز التحقق غير متاحة حاليًا.',
+    code: 'whatsapp_verification_unavailable'
+  }, 503);
+}
+
 function phoneVerificationDisabledResponse() {
   return jsonResponse({
     error: 'التحقق من رقم الجوال عبر واتساب غير مفعّل حاليًا.',
@@ -1388,19 +1510,33 @@ function getPhoneVerificationSecret(env) {
   return String(env.PHONE_VERIFICATION_SECRET || '').trim();
 }
 
-async function invalidateUnsentOtp(database, phone, codeHash) {
+async function invalidateUnsentOtp(database, phone, codeHash, holdMilliseconds = 0) {
   const now = new Date().toISOString();
   const cooldownElapsed = new Date(Date.now() - PHONE_OTP_COOLDOWN_MS).toISOString();
+  const holdUntil = holdMilliseconds > 0
+    ? new Date(Date.now() + holdMilliseconds).toISOString()
+    : null;
   await database.prepare(
     'UPDATE phone_verifications ' +
-    'SET code_hash = ?1, expires_at = ?2, last_sent_at = ?3, updated_at = ?2 ' +
-    'WHERE phone = ?4 AND purpose = ?5 AND code_hash = ?6'
-  ).bind('', now, cooldownElapsed, phone, PHONE_VERIFICATION_PURPOSE, codeHash).run();
+    'SET code_hash = ?1, expires_at = ?2, last_sent_at = ?3, send_hold_until = ?4, ' +
+    'updated_at = ?2 WHERE phone = ?5 AND purpose = ?6 AND code_hash = ?7'
+  ).bind(
+    '',
+    now,
+    holdUntil ? now : cooldownElapsed,
+    holdUntil,
+    phone,
+    PHONE_VERIFICATION_PURPOSE,
+    codeHash
+  ).run();
 }
 
 async function handleSendWhatsAppCode(request, env) {
   if (!isPhoneVerificationRequired(env)) {
     return phoneVerificationDisabledResponse();
+  }
+  if (!isOtpSendEnabled(env)) {
+    return phoneVerificationSendDisabledResponse();
   }
 
   if (!env.PLATFORM_DB || typeof env.PLATFORM_DB.prepare !== 'function') {
@@ -1425,13 +1561,36 @@ async function handleSendWhatsAppCode(request, env) {
         'أدخل رقم جوال سعودي صحيحًا.'
       );
     }
+    const edgeRateLimitStatus = await isRateLimitAllowed(
+      request,
+      env,
+      'whatsapp-code-send',
+      env.CHAT_RATE_LIMITER
+    );
+    if(edgeRateLimitStatus === RATE_LIMIT_UNAVAILABLE){
+      return rateLimitUnavailableResponse('whatsapp-code-send');
+    }
+    if(edgeRateLimitStatus === RATE_LIMIT_DENIED){
+      return verificationRateLimitedResponse();
+    }
     if (!isWhatsAppTestRecipientAllowed(env, phone)) {
       return phoneVerificationUnavailableResponse();
     }
 
+    const now = new Date();
+    const abuseKeys = await getVerificationAbuseKeys(request, env, phone);
+    if(!abuseKeys){
+      return rateLimitUnavailableResponse('whatsapp-code-send');
+    }
+    if(!await isPhoneSendAvailable(env.PLATFORM_DB, phone, now)){
+      return verificationRateLimitedResponse();
+    }
+    if(!await reserveOtpSendAttempt(env.PLATFORM_DB, abuseKeys, now)){
+      return verificationRateLimitedResponse();
+    }
+
     const code = generateOtpCode();
     const codeHash = await hashOtpCode(secret, phone, code);
-    const now = new Date();
     const sentAt = now.toISOString();
     const expiresAt = new Date(now.getTime() + PHONE_OTP_TTL_MS).toISOString();
     const cooldownElapsed = new Date(now.getTime() - PHONE_OTP_COOLDOWN_MS).toISOString();
@@ -1444,8 +1603,9 @@ async function handleSendWhatsAppCode(request, env) {
       'code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0, ' +
       'last_sent_at = excluded.last_sent_at, verified_at = NULL, ' +
       'verification_token_hash = NULL, token_expires_at = NULL, consumed_at = NULL, ' +
-      'updated_at = excluded.updated_at ' +
-      'WHERE phone_verifications.last_sent_at <= ?6'
+      'send_hold_until = NULL, updated_at = excluded.updated_at ' +
+      'WHERE phone_verifications.last_sent_at <= ?6 ' +
+      'AND (phone_verifications.send_hold_until IS NULL OR phone_verifications.send_hold_until <= ?5)'
     ).bind(
       phone,
       codeHash,
@@ -1456,16 +1616,19 @@ async function handleSendWhatsAppCode(request, env) {
     ).run();
 
     if (Number(reservation?.meta?.changes || 0) !== 1) {
-      return jsonResponse({
-        error: 'انتظر 60 ثانية قبل طلب رمز جديد.',
-        code: 'verification_code_cooldown'
-      }, 429, { 'Retry-After': '60' });
+      return verificationRateLimitedResponse();
     }
 
     try {
       await sendWhatsAppOtp(env, phone, code);
     } catch (error) {
-      await invalidateUnsentOtp(env.PLATFORM_DB, phone, codeHash);
+      const ambiguousFailure = !(error instanceof WhatsAppOtpError) || error.ambiguous === true;
+      await invalidateUnsentOtp(
+        env.PLATFORM_DB,
+        phone,
+        codeHash,
+        ambiguousFailure ? OTP_SEND_HOLD_MS : 0
+      );
       if (error instanceof WhatsAppOtpError) {
         return jsonResponse({ error: error.message, code: error.code }, error.status);
       }
@@ -1540,6 +1703,13 @@ async function handleVerifyWhatsAppCode(request, env) {
 
     const matches = await timingSafeTokenEqual(submittedHash, row.code_hash);
     if (!matches) {
+      const abuseKeys = await getVerificationAbuseKeys(request, env, phone);
+      if(!abuseKeys){
+        return rateLimitUnavailableResponse('whatsapp-code-verify');
+      }
+      if(!await reserveOtpVerifyFailure(env.PLATFORM_DB, abuseKeys, new Date())){
+        return verificationRateLimitedResponse();
+      }
       const attemptResult = await env.PLATFORM_DB.prepare(
         'UPDATE phone_verifications SET attempts = attempts + 1, updated_at = ?1 ' +
         'WHERE id = ?2 AND attempts < ?3 RETURNING attempts'
@@ -1866,10 +2036,18 @@ export default {
       if(!isPhoneVerificationRequired(env)){
         return phoneVerificationDisabledResponse();
       }
+      if(
+        url.pathname.endsWith('send-whatsapp-code') &&
+        !isOtpSendEnabled(env)
+      ){
+        return phoneVerificationSendDisabledResponse();
+      }
 
-      const scope = url.pathname.endsWith('send-whatsapp-code')
-        ? 'whatsapp-code-send'
-        : 'whatsapp-code-verify';
+      if(url.pathname.endsWith('send-whatsapp-code')){
+        return handleSendWhatsAppCode(request, env);
+      }
+
+      const scope = 'whatsapp-code-verify';
       const rateLimitStatus = await isRateLimitAllowed(
         request,
         env,
@@ -1880,15 +2058,10 @@ export default {
         return rateLimitUnavailableResponse(scope);
       }
       if(rateLimitStatus === RATE_LIMIT_DENIED){
-        return jsonResponse({
-          error: 'تم تجاوز الحد المسموح مؤقتًا. انتظر دقيقة ثم حاول مرة أخرى.',
-          code: 'rate_limited'
-        }, 429, { 'Retry-After': String(RATE_LIMIT_WINDOW_SECONDS) });
+        return verificationRateLimitedResponse();
       }
 
-      return url.pathname.endsWith('send-whatsapp-code')
-        ? handleSendWhatsAppCode(request, env)
-        : handleVerifyWhatsAppCode(request, env);
+      return handleVerifyWhatsAppCode(request, env);
     }
 
     if(url.pathname === '/api/schools/register'){

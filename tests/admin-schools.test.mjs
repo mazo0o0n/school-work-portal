@@ -90,6 +90,13 @@ const phoneVerificationMigration = await readFile(
   ),
   'utf8'
 );
+const phoneVerificationAbuseMigration = await readFile(
+  new globalThis.URL(
+    '../migrations/platform/0006_create_phone_verification_abuse_events.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
 
 const TOKEN = 'test-admin-token';
 const BASE_URL = 'https://example.test';
@@ -398,6 +405,7 @@ function createEnv(database = createDatabase().binding){
 function createRegistrationDatabase(){
   const rows = [];
   const verifications = [];
+  const verificationAbuseEvents = [];
   const statements = [];
   let inserted = 0;
 
@@ -409,6 +417,7 @@ function createRegistrationDatabase(){
   return {
     rows,
     verifications,
+    verificationAbuseEvents,
     statements,
     get inserted(){
       return inserted;
@@ -466,10 +475,74 @@ function createRegistrationDatabase(){
                     verification_token_hash: null,
                     token_expires_at: null,
                     consumed_at: null,
+                    send_hold_until: null,
                     updated_at: sentAt
                   });
                   if(!existing) verifications.push(next);
                   return { success: true, meta: { changes: 1 } };
+                }
+              };
+            }
+
+            if(sql.startsWith('SELECT last_sent_at, send_hold_until')){
+              return {
+                async first(){
+                  const [phone, purpose] = values;
+                  return verifications.find((row) => (
+                    row.phone === phone && row.purpose === purpose
+                  )) || null;
+                }
+              };
+            }
+
+            if(sql.startsWith('INSERT INTO phone_verification_abuse_events')){
+              return {
+                async first(column){
+                  const [requestId, phoneHash, ipHash, ipPhoneHash, createdAt, expiresAt] = values;
+                  const isSend = sql.includes("'send_attempt'");
+                  const eventType = isSend ? 'send_attempt' : 'verify_failure';
+                  const recentCount = (field, value, since) => verificationAbuseEvents.filter(
+                    (event) => event.event_type === eventType &&
+                      event[field] === value &&
+                      event.created_at > since
+                  ).length;
+                  const allowed = isSend
+                    ? recentCount('phone_hash', phoneHash, values[6]) < 3 &&
+                      recentCount('phone_hash', phoneHash, values[7]) < 6 &&
+                      recentCount('phone_hash', phoneHash, values[8]) < 10 &&
+                      recentCount('ip_hash', ipHash, values[7]) < 20 &&
+                      recentCount('ip_hash', ipHash, values[8]) < 50 &&
+                      recentCount('ip_phone_hash', ipPhoneHash, values[6]) < 3 &&
+                      verificationAbuseEvents.filter((event) => (
+                        event.event_type === eventType && event.created_at > values[8]
+                      )).length < 100
+                    : recentCount('phone_hash', phoneHash, values[6]) < 10 &&
+                      recentCount('ip_hash', ipHash, values[6]) < 30;
+                  if(!allowed) return null;
+                  const event = {
+                    id: verificationAbuseEvents.length + 1,
+                    request_id: requestId,
+                    event_type: eventType,
+                    phone_hash: phoneHash,
+                    ip_hash: ipHash,
+                    ip_phone_hash: ipPhoneHash,
+                    created_at: createdAt,
+                    expires_at: expiresAt
+                  };
+                  verificationAbuseEvents.push(event);
+                  return column ? event[column] : event;
+                }
+              };
+            }
+
+            if(sql.startsWith('SELECT COUNT(*) AS count FROM phone_verification_abuse_events')){
+              return {
+                async first(column){
+                  const [eventType, since] = values;
+                  const count = verificationAbuseEvents.filter((event) => (
+                    event.event_type === eventType && event.created_at > since
+                  )).length;
+                  return column ? count : { count };
                 }
               };
             }
@@ -488,7 +561,7 @@ function createRegistrationDatabase(){
             if(sql.startsWith('UPDATE phone_verifications SET code_hash')){
               return {
                 async run(){
-                  const [codeHash, expiresAt, lastSentAt, phone, purpose, previousHash] = values;
+                  const [codeHash, expiresAt, lastSentAt, sendHoldUntil, phone, purpose, previousHash] = values;
                   const row = verifications.find((item) => (
                     item.phone === phone &&
                     item.purpose === purpose &&
@@ -499,6 +572,7 @@ function createRegistrationDatabase(){
                     code_hash: codeHash,
                     expires_at: expiresAt,
                     last_sent_at: lastSentAt,
+                    send_hold_until: sendHoldUntil,
                     updated_at: expiresAt
                   });
                   return { success: true, meta: { changes: 1 } };
@@ -624,6 +698,7 @@ function createRegistrationEnv(database, { phoneVerificationRequired = true } = 
     env: {
       PLATFORM_DB: database.binding,
       PHONE_VERIFICATION_REQUIRED: phoneVerificationRequired ? 'true' : 'false',
+      OTP_SEND_ENABLED: 'true',
       PHONE_VERIFICATION_SECRET,
       WHATSAPP_OTP_SENDER: async ({ phone, code }) => {
         sentCodes.push({ phone, code });
@@ -1220,6 +1295,17 @@ test('defines school identity uniqueness and admin audit migrations safely', () 
   assert.match(phoneVerificationMigration, /verification_token_hash TEXT/);
   assert.match(phoneVerificationMigration, /consumed_at TEXT/);
   assert.doesNotMatch(phoneVerificationMigration, /otp_code|plain_code/i);
+
+  assert.match(
+    phoneVerificationAbuseMigration,
+    /CREATE TABLE IF NOT EXISTS phone_verification_abuse_events/
+  );
+  assert.match(phoneVerificationAbuseMigration, /phone_hash TEXT NOT NULL/);
+  assert.match(phoneVerificationAbuseMigration, /ip_hash TEXT NOT NULL/);
+  assert.match(phoneVerificationAbuseMigration, /ip_phone_hash TEXT NOT NULL/);
+  assert.match(phoneVerificationAbuseMigration, /expires_at TEXT NOT NULL/);
+  assert.match(phoneVerificationAbuseMigration, /ADD COLUMN send_hold_until TEXT/);
+  assert.doesNotMatch(phoneVerificationAbuseMigration, /otp_code|plain_code|raw_ip/i);
 });
 
 test('protects the admin page from caching and indexing', async () => {
@@ -1285,23 +1371,26 @@ test('prevents only duplicate normalized school identities', async () => {
 
   const differentDepartment = await registerSchool(database, {
     ...baseSchool,
-    educationDepartment: 'إدارة التعليم بمنطقة الحدود الشمالية'
-  }, await verifyRegistrationPhone(database, baseSchool.registrationContactPhone));
+    educationDepartment: 'إدارة التعليم بمنطقة الحدود الشمالية',
+    registrationContactPhone: '0512345679'
+  }, await verifyRegistrationPhone(database, '0512345679'));
   assert.equal(differentDepartment.response.status, 201);
   assert.equal(database.inserted, 2);
 
   const differentStage = await registerSchool(database, {
     ...baseSchool,
     stage: 'ابتدائية',
-    schoolStage: undefined
-  }, await verifyRegistrationPhone(database, baseSchool.registrationContactPhone));
+    schoolStage: undefined,
+    registrationContactPhone: '0512345680'
+  }, await verifyRegistrationPhone(database, '0512345680'));
   assert.equal(differentStage.response.status, 201);
   assert.equal(database.inserted, 3);
 
   const differentName = await registerSchool(database, {
     ...baseSchool,
-    schoolName: 'اختبار 3'
-  }, await verifyRegistrationPhone(database, baseSchool.registrationContactPhone));
+    schoolName: 'اختبار 3',
+    registrationContactPhone: '0512345681'
+  }, await verifyRegistrationPhone(database, '0512345681'));
   assert.equal(differentName.response.status, 201);
   assert.equal(database.inserted, 4);
 
@@ -1567,7 +1656,7 @@ test('secures the WhatsApp verification lifecycle without real provider secrets'
     { phone }
   );
   assert.equal(cooldown.response.status, 429);
-  assert.equal(cooldown.body.code, 'verification_code_cooldown');
+  assert.equal(cooldown.body.code, 'verification_rate_limited');
 
   const wrongCode = code === '999999' ? '888888' : '999999';
   for(let attempt = 1; attempt <= 5; attempt += 1){
