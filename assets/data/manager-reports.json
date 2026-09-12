@@ -26,32 +26,7 @@
       "principalName",
       "educationalAffairsAgent"
     ],
-    "customFields": [
-      {
-        "key": "departmentName",
-        "label": "اسم القسم",
-        "type": "text",
-        "placeholder": "مثال: قسم الرياضيات"
-      },
-      {
-        "key": "meetingTitle",
-        "label": "عنوان الاجتماع",
-        "type": "text",
-        "placeholder": "مثال: اجتماع قسم الرياضيات"
-      },
-      {
-        "key": "meetingDate",
-        "label": "تاريخ الاجتماع",
-        "type": "text",
-        "placeholder": "مثال: 15 / 3 / 1447 هـ"
-      },
-      {
-        "key": "meetingDay",
-        "label": "اليوم",
-        "type": "text",
-        "placeholder": "مثال: الخميس"
-      }
-    ],
+    "customFields": [],
     "notes": ""
   },
   {
@@ -173,9 +148,17 @@
     "templatePath": "assets/report-templates/manager-reports/task-follow-up-record.docx",
     "outputFileName": "سجل متابعة تنفيذ المهام - {{schoolDisplayName}}.docx",
     "tags": [],
-    "fields": [],
+    "fields": [
+      "educationDepartment",
+      "schoolDisplayName",
+      "principalName"
+    ],
     "requiredFields": [],
-    "optionalFields": [],
+    "optionalFields": [
+      "educationDepartment",
+      "schoolDisplayName",
+      "principalName"
+    ],
     "customFields": [],
     "notes": ""
   }
